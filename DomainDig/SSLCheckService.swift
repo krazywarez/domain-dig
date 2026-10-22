@@ -228,24 +228,15 @@ private enum DERCertificateParser {
         while pos < end {
             // Each SET in the issuer
             guard let setTL = readTagAndLength(bytes, offset: pos) else { break }
-            let setEnd = setTL.contentStart + setTL.length
+            pos = setTL.contentStart + setTL.length
 
             // Inside the SET is a SEQUENCE with OID + value
-            if let seqTL = readTagAndLength(bytes, offset: setTL.contentStart) {
-                let seqEnd = seqTL.contentStart + seqTL.length
-                if let oidTL = readTagAndLength(bytes, offset: seqTL.contentStart) {
-                    let oidBytes = Array(bytes[oidTL.contentStart..<oidTL.contentStart + oidTL.length])
-                    if oidBytes == cnOID {
-                        let valueStart = oidTL.contentStart + oidTL.length
-                        if let valueTL = readTagAndLength(bytes, offset: valueStart) {
-                            let strBytes = bytes[valueTL.contentStart..<valueTL.contentStart + valueTL.length]
-                            return String(bytes: strBytes, encoding: .utf8)
-                        }
-                    }
-                    _ = seqEnd // suppress unused warning
-                }
-            }
-            pos = setEnd
+            guard let seqTL = readTagAndLength(bytes, offset: setTL.contentStart),
+                  let oidTL = readTagAndLength(bytes, offset: seqTL.contentStart),
+                  content(of: oidTL, in: bytes).elementsEqual(cnOID),
+                  let valueTL = readTagAndLength(bytes, offset: oidTL.contentStart + oidTL.length)
+            else { continue }
+            return String(bytes: content(of: valueTL, in: bytes), encoding: .utf8)
         }
         return nil
     }
@@ -260,37 +251,39 @@ private enum DERCertificateParser {
             let extEnd = extSeq.contentStart + extSeq.length
 
             // Each extension is SEQUENCE { OID, [critical], value }
-            if let oidTL = readTagAndLength(bytes, offset: extSeq.contentStart) {
-                let oidBytes = Array(bytes[oidTL.contentStart..<oidTL.contentStart + oidTL.length])
-                if oidBytes == sanOID {
-                    var valuePos = oidTL.contentStart + oidTL.length
-                    // Skip optional critical BOOLEAN
-                    if valuePos < extEnd, bytes[valuePos] == 0x01,
-                       let boolTL = readTagAndLength(bytes, offset: valuePos) {
-                        valuePos = boolTL.contentStart + boolTL.length
-                    }
-                    // The value is an OCTET STRING wrapping a SEQUENCE of GeneralNames
-                    if let octetTL = readTagAndLength(bytes, offset: valuePos),
-                       let sanSeq = readTagAndLength(bytes, offset: octetTL.contentStart) {
-                        let sanEnd = sanSeq.contentStart + sanSeq.length
-                        var sanPos = sanSeq.contentStart
-                        while sanPos < sanEnd {
-                            guard let nameTL = readTagAndLength(bytes, offset: sanPos) else { break }
-                            // Context tag [2] = dNSName (IA5String)
-                            if (bytes[sanPos] & 0x1F) == 2 {
-                                let nameBytes = bytes[nameTL.contentStart..<nameTL.contentStart + nameTL.length]
-                                if let name = String(bytes: nameBytes, encoding: .ascii) {
-                                    sans.append(name)
-                                }
-                            }
-                            sanPos = nameTL.contentStart + nameTL.length
-                        }
-                    }
-                }
+            if let oidTL = readTagAndLength(bytes, offset: extSeq.contentStart), content(of: oidTL, in: bytes).elementsEqual(sanOID) {
+                sans += sanDNSNames(bytes, valueStart: oidTL.contentStart + oidTL.length, extensionEnd: extEnd)
             }
             pos = extEnd
         }
         return sans
+    }
+
+    /// The dNSName entries of a subjectAltName extension whose value starts at `valueStart`.
+    private static func sanDNSNames(_ bytes: [UInt8], valueStart: Int, extensionEnd: Int) -> [String] {
+        var valuePos = valueStart
+        // Skip optional critical BOOLEAN
+        if valuePos < extensionEnd, bytes[valuePos] == 0x01,
+           let boolTL = readTagAndLength(bytes, offset: valuePos) {
+            valuePos = boolTL.contentStart + boolTL.length
+        }
+        // The value is an OCTET STRING wrapping a SEQUENCE of GeneralNames
+        guard let octetTL = readTagAndLength(bytes, offset: valuePos),
+              let sanSeq = readTagAndLength(bytes, offset: octetTL.contentStart)
+        else { return [] }
+
+        let sanEnd = sanSeq.contentStart + sanSeq.length
+        var sanPos = sanSeq.contentStart
+        var names: [String] = []
+        while sanPos < sanEnd {
+            guard let nameTL = readTagAndLength(bytes, offset: sanPos) else { break }
+            // Context tag [2] = dNSName (IA5String)
+            if (bytes[sanPos] & 0x1F) == 2, let name = String(bytes: content(of: nameTL, in: bytes), encoding: .ascii) {
+                names.append(name)
+            }
+            sanPos = nameTL.contentStart + nameTL.length
+        }
+        return names
     }
 
     private static func extractValidity(_ bytes: [UInt8], sequenceStart: Int, length: Int) -> (Date?, Date?) {
@@ -362,7 +355,13 @@ private enum DERCertificateParser {
             length = len
         }
 
+        // A length past the end of the data is malformed, and slicing to it would trap.
+        guard length <= bytes.count - pos else { return nil }
         return TLV(contentStart: pos, length: length)
+    }
+
+    private static func content(of tlv: TLV, in bytes: [UInt8]) -> ArraySlice<UInt8> {
+        bytes[tlv.contentStart..<tlv.contentStart + tlv.length]
     }
 }
 

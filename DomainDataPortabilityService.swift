@@ -305,7 +305,8 @@ enum DataPortabilityCSV {
     }
 
     private nonisolated static func dictionary(for row: [String], header: [String]) -> [String: String] {
-        Dictionary(uniqueKeysWithValues: zip(header, row).map { ($0.0, $0.1) })
+        // A repeated column keeps its first value rather than failing the import.
+        Dictionary(zip(header, row).map { ($0.0, $0.1) }) { first, _ in first }
     }
 
     private nonisolated static func csvLine(_ values: [String]) -> String {
@@ -903,76 +904,54 @@ enum DomainDataPortabilityService {
             if backup.schemaVersion > DomainDigBackup.currentSchemaVersion {
                 throw DataPortabilityError.unsupportedSchema(backup.schemaVersion)
             }
-            let report = DataValidationService.validate(backup: backup)
-            if !report.errors.isEmpty {
-                throw DataPortabilityError.validationFailed(report.errors)
-            }
-            return .backup(backup, report)
+            return .backup(backup, try passing(DataValidationService.validate(backup: backup)))
         }
-
         if let backup = try? decodeLegacyBackup(from: data) {
-            let report = DataValidationService.validate(backup: backup)
-            if !report.errors.isEmpty {
-                throw DataPortabilityError.validationFailed(report.errors)
-            }
-            return .backup(backup, report)
+            return .backup(backup, try passing(DataValidationService.validate(backup: backup)))
         }
-
         if let export = try? decoder.decode(TrackedDomainsExport.self, from: data) {
-            let report = DataValidationService.validate(trackedDomains: export.trackedDomains)
-            if !report.errors.isEmpty {
-                throw DataPortabilityError.validationFailed(report.errors)
-            }
-            return .trackedDomains(export.trackedDomains, report)
+            return try trackedDomainsPayload(export.trackedDomains)
         }
-
         if let export = try? decoder.decode(WorkflowsExport.self, from: data) {
-            let report = DataValidationService.validate(workflows: export.workflows)
-            if !report.errors.isEmpty {
-                throw DataPortabilityError.validationFailed(report.errors)
-            }
-            return .workflows(export.workflows, report)
+            return try workflowsPayload(export.workflows)
         }
-
         if let trackedDomains = try? decoder.decode([TrackedDomain].self, from: data) {
-            let report = DataValidationService.validate(trackedDomains: trackedDomains)
-            if !report.errors.isEmpty {
-                throw DataPortabilityError.validationFailed(report.errors)
-            }
-            return .trackedDomains(trackedDomains, report)
+            return try trackedDomainsPayload(trackedDomains)
         }
-
         if let workflows = try? decoder.decode([DomainWorkflow].self, from: data) {
-            let report = DataValidationService.validate(workflows: workflows)
-            if !report.errors.isEmpty {
-                throw DataPortabilityError.validationFailed(report.errors)
-            }
-            return .workflows(workflows, report)
+            return try workflowsPayload(workflows)
         }
-
-        let lowercasedFileName = fileName.lowercased()
-        if lowercasedFileName.hasSuffix(".csv") {
-            guard let string = String(data: data, encoding: .utf8) else {
-                throw DataPortabilityError.unreadableFile
-            }
-            if lowercasedFileName.contains("workflow") {
-                let workflows = try DataPortabilityCSV.parseWorkflows(from: string)
-                let report = DataValidationService.validate(workflows: workflows)
-                if !report.errors.isEmpty {
-                    throw DataPortabilityError.validationFailed(report.errors)
-                }
-                return .workflows(workflows, report)
-            }
-
-            let trackedDomains = try DataPortabilityCSV.parseTrackedDomains(from: string)
-            let report = DataValidationService.validate(trackedDomains: trackedDomains)
-            if !report.errors.isEmpty {
-                throw DataPortabilityError.validationFailed(report.errors)
-            }
-            return .trackedDomains(trackedDomains, report)
+        if fileName.lowercased().hasSuffix(".csv") {
+            return try decodeCSVPayload(from: data, fileName: fileName)
         }
-
         throw DataPortabilityError.unsupportedFormat
+    }
+
+    /// A CSV holds workflows when its name says so, and tracked domains otherwise.
+    private static func decodeCSVPayload(from data: Data, fileName: String) throws -> ImportPayload {
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw DataPortabilityError.unreadableFile
+        }
+        if fileName.lowercased().contains("workflow") {
+            return try workflowsPayload(DataPortabilityCSV.parseWorkflows(from: string))
+        }
+        return try trackedDomainsPayload(DataPortabilityCSV.parseTrackedDomains(from: string))
+    }
+
+    private static func trackedDomainsPayload(_ trackedDomains: [TrackedDomain]) throws -> ImportPayload {
+        .trackedDomains(trackedDomains, try passing(DataValidationService.validate(trackedDomains: trackedDomains)))
+    }
+
+    private static func workflowsPayload(_ workflows: [DomainWorkflow]) throws -> ImportPayload {
+        .workflows(workflows, try passing(DataValidationService.validate(workflows: workflows)))
+    }
+
+    /// `report`, unless it found errors, which fail the import.
+    private static func passing(_ report: DataValidationReport) throws -> DataValidationReport {
+        guard report.errors.isEmpty else {
+            throw DataPortabilityError.validationFailed(report.errors)
+        }
+        return report
     }
 
     private static func decodeLegacyBackup(from data: Data) throws -> DomainDigBackup {

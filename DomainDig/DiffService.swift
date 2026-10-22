@@ -329,8 +329,9 @@ enum DiffService {
     }
 
     private static func dnsSection(from oldReport: DomainReport, to newReport: DomainReport) -> DiffSection {
-        let oldSections = Dictionary(uniqueKeysWithValues: oldReport.dns.recordSections.map { ($0.recordType, $0) })
-        let newSections = Dictionary(uniqueKeysWithValues: newReport.dns.recordSections.map { ($0.recordType, $0) })
+        // Imported reports are not guaranteed one section per record type.
+        let oldSections = Dictionary(oldReport.dns.recordSections.map { ($0.recordType, $0) }) { first, _ in first }
+        let newSections = Dictionary(newReport.dns.recordSections.map { ($0.recordType, $0) }) { first, _ in first }
         let recordTypes = Set(oldSections.keys).union(newSections.keys).sorted { $0.rawValue < $1.rawValue }
 
         var items: [DiffItem] = [

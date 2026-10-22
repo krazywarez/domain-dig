@@ -290,11 +290,11 @@ final class DomainMonitoringService {
                 domain: trackedDomain.domain,
                 previousSnapshot: previousSnapshot
             )
-            let snapshot = Self.resolvedSnapshotAfterFallback(inspectedSnapshot, previousSnapshot: previousSnapshot)
+            let snapshot = inspectedSnapshot.resolvedAfterFallback(to: previousSnapshot)
             // When the fallback fires, `snapshot` *is* `previousSnapshot`, so
             // every comparison below is old-against-old and would otherwise
             // report "No meaningful changes" for a domain we never reached.
-            let unreachableReason = (previousSnapshot != nil && Self.shouldFallbackToSnapshot(inspectedSnapshot))
+            let unreachableReason = (previousSnapshot != nil && inspectedSnapshot.needsFallback)
                 ? Self.firstErrorMessage(in: inspectedSnapshot)
                 : nil
             let savedEntry: HistoryEntry?
@@ -844,95 +844,8 @@ final class DomainMonitoringService {
             }
     }
 
-    private static func resolvedSnapshotAfterFallback(
-        _ snapshot: LookupSnapshot,
-        previousSnapshot: LookupSnapshot?
-    ) -> LookupSnapshot {
-        guard shouldFallbackToSnapshot(snapshot), let previousSnapshot else {
-            return snapshot
-        }
-
-        return LookupSnapshot(
-            historyEntryID: previousSnapshot.historyEntryID,
-            domain: previousSnapshot.domain,
-            timestamp: previousSnapshot.timestamp,
-            trackedDomainID: previousSnapshot.trackedDomainID,
-            note: previousSnapshot.note,
-            appVersion: previousSnapshot.appVersion,
-            resolverDisplayName: previousSnapshot.resolverDisplayName,
-            resolverURLString: previousSnapshot.resolverURLString,
-            dataSources: previousSnapshot.dataSources,
-            provenanceBySection: previousSnapshot.provenanceBySection,
-            availabilityConfidence: previousSnapshot.availabilityConfidence,
-            ownershipConfidence: previousSnapshot.ownershipConfidence,
-            subdomainConfidence: previousSnapshot.subdomainConfidence,
-            emailSecurityConfidence: previousSnapshot.emailSecurityConfidence,
-            geolocationConfidence: previousSnapshot.geolocationConfidence,
-            errorDetails: previousSnapshot.errorDetails,
-            isPartialSnapshot: previousSnapshot.isPartialSnapshot,
-            validationIssues: previousSnapshot.validationIssues,
-            totalLookupDurationMs: previousSnapshot.totalLookupDurationMs,
-            snapshotIndex: previousSnapshot.snapshotIndex,
-            previousSnapshotID: previousSnapshot.previousSnapshotID,
-            changeCount: previousSnapshot.changeCount,
-            severitySummary: previousSnapshot.severitySummary,
-            dnsSections: previousSnapshot.dnsSections,
-            dnsError: previousSnapshot.dnsError,
-            availabilityResult: previousSnapshot.availabilityResult,
-            suggestions: previousSnapshot.suggestions,
-            sslInfo: previousSnapshot.sslInfo,
-            sslError: previousSnapshot.sslError,
-            hstsPreloaded: previousSnapshot.hstsPreloaded,
-            httpHeaders: previousSnapshot.httpHeaders,
-            httpSecurityGrade: previousSnapshot.httpSecurityGrade,
-            httpStatusCode: previousSnapshot.httpStatusCode,
-            httpResponseTimeMs: previousSnapshot.httpResponseTimeMs,
-            httpProtocol: previousSnapshot.httpProtocol,
-            http3Advertised: previousSnapshot.http3Advertised,
-            httpHeadersError: previousSnapshot.httpHeadersError,
-            reachabilityResults: previousSnapshot.reachabilityResults,
-            reachabilityError: previousSnapshot.reachabilityError,
-            ipGeolocation: previousSnapshot.ipGeolocation,
-            ipGeolocationError: previousSnapshot.ipGeolocationError,
-            emailSecurity: previousSnapshot.emailSecurity,
-            emailSecurityError: previousSnapshot.emailSecurityError,
-            ownership: previousSnapshot.ownership,
-            ownershipError: previousSnapshot.ownershipError,
-            ownershipHistory: previousSnapshot.ownershipHistory,
-            ownershipHistoryError: previousSnapshot.ownershipHistoryError,
-            inferredProvider: previousSnapshot.inferredProvider,
-            priorProviders: previousSnapshot.priorProviders,
-            domainClassification: previousSnapshot.domainClassification,
-            ownershipTransitions: previousSnapshot.ownershipTransitions,
-            hostingTransitions: previousSnapshot.hostingTransitions,
-            subdomainHistory: previousSnapshot.subdomainHistory,
-            riskSignals: previousSnapshot.riskSignals,
-            intelligenceTimeline: previousSnapshot.intelligenceTimeline,
-            ptrRecord: previousSnapshot.ptrRecord,
-            ptrError: previousSnapshot.ptrError,
-            redirectChain: previousSnapshot.redirectChain,
-            redirectChainError: previousSnapshot.redirectChainError,
-            subdomains: previousSnapshot.subdomains,
-            subdomainsError: previousSnapshot.subdomainsError,
-            extendedSubdomains: previousSnapshot.extendedSubdomains,
-            extendedSubdomainsError: previousSnapshot.extendedSubdomainsError,
-            dnsHistory: previousSnapshot.dnsHistory,
-            dnsHistoryError: previousSnapshot.dnsHistoryError,
-            domainPricing: previousSnapshot.domainPricing,
-            domainPricingError: previousSnapshot.domainPricingError,
-            reputation: previousSnapshot.reputation,
-            reputationError: previousSnapshot.reputationError,
-            portScanResults: previousSnapshot.portScanResults,
-            portScanError: previousSnapshot.portScanError,
-            changeSummary: previousSnapshot.changeSummary,
-            resultSource: .snapshot,
-            cachedSections: [],
-            statusMessage: "Last known result • \(previousSnapshot.timestamp.formatted(date: .abbreviated, time: .shortened))"
-        )
-    }
-
     /// First reported error on a snapshot, used to explain a fallback. Mirrors
-    /// the ordering `shouldFallbackToSnapshot` inspects.
+    /// the ordering `LookupSnapshot.needsFallback` inspects.
     private static func firstErrorMessage(in snapshot: LookupSnapshot) -> String {
         [
             snapshot.dnsError,
@@ -945,34 +858,6 @@ final class DomainMonitoringService {
         ]
         .compactMap { $0 }
         .first ?? "The lookup could not reach the domain."
-    }
-
-    private static func shouldFallbackToSnapshot(_ snapshot: LookupSnapshot) -> Bool {
-        let candidateMessages = [
-            snapshot.dnsError,
-            snapshot.httpHeadersError,
-            snapshot.sslError,
-            snapshot.ownershipError,
-            snapshot.subdomainsError,
-            snapshot.redirectChainError,
-            snapshot.ipGeolocationError
-        ]
-        .compactMap { $0?.lowercased() }
-
-        guard !candidateMessages.isEmpty else { return false }
-        let connectivityFailure = candidateMessages.allSatisfy { message in
-            message.hasPrefix("network error:")
-                || message.hasPrefix("timeout:")
-                || message.hasPrefix("rate limit:")
-        }
-
-        let hasMaterialData = !snapshot.dnsSections.isEmpty
-            || !snapshot.httpHeaders.isEmpty
-            || snapshot.sslInfo != nil
-            || snapshot.ownership != nil
-            || !snapshot.subdomains.isEmpty
-
-        return connectivityFailure && !hasMaterialData
     }
 
     private static func primaryIPAddress(from snapshot: LookupSnapshot) -> String? {

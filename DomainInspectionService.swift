@@ -678,7 +678,7 @@ struct DomainInspectionService {
     private func mapPortScanResult(_ result: ServiceResult<[PortScanResult]>, domain: String) async -> (value: [PortScanResult], message: String?) {
         switch result {
         case let .success(results):
-            return (await enrichOpenPortBanners(in: results, domain: domain), nil)
+            return (await PortScanService.withBanners(results, host: domain), nil)
         case let .empty(message), let .error(message):
             return ([], message)
         }
@@ -714,31 +714,6 @@ struct DomainInspectionService {
                 http3Advertised: false,
                 error: message
             )
-        }
-    }
-
-    private func enrichOpenPortBanners(in results: [PortScanResult], domain: String) async -> [PortScanResult] {
-        let banners = await withTaskGroup(of: (UInt16, String?).self, returning: [UInt16: String].self) { group in
-            for result in results where result.open {
-                group.addTask {
-                    let banner = await PortScanService.grabBanner(host: domain, port: result.port)
-                    return (result.port, banner)
-                }
-            }
-
-            var collected: [UInt16: String] = [:]
-            for await (port, banner) in group {
-                if let banner {
-                    collected[port] = banner
-                }
-            }
-            return collected
-        }
-
-        return results.map { result in
-            var updated = result
-            updated.banner = banners[result.port]
-            return updated
         }
     }
 }

@@ -74,6 +74,32 @@ struct PortScanService {
         .pipe { $0.isEmpty ? .empty("No custom port scan results") : .success($0) }
     }
 
+    /// `results` with each open port's banner, grabbed concurrently.
+    static func withBanners(_ results: [PortScanResult], host: String) async -> [PortScanResult] {
+        let banners = await withTaskGroup(of: (UInt16, String?).self, returning: [UInt16: String].self) { group in
+            for result in results where result.open {
+                group.addTask {
+                    let banner = await grabBanner(host: host, port: result.port)
+                    return (result.port, banner)
+                }
+            }
+
+            var collected: [UInt16: String] = [:]
+            for await (port, banner) in group {
+                if let banner {
+                    collected[port] = banner
+                }
+            }
+            return collected
+        }
+
+        return results.map { result in
+            var updated = result
+            updated.banner = banners[result.port]
+            return updated
+        }
+    }
+
     static func grabBanner(host: String, port: UInt16, timeout: TimeInterval = 3.0) async -> String? {
         await withCheckedContinuation { continuation in
             guard let nwPort = NWEndpoint.Port(rawValue: port) else {

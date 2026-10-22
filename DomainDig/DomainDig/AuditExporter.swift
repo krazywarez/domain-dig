@@ -48,7 +48,21 @@ enum AuditExporter {
             lines.append("")
         }
 
-        lines.append("## Findings Summary")
+        lines += findingsSummaryLines(session)
+        lines += keyRiskLines(session)
+        lines.append("## Checklist")
+        for item in session.checklist {
+            lines.append("- [\(item.isComplete ? "x" : " ")] \(item.title): \(item.detail)")
+        }
+        lines.append("")
+        lines += findingLines(session)
+        lines += evidenceLines(session.evidence)
+
+        return lines.joined(separator: "\n")
+    }
+
+    private static func findingsSummaryLines(_ session: AuditSession) -> [String] {
+        var lines = ["## Findings Summary"]
         if session.findings.isEmpty {
             lines.append("No findings recorded.")
         } else {
@@ -57,8 +71,11 @@ enum AuditExporter {
             }
         }
         lines.append("")
+        return lines
+    }
 
-        lines.append("## Key Risks")
+    private static func keyRiskLines(_ session: AuditSession) -> [String] {
+        var lines = ["## Key Risks"]
         if session.keyRisks.isEmpty {
             lines.append("No medium or high-severity risks recorded.")
         } else {
@@ -67,46 +84,46 @@ enum AuditExporter {
             }
         }
         lines.append("")
+        return lines
+    }
 
-        lines.append("## Checklist")
-        for item in session.checklist {
-            lines.append("- [\(item.isComplete ? "x" : " ")] \(item.title): \(item.detail)")
-        }
-        lines.append("")
-
-        lines.append("## Findings")
+    private static func findingLines(_ session: AuditSession) -> [String] {
+        var lines = ["## Findings"]
         if session.findings.isEmpty {
             lines.append("No findings recorded.")
-        } else {
-            for finding in session.findings {
-                lines.append("### \(finding.title)")
-                lines.append("- Severity: \(finding.severity.title)")
-                lines.append("- Status: \(finding.status.title)")
-                if !finding.checklistAreas.isEmpty {
-                    lines.append("- Checklist Areas: \(finding.checklistAreas.map(\.title).joined(separator: ", "))")
-                }
-                lines.append("- Summary: \(finding.summary)")
-                if !finding.evidenceReferences.isEmpty {
-                    lines.append("- Evidence: \(finding.evidenceReferences.joined(separator: " | "))")
-                }
-                if !finding.notes.isEmpty {
-                    lines.append("- Notes: \(finding.notes)")
-                }
-                lines.append("")
-            }
         }
+        for finding in session.findings {
+            lines.append("### \(finding.title)")
+            lines.append("- Severity: \(finding.severity.title)")
+            lines.append("- Status: \(finding.status.title)")
+            if !finding.checklistAreas.isEmpty {
+                lines.append("- Checklist Areas: \(finding.checklistAreas.map(\.title).joined(separator: ", "))")
+            }
+            lines.append("- Summary: \(finding.summary)")
+            if !finding.evidenceReferences.isEmpty {
+                lines.append("- Evidence: \(finding.evidenceReferences.joined(separator: " | "))")
+            }
+            if !finding.notes.isEmpty {
+                lines.append("- Notes: \(finding.notes)")
+            }
+            lines.append("")
+        }
+        return lines
+    }
 
-        lines.append("## Evidence Snapshot")
-        lines.append("- Availability: \(availabilityTitle(session.evidence.report.availability))")
-        lines.append("- Risk Score: \(session.evidence.report.riskAssessment.score) (\(session.evidence.report.riskAssessment.level.title))")
-        lines.append("- TLS Status: \(session.evidence.report.web.tlsStatus)")
-        lines.append("- Final URL: \(session.evidence.report.web.finalURL ?? "Unavailable")")
-        lines.append("- Primary IP: \(session.evidence.report.dns.primaryIP ?? "Unavailable")")
-        lines.append("- Reachability: \(session.evidence.report.network.reachabilitySummary)")
-        lines.append("- Ownership: \(session.evidence.report.ownership?.registrar ?? "Unavailable")")
-        lines.append("- Historical Context Snapshots: \(session.evidence.historicalContext.count)")
-
-        return lines.joined(separator: "\n")
+    private static func evidenceLines(_ evidence: AuditEvidenceSnapshot) -> [String] {
+        let report = evidence.report
+        return [
+            "## Evidence Snapshot",
+            "- Availability: \(availabilityTitle(report.availability))",
+            "- Risk Score: \(report.riskAssessment.score) (\(report.riskAssessment.level.title))",
+            "- TLS Status: \(report.web.tlsStatus)",
+            "- Final URL: \(report.web.finalURL ?? "Unavailable")",
+            "- Primary IP: \(report.dns.primaryIP ?? "Unavailable")",
+            "- Reachability: \(report.network.reachabilitySummary)",
+            "- Ownership: \(report.ownership?.registrar ?? "Unavailable")",
+            "- Historical Context Snapshots: \(evidence.historicalContext.count)",
+        ]
     }
 
     private static func availabilityTitle(_ status: DomainAvailabilityStatus) -> String {
@@ -121,37 +138,6 @@ enum AuditExporter {
     }
 
     private static func pdfData(for session: AuditSession) throws -> Data {
-        let markdown = markdown(for: session)
-        #if canImport(UIKit)
-        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 612, height: 792))
-        return renderer.pdfData { context in
-            let lines = markdown.components(separatedBy: .newlines)
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.lineBreakMode = .byWordWrapping
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.monospacedSystemFont(ofSize: 11, weight: .regular),
-                .paragraphStyle: paragraphStyle
-            ]
-
-            var yOffset: CGFloat = 36
-            context.beginPage()
-
-            for line in lines {
-                if yOffset > 744 {
-                    context.beginPage()
-                    yOffset = 36
-                }
-
-                let renderedLine = NSString(string: line.isEmpty ? " " : line)
-                renderedLine.draw(
-                    in: CGRect(x: 36, y: yOffset, width: 540, height: 22),
-                    withAttributes: attributes
-                )
-                yOffset += 16
-            }
-        }
-        #else
-        return Data(markdown.utf8)
-        #endif
+        DomainReportExporter.pdfData(fromMarkdown: markdown(for: session))
     }
 }

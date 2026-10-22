@@ -156,6 +156,25 @@ enum DomainReportExporter {
     }
 
     static func text(for report: DomainReport) -> String {
+        var lines = headerLines(report)
+        appendSection("Summary", to: &lines) { summarySection(report) }
+        appendSection("Risk", to: &lines) { riskSection(report) }
+        appendSection("Insights", to: &lines) { insightsSection(report) }
+        appendSection("Ownership", to: &lines) { ownershipSection(report) }
+        appendSection("Ownership History", to: &lines) { ownershipHistorySection(report) }
+        appendSection("DNS", to: &lines) { dnsSection(report) }
+        appendSection("DNS History", to: &lines) { dnsHistorySection(report) }
+        appendSection("Web", to: &lines) { webSection(report) }
+        appendSection("Email", to: &lines) { emailSection(report) }
+        appendSection("Network", to: &lines) { networkSection(report) }
+        appendSection("Subdomains", to: &lines) { subdomainsSection(report) }
+        appendSection("Pricing", to: &lines) { pricingSection(report) }
+        appendSection("Changes", to: &lines) { changesSection(report) }
+        return lines.joined(separator: "\n")
+    }
+
+    /// The report's title block: what was looked up, when, how, and with what caveats.
+    private static func headerLines(_ report: DomainReport) -> [String] {
         var lines = [
             "DomainDig Report",
             "Domain: \(report.domain)",
@@ -183,288 +202,285 @@ enum DomainReportExporter {
         if let workflowContext = report.workflowContext {
             lines.append("Workflow Context: \(workflowContext.workflowName ?? workflowContext.source)")
         }
+        return lines
+    }
 
-        appendSection("Summary", to: &lines) {
+    private static func summarySection(_ report: DomainReport) -> [String] {
+        [
+            "Primary IP: \(report.dns.primaryIP ?? "Unavailable")",
+            "Risk Score: \(report.riskAssessment.score) (\(report.riskAssessment.level.title))",
+            "TLS Status: \(report.web.tlsStatus)",
+            "HTTP: \(httpSummary(for: report))",
+            "Email: \(report.email.summary)",
+            "Subdomains: \(report.subdomains.count)",
+            "Extended Subdomains: \(report.extendedSubdomains.count)",
+            "External Price: \(report.domainPricing?.estimatedPrice ?? "Unavailable")",
+            "Reputation: \(report.reputation?.status.title ?? "Unavailable")"
+        ]
+    }
+
+    private static func riskSection(_ report: DomainReport) -> [String] {
+        var values = [
+            "Score: \(report.riskAssessment.score)",
+            "Level: \(report.riskAssessment.level.title)"
+        ]
+        if report.riskAssessment.factors.isEmpty {
+            values.append("Factors: None")
+        } else {
+            values.append("Factors:")
+            for factor in report.riskAssessment.factors {
+                values.append("  [\(factor.impact.rawValue)] \(factor.description)")
+            }
+        }
+        return values
+    }
+
+    private static func insightsSection(_ report: DomainReport) -> [String] {
+        report.insights.isEmpty ? ["No deterministic insights triggered"] : report.insights.map { "- \($0)" }
+    }
+
+    private static func ownershipSection(_ report: DomainReport) -> [String] {
+        var ownershipLines = [
+            "Registrar: \(report.ownership?.registrar ?? "Unavailable")",
+            "Confidence: \(report.ownershipConfidence?.title ?? "N/A")",
+            "Created: \(ownershipDateLabel(report.ownership?.createdDate))",
+            "Expires: \(ownershipDateLabel(report.ownership?.expirationDate))",
+            "Registrant: \(report.ownership?.registrant ?? "Unavailable")",
+            "Nameservers: \(joined(report.ownership?.nameservers) ?? "Unavailable")",
+            "Status: \(joined(report.ownership?.status) ?? "Unavailable")",
+            "Abuse Contact: \(report.ownership?.abuseEmail ?? "Unavailable")"
+        ]
+        if let provenance = report.sectionProvenance[.ownership] {
+            ownershipLines.append("Provenance: \(provenanceLabel(provenance))")
+        }
+        if let error = report.dns.error, report.ownership == nil {
+            ownershipLines.append("Error: \(error)")
+        }
+        return ownershipLines
+    }
+
+    private static func ownershipHistorySection(_ report: DomainReport) -> [String] {
+        guard !report.ownershipHistory.isEmpty else {
+            return ["No ownership history available"]
+        }
+
+        return report.ownershipHistory.map { event in
             [
-                "Primary IP: \(report.dns.primaryIP ?? "Unavailable")",
-                "Risk Score: \(report.riskAssessment.score) (\(report.riskAssessment.level.title))",
-                "TLS Status: \(report.web.tlsStatus)",
-                "HTTP: \(httpSummary(for: report))",
-                "Email: \(report.email.summary)",
-                "Subdomains: \(report.subdomains.count)",
-                "Extended Subdomains: \(report.extendedSubdomains.count)",
-                "External Price: \(report.domainPricing?.estimatedPrice ?? "Unavailable")",
-                "Reputation: \(report.reputation?.status.title ?? "Unavailable")"
-            ]
+                textDateFormatter.string(from: event.date),
+                event.summary,
+                "source=\(event.source)"
+            ].joined(separator: " | ")
+        }
+    }
+
+    private static func dnsSection(_ report: DomainReport) -> [String] {
+        var dnsLines = [
+            "Lookup Duration: \(durationLabel(report.dns.lookupDurationMs))",
+            "Primary IP: \(report.dns.primaryIP ?? "Unavailable")",
+            "PTR: \(report.dns.ptrRecord ?? report.dns.ptrError ?? "Unavailable")",
+            "DNSSEC: \(dnssecLabel(report.dns.dnssecSigned))",
+            "Patterns: \(report.dns.patternSummary.patterns.joined(separator: " | ").nilIfEmpty ?? "None")"
+        ]
+        if let provenance = report.sectionProvenance[.dns] {
+            dnsLines.append("Provenance: \(provenanceLabel(provenance))")
+        }
+        if let error = report.dns.error {
+            dnsLines.append("Error: \(error)")
+        }
+        if report.dns.recordSections.isEmpty {
+            dnsLines.append("Records: None")
+        } else {
+            dnsLines.append("Records:")
+            for section in report.dns.recordSections {
+                var seen: Set<String> = []
+                let values = (section.records + section.wildcardRecords)
+                    .map(\.value)
+                    .filter { seen.insert($0).inserted }
+                let renderedValues = values.isEmpty ? "None" : values.joined(separator: " | ")
+                dnsLines.append("  \(section.recordType.rawValue): \(renderedValues)")
+            }
+        }
+        return dnsLines
+    }
+
+    private static func dnsHistorySection(_ report: DomainReport) -> [String] {
+        guard !report.dnsHistory.isEmpty else {
+            return ["No DNS history available"]
         }
 
-        appendSection("Risk", to: &lines) {
-            var values = [
-                "Score: \(report.riskAssessment.score)",
-                "Level: \(report.riskAssessment.level.title)"
-            ]
-            if report.riskAssessment.factors.isEmpty {
-                values.append("Factors: None")
-            } else {
-                values.append("Factors:")
-                for factor in report.riskAssessment.factors {
-                    values.append("  [\(factor.impact.rawValue)] \(factor.description)")
-                }
+        return report.dnsHistory.map { event in
+            [
+                textDateFormatter.string(from: event.date),
+                event.summary,
+                "A=\(event.aRecords.joined(separator: " | ").nilIfEmpty ?? "-")",
+                "NS=\(event.nameservers.joined(separator: " | ").nilIfEmpty ?? "-")",
+                "source=\(event.source)"
+            ].joined(separator: " | ")
+        }
+    }
+
+    private static func webSection(_ report: DomainReport) -> [String] {
+        var webLines = [
+            "TLS Status: \(report.web.tlsStatus)",
+            "TLS Grade: \(report.web.tlsGrade.rawValue)",
+            "TLS Highlights: \(report.web.tlsHighlights.joined(separator: " | "))",
+            "Certificate Warning: \(report.web.certificateWarningLevel.title)",
+            "Security Grade: \(report.web.securityGrade ?? "Unavailable")",
+            "HTTP Status: \(report.web.statusCode.map(String.init) ?? "Unavailable")",
+            "Protocol: \(report.web.httpProtocol ?? "Unavailable")",
+            "HTTP/3 Advertised: \(report.web.http3Advertised ? "Yes" : "No")",
+            "Final URL: \(report.web.finalURL ?? "Unavailable")",
+            "HSTS Preloaded: \(booleanLabel(report.web.hstsPreloaded))",
+            "Header Count: \(report.web.headerCount)"
+        ]
+        if let provenance = report.sectionProvenance[.ssl] {
+            webLines.append("TLS Provenance: \(provenanceLabel(provenance))")
+        }
+        if let provenance = report.sectionProvenance[.httpHeaders] {
+            webLines.append("HTTP Provenance: \(provenanceLabel(provenance))")
+        }
+        if let provenance = report.sectionProvenance[.redirectChain] {
+            webLines.append("Redirect Provenance: \(provenanceLabel(provenance))")
+        }
+        if let tlsError = report.web.tlsError {
+            webLines.append("TLS Error: \(tlsError)")
+        }
+        if let headersError = report.web.headersError {
+            webLines.append("Headers Error: \(headersError)")
+        }
+        if let redirectError = report.web.redirectError {
+            webLines.append("Redirect Error: \(redirectError)")
+        }
+        if !report.web.headers.isEmpty {
+            webLines.append("Headers:")
+            for header in report.web.headers {
+                webLines.append("  \(header.name): \(header.value)")
             }
+        }
+        if !report.web.redirectChain.isEmpty {
+            webLines.append("Redirect Chain:")
+            for hop in report.web.redirectChain {
+                webLines.append("  \(hop.stepNumber). \(hop.statusCode) \(hop.url)\(hop.isFinal ? " (final)" : "")")
+            }
+        }
+        return webLines
+    }
+
+    private static func emailSection(_ report: DomainReport) -> [String] {
+        var emailLines = [report.email.summary]
+        if let grade = report.email.grade {
+            emailLines.append("Grade: \(grade.rawValue)")
+        }
+        if !report.email.reasons.isEmpty {
+            emailLines.append("Why: \(report.email.reasons.joined(separator: " | "))")
+        }
+        emailLines.append("Confidence: \(report.emailConfidence?.title ?? "N/A")")
+        if let provenance = report.sectionProvenance[.emailSecurity] {
+            emailLines.append("Provenance: \(provenanceLabel(provenance))")
+        }
+        if let records = report.email.records {
+            emailLines.append("SPF: \(recordLabel(records.spf))")
+            emailLines.append("DMARC: \(recordLabel(records.dmarc))")
+            emailLines.append("DKIM: \(recordLabel(records.dkim))")
+            emailLines.append("BIMI: \(recordLabel(records.bimi))")
+            emailLines.append("MTA-STS: \(records.mtaSts?.txtFound == true ? records.mtaSts?.policyMode ?? "found" : "Unavailable")")
+        }
+        if let error = report.email.error {
+            emailLines.append("Error: \(error)")
+        }
+        return emailLines
+    }
+
+    private static func networkSection(_ report: DomainReport) -> [String] {
+        var networkLines = [
+            "Reachability: \(report.network.reachabilitySummary)",
+            "Geolocation: \(report.network.geolocationSummary)",
+            "Geolocation Confidence: \(report.geolocationConfidence?.title ?? "N/A")",
+            "Open Ports: \(report.network.openPorts.map(String.init).joined(separator: ", ").nilIfEmpty ?? "None")"
+        ]
+        if let provenance = report.sectionProvenance[.ipGeolocation] {
+            networkLines.append("Geolocation Provenance: \(provenanceLabel(provenance))")
+        }
+        if let error = report.network.reachabilityError {
+            networkLines.append("Reachability Error: \(error)")
+        }
+        if let error = report.network.geolocationError {
+            networkLines.append("Geolocation Error: \(error)")
+        }
+        if let error = report.network.portScanError {
+            networkLines.append("Port Scan Error: \(error)")
+        }
+        if !report.network.portScan.isEmpty {
+            networkLines.append("Port Scan:")
+            for result in report.network.portScan {
+                networkLines.append(
+                    "  \(result.port) \(result.service): \(result.open ? "open" : "closed")\(result.banner.map { " banner=\($0)" } ?? "")"
+                )
+            }
+        }
+        return networkLines
+    }
+
+    private static func subdomainsSection(_ report: DomainReport) -> [String] {
+        var values = ["Confidence: \(report.subdomainConfidence?.title ?? "N/A")"]
+        if let provenance = report.sectionProvenance[.subdomains] {
+            values.append("Provenance: \(provenanceLabel(provenance))")
+        }
+        if report.subdomains.isEmpty {
+            values.append("None")
             return values
         }
+        if !report.subdomainGroups.isEmpty {
+            values.append("Groups: \(report.subdomainGroups.map { "\($0.label): \($0.subdomains.count)" }.joined(separator: " | "))")
+        }
+        values.append(contentsOf: report.subdomains.map { "- \($0)" })
+        if !report.extendedSubdomains.isEmpty {
+            values.append("Extended:")
+            values.append(contentsOf: report.extendedSubdomains.map { "- \($0)" })
+        }
+        return values
+    }
 
-        appendSection("Insights", to: &lines) {
-            report.insights.isEmpty ? ["No deterministic insights triggered"] : report.insights.map { "- \($0)" }
+    private static func pricingSection(_ report: DomainReport) -> [String] {
+        guard let pricing = report.domainPricing else {
+            return ["External pricing unavailable"]
         }
 
-        appendSection("Ownership", to: &lines) {
-            var ownershipLines = [
-                "Registrar: \(report.ownership?.registrar ?? "Unavailable")",
-                "Confidence: \(report.ownershipConfidence?.title ?? "N/A")",
-                "Created: \(ownershipDateLabel(report.ownership?.createdDate))",
-                "Expires: \(ownershipDateLabel(report.ownership?.expirationDate))",
-                "Registrant: \(report.ownership?.registrant ?? "Unavailable")",
-                "Nameservers: \(joined(report.ownership?.nameservers) ?? "Unavailable")",
-                "Status: \(joined(report.ownership?.status) ?? "Unavailable")",
-                "Abuse Contact: \(report.ownership?.abuseEmail ?? "Unavailable")"
-            ]
-            if let provenance = report.sectionProvenance[.ownership] {
-                ownershipLines.append("Provenance: \(provenanceLabel(provenance))")
-            }
-            if let error = report.dns.error, report.ownership == nil {
-                ownershipLines.append("Error: \(error)")
-            } else if let error = report.changeSummary?.message, report.ownership == nil, report.ownership == nil {
-                _ = error
-            }
-            return ownershipLines
+        return [
+            "Estimated Price: \(pricing.estimatedPrice ?? "Unavailable")",
+            "Premium: \(pricing.premiumIndicator == true ? "Yes" : "No")",
+            "Resale: \(pricing.resaleSignal ?? "Unavailable")",
+            "Auction: \(pricing.auctionSignal ?? "Unavailable")",
+            "Source: \(pricing.source)",
+            "Collected: \(textDateFormatter.string(from: pricing.collectedAt))"
+        ]
+    }
+
+    private static func changesSection(_ report: DomainReport) -> [String] {
+        guard let changeSummary = report.changeSummary else {
+            return ["No comparison available"]
         }
 
-        appendSection("Ownership History", to: &lines) {
-            guard !report.ownershipHistory.isEmpty else {
-                return ["No ownership history available"]
-            }
-
-            return report.ownershipHistory.map { event in
-                [
-                    textDateFormatter.string(from: event.date),
-                    event.summary,
-                    "source=\(event.source)"
-                ].joined(separator: " | ")
-            }
+        var values = [
+            "Has Changes: \(changeSummary.hasChanges ? "Yes" : "No")",
+            "Severity: \(changeSummary.severity.title)",
+            "Impact: \(changeSummary.impactClassification.title)",
+            "Inferred Summary: \(changeSummary.message)",
+            "Changed Sections: \(changeSummary.changedSections.isEmpty ? "None" : changeSummary.changedSections.joined(separator: ", "))"
+        ]
+        if let riskScoreDelta = changeSummary.riskScoreDelta {
+            values.append("Risk Delta: \(riskScoreDelta >= 0 ? "+" : "")\(riskScoreDelta)")
         }
-
-        appendSection("DNS", to: &lines) {
-            var dnsLines = [
-                "Lookup Duration: \(durationLabel(report.dns.lookupDurationMs))",
-                "Primary IP: \(report.dns.primaryIP ?? "Unavailable")",
-                "PTR: \(report.dns.ptrRecord ?? report.dns.ptrError ?? "Unavailable")",
-                "DNSSEC: \(dnssecLabel(report.dns.dnssecSigned))",
-                "Patterns: \(report.dns.patternSummary.patterns.joined(separator: " | ").nilIfEmpty ?? "None")"
-            ]
-            if let provenance = report.sectionProvenance[.dns] {
-                dnsLines.append("Provenance: \(provenanceLabel(provenance))")
-            }
-            if let error = report.dns.error {
-                dnsLines.append("Error: \(error)")
-            }
-            if report.dns.recordSections.isEmpty {
-                dnsLines.append("Records: None")
-            } else {
-                dnsLines.append("Records:")
-                for section in report.dns.recordSections {
-                    var seen: Set<String> = []
-                    let values = (section.records + section.wildcardRecords)
-                        .map(\.value)
-                        .filter { seen.insert($0).inserted }
-                    let renderedValues = values.isEmpty ? "None" : values.joined(separator: " | ")
-                    dnsLines.append("  \(section.recordType.rawValue): \(renderedValues)")
-                }
-            }
-            return dnsLines
+        if !changeSummary.insights.isEmpty {
+            values.append("Insights: \(changeSummary.insights.joined(separator: " | "))")
         }
-
-        appendSection("DNS History", to: &lines) {
-            guard !report.dnsHistory.isEmpty else {
-                return ["No DNS history available"]
-            }
-
-            return report.dnsHistory.map { event in
-                [
-                    textDateFormatter.string(from: event.date),
-                    event.summary,
-                    "A=\(event.aRecords.joined(separator: " | ").nilIfEmpty ?? "-")",
-                    "NS=\(event.nameservers.joined(separator: " | ").nilIfEmpty ?? "-")",
-                    "source=\(event.source)"
-                ].joined(separator: " | ")
-            }
+        if !changeSummary.observedFacts.isEmpty {
+            values.append("Observed: \(changeSummary.observedFacts.joined(separator: " | "))")
         }
-
-        appendSection("Web", to: &lines) {
-            var webLines = [
-                "TLS Status: \(report.web.tlsStatus)",
-                "TLS Grade: \(report.web.tlsGrade.rawValue)",
-                "TLS Highlights: \(report.web.tlsHighlights.joined(separator: " | "))",
-                "Certificate Warning: \(report.web.certificateWarningLevel.title)",
-                "Security Grade: \(report.web.securityGrade ?? "Unavailable")",
-                "HTTP Status: \(report.web.statusCode.map(String.init) ?? "Unavailable")",
-                "Protocol: \(report.web.httpProtocol ?? "Unavailable")",
-                "HTTP/3 Advertised: \(report.web.http3Advertised ? "Yes" : "No")",
-                "Final URL: \(report.web.finalURL ?? "Unavailable")",
-                "HSTS Preloaded: \(booleanLabel(report.web.hstsPreloaded))",
-                "Header Count: \(report.web.headerCount)"
-            ]
-            if let provenance = report.sectionProvenance[.ssl] {
-                webLines.append("TLS Provenance: \(provenanceLabel(provenance))")
-            }
-            if let provenance = report.sectionProvenance[.httpHeaders] {
-                webLines.append("HTTP Provenance: \(provenanceLabel(provenance))")
-            }
-            if let provenance = report.sectionProvenance[.redirectChain] {
-                webLines.append("Redirect Provenance: \(provenanceLabel(provenance))")
-            }
-            if let tlsError = report.web.tlsError {
-                webLines.append("TLS Error: \(tlsError)")
-            }
-            if let headersError = report.web.headersError {
-                webLines.append("Headers Error: \(headersError)")
-            }
-            if let redirectError = report.web.redirectError {
-                webLines.append("Redirect Error: \(redirectError)")
-            }
-            if !report.web.headers.isEmpty {
-                webLines.append("Headers:")
-                for header in report.web.headers {
-                    webLines.append("  \(header.name): \(header.value)")
-                }
-            }
-            if !report.web.redirectChain.isEmpty {
-                webLines.append("Redirect Chain:")
-                for hop in report.web.redirectChain {
-                    webLines.append("  \(hop.stepNumber). \(hop.statusCode) \(hop.url)\(hop.isFinal ? " (final)" : "")")
-                }
-            }
-            return webLines
+        if let contextNote = changeSummary.contextNote {
+            values.append("Context: \(contextNote)")
         }
-
-        appendSection("Email", to: &lines) {
-            var emailLines = [report.email.summary]
-            if let grade = report.email.grade {
-                emailLines.append("Grade: \(grade.rawValue)")
-            }
-            if !report.email.reasons.isEmpty {
-                emailLines.append("Why: \(report.email.reasons.joined(separator: " | "))")
-            }
-            emailLines.append("Confidence: \(report.emailConfidence?.title ?? "N/A")")
-            if let provenance = report.sectionProvenance[.emailSecurity] {
-                emailLines.append("Provenance: \(provenanceLabel(provenance))")
-            }
-            if let records = report.email.records {
-                emailLines.append("SPF: \(recordLabel(records.spf))")
-                emailLines.append("DMARC: \(recordLabel(records.dmarc))")
-                emailLines.append("DKIM: \(recordLabel(records.dkim))")
-                emailLines.append("BIMI: \(recordLabel(records.bimi))")
-                emailLines.append("MTA-STS: \(records.mtaSts?.txtFound == true ? records.mtaSts?.policyMode ?? "found" : "Unavailable")")
-            }
-            if let error = report.email.error {
-                emailLines.append("Error: \(error)")
-            }
-            return emailLines
-        }
-
-        appendSection("Network", to: &lines) {
-            var networkLines = [
-                "Reachability: \(report.network.reachabilitySummary)",
-                "Geolocation: \(report.network.geolocationSummary)",
-                "Geolocation Confidence: \(report.geolocationConfidence?.title ?? "N/A")",
-                "Open Ports: \(report.network.openPorts.map(String.init).joined(separator: ", ").nilIfEmpty ?? "None")"
-            ]
-            if let provenance = report.sectionProvenance[.ipGeolocation] {
-                networkLines.append("Geolocation Provenance: \(provenanceLabel(provenance))")
-            }
-            if let error = report.network.reachabilityError {
-                networkLines.append("Reachability Error: \(error)")
-            }
-            if let error = report.network.geolocationError {
-                networkLines.append("Geolocation Error: \(error)")
-            }
-            if let error = report.network.portScanError {
-                networkLines.append("Port Scan Error: \(error)")
-            }
-            if !report.network.portScan.isEmpty {
-                networkLines.append("Port Scan:")
-                for result in report.network.portScan {
-                    networkLines.append(
-                        "  \(result.port) \(result.service): \(result.open ? "open" : "closed")\(result.banner.map { " banner=\($0)" } ?? "")"
-                    )
-                }
-            }
-            return networkLines
-        }
-
-        appendSection("Subdomains", to: &lines) {
-            var values = ["Confidence: \(report.subdomainConfidence?.title ?? "N/A")"]
-            if let provenance = report.sectionProvenance[.subdomains] {
-                values.append("Provenance: \(provenanceLabel(provenance))")
-            }
-            if report.subdomains.isEmpty {
-                values.append("None")
-                return values
-            }
-            if !report.subdomainGroups.isEmpty {
-                values.append("Groups: \(report.subdomainGroups.map { "\($0.label): \($0.subdomains.count)" }.joined(separator: " | "))")
-            }
-            values.append(contentsOf: report.subdomains.map { "- \($0)" })
-            if !report.extendedSubdomains.isEmpty {
-                values.append("Extended:")
-                values.append(contentsOf: report.extendedSubdomains.map { "- \($0)" })
-            }
-            return values
-        }
-
-        appendSection("Pricing", to: &lines) {
-            guard let pricing = report.domainPricing else {
-                return ["External pricing unavailable"]
-            }
-
-            return [
-                "Estimated Price: \(pricing.estimatedPrice ?? "Unavailable")",
-                "Premium: \(pricing.premiumIndicator == true ? "Yes" : "No")",
-                "Resale: \(pricing.resaleSignal ?? "Unavailable")",
-                "Auction: \(pricing.auctionSignal ?? "Unavailable")",
-                "Source: \(pricing.source)",
-                "Collected: \(textDateFormatter.string(from: pricing.collectedAt))"
-            ]
-        }
-
-        appendSection("Changes", to: &lines) {
-            guard let changeSummary = report.changeSummary else {
-                return ["No comparison available"]
-            }
-
-            var values = [
-                "Has Changes: \(changeSummary.hasChanges ? "Yes" : "No")",
-                "Severity: \(changeSummary.severity.title)",
-                "Impact: \(changeSummary.impactClassification.title)",
-                "Inferred Summary: \(changeSummary.message)",
-                "Changed Sections: \(changeSummary.changedSections.isEmpty ? "None" : changeSummary.changedSections.joined(separator: ", "))"
-            ]
-            if let riskScoreDelta = changeSummary.riskScoreDelta {
-                values.append("Risk Delta: \(riskScoreDelta >= 0 ? "+" : "")\(riskScoreDelta)")
-            }
-            if !changeSummary.insights.isEmpty {
-                values.append("Insights: \(changeSummary.insights.joined(separator: " | "))")
-            }
-            if !changeSummary.observedFacts.isEmpty {
-                values.append("Observed: \(changeSummary.observedFacts.joined(separator: " | "))")
-            }
-            if let contextNote = changeSummary.contextNote {
-                values.append("Context: \(contextNote)")
-            }
-            return values
-        }
-
-        return lines.joined(separator: "\n")
+        return values
     }
 
     static func batchText(for reports: [DomainReport], title: String) -> String {
