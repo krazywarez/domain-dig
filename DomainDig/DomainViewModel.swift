@@ -1298,17 +1298,7 @@ final class DomainViewModel {
             historyEntries: history
         )
 
-        switch outcome.value {
-        case let .success(events):
-            ownershipHistory = events
-            ownershipHistoryError = nil
-        case let .empty(message):
-            ownershipHistory = []
-            ownershipHistoryError = message
-        case let .error(message):
-            ownershipHistory = []
-            ownershipHistoryError = conciseExternalMessage(message, fallback: "Ownership history unavailable")
-        }
+        (ownershipHistory, ownershipHistoryError) = found(outcome.value, fallback: "Ownership history unavailable")
 
         ownershipHistoryLoading = false
         _ = saveHistoryEntry(replaceLatest: true)
@@ -1331,17 +1321,7 @@ final class DomainViewModel {
             historyEntries: history
         )
 
-        switch outcome.value {
-        case let .success(events):
-            dnsHistory = events
-            dnsHistoryError = nil
-        case let .empty(message):
-            dnsHistory = []
-            dnsHistoryError = message
-        case let .error(message):
-            dnsHistory = []
-            dnsHistoryError = conciseExternalMessage(message, fallback: "DNS history unavailable")
-        }
+        (dnsHistory, dnsHistoryError) = found(outcome.value, fallback: "DNS history unavailable")
 
         dnsHistoryLoading = false
         _ = saveHistoryEntry(replaceLatest: true)
@@ -1363,20 +1343,22 @@ final class DomainViewModel {
             existing: subdomains
         )
 
-        switch outcome.value {
-        case let .success(results):
-            extendedSubdomains = results
-            extendedSubdomainsError = nil
-        case let .empty(message):
-            extendedSubdomains = []
-            extendedSubdomainsError = message
-        case let .error(message):
-            extendedSubdomains = []
-            extendedSubdomainsError = conciseExternalMessage(message, fallback: "Extended subdomains unavailable")
-        }
+        (extendedSubdomains, extendedSubdomainsError) = found(outcome.value, fallback: "Extended subdomains unavailable")
 
         extendedSubdomainsLoading = false
         _ = saveHistoryEntry(replaceLatest: true)
+    }
+
+    /// What a lookup found, and the message to show when it found nothing or failed.
+    private func found<Item>(_ result: ServiceResult<[Item]>, fallback: String) -> ([Item], String?) {
+        switch result {
+        case let .success(items):
+            return (items, nil)
+        case let .empty(message):
+            return ([], message)
+        case let .error(message):
+            return ([], conciseExternalMessage(message, fallback: fallback))
+        }
     }
 
     func refreshUsageCredits() async {
