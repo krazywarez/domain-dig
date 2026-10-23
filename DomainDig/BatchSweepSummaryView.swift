@@ -28,25 +28,12 @@ struct BatchSweepSummaryView: View {
                     Toggle("Show unchanged domains", isOn: $showUnchangedDomains)
                 }
 
-                Section(visibleResults.isEmpty ? "Changed Domains" : "Results") {
-                    if visibleResults.isEmpty {
-                        Text("No domains with changes or warnings")
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(Color(.appTextSecondary))
-                    } else {
-                        ForEach(visibleResults) { result in
-                            if let entry = viewModel.historyEntry(for: result) {
-                                NavigationLink {
-                                    HistoryDetailView(viewModel: viewModel, entry: entry)
-                                } label: {
-                                    BatchResultRowView(result: result)
-                                }
-                            } else {
-                                BatchResultRowView(result: result)
-                            }
-                        }
-                    }
-                }
+                BatchResultsSection(
+                    viewModel: viewModel,
+                    results: visibleResults,
+                    emptyTitle: "Changed Domains",
+                    emptyText: "No domains with changes or warnings"
+                )
             }
             .navigationTitle(summary.source == .watchlistRefresh ? "Sweep Summary" : "Batch Summary")
         }
@@ -61,6 +48,37 @@ struct BatchSweepSummaryView: View {
             Text(value)
                 .font(.system(.callout, design: .monospaced))
                 .foregroundStyle(.primary)
+        }
+    }
+}
+
+/// A batch's results, each opening its history entry where one was saved.
+/// Titled `emptyTitle`, with `emptyText` under it, when nothing is shown.
+struct BatchResultsSection: View {
+    @Bindable var viewModel: DomainViewModel
+    let results: [BatchLookupResult]
+    let emptyTitle: String
+    let emptyText: String
+
+    var body: some View {
+        Section(results.isEmpty ? emptyTitle : "Results") {
+            if results.isEmpty {
+                Text(emptyText)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Color(.appTextSecondary))
+            } else {
+                ForEach(results) { result in
+                    if let entry = viewModel.historyEntry(for: result) {
+                        NavigationLink {
+                            HistoryDetailView(viewModel: viewModel, entry: entry)
+                        } label: {
+                            BatchResultRowView(result: result)
+                        }
+                    } else {
+                        BatchResultRowView(result: result)
+                    }
+                }
+            }
         }
     }
 }

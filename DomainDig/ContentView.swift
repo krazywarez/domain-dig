@@ -566,32 +566,7 @@ struct ContentView: View {
                 .accessibilityValue(viewModel.isCurrentDomainSaved ? "Saved" : "Not saved")
                 .accessibilityAddTraits(viewModel.isCurrentDomainSaved ? .isSelected : [])
                 Menu {
-                    Button("Export TXT") {
-                        shareSingleResults(format: .text)
-                    }
-                    if FeatureAccessService.hasAccess(to: .advancedExports) {
-                        Button("Export CSV") {
-                            shareSingleResults(format: .csv)
-                        }
-                        Button("Export JSON") {
-                            shareSingleResults(format: .json)
-                        }
-                        Button("Export Markdown") {
-                            shareSingleResults(format: .markdown)
-                        }
-                        Button("Export PDF") {
-                            shareSingleResults(format: .pdf)
-                        }
-                    } else {
-                        Button("CSV Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                            .disabled(true)
-                        Button("JSON Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                            .disabled(true)
-                        Button("Markdown Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                            .disabled(true)
-                        Button("PDF Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                            .disabled(true)
-                    }
+                    ExportFormatButtons(share: shareSingleResults)
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                         .font(appDensity.font(.body, design: .default))
@@ -619,32 +594,7 @@ struct ContentView: View {
                             showingBatchWorkflowSheet = true
                         }
                         Divider()
-                        Button("Export Batch TXT") {
-                            shareBatchResults(format: .text)
-                        }
-                        if FeatureAccessService.hasAccess(to: .advancedExports) {
-                            Button("Export Batch CSV") {
-                                shareBatchResults(format: .csv)
-                            }
-                            Button("Export Batch JSON") {
-                                shareBatchResults(format: .json)
-                            }
-                            Button("Export Batch Markdown") {
-                                shareBatchResults(format: .markdown)
-                            }
-                            Button("Export Batch PDF") {
-                                shareBatchResults(format: .pdf)
-                            }
-                        } else {
-                            Button("Batch CSV • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                .disabled(true)
-                            Button("Batch JSON • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                .disabled(true)
-                            Button("Batch Markdown • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                .disabled(true)
-                            Button("Batch PDF • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                .disabled(true)
-                        }
+                        ExportFormatButtons(share: shareBatchResults, batch: true)
                     } label: {
                         Label("Export", systemImage: "square.and.arrow.up")
                             .font(appDensity.font(.caption))

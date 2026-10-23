@@ -303,47 +303,20 @@ final class LocalAPIService {
         static let reference = "DomainDig.LocalAPI.Token"
 
         static func save(secret: String, reference: String) throws {
-            let data = Data(secret.utf8)
-            try? delete(reference: reference)
-
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrAccount as String: reference,
-                kSecValueData as String: data,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-            ]
-
-            let status = SecItemAdd(query as CFDictionary, nil)
-            guard status == errSecSuccess else {
+            guard GenericPasswordKeychain.save(secret, reference: reference) else {
                 throw LocalAPIServerError.secretPersistenceFailed
             }
         }
 
         static func secret(reference: String) throws -> String {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrAccount as String: reference,
-                kSecReturnData as String: true,
-                kSecMatchLimit as String: kSecMatchLimitOne
-            ]
-
-            var result: CFTypeRef?
-            let status = SecItemCopyMatching(query as CFDictionary, &result)
-            guard status == errSecSuccess,
-                  let data = result as? Data,
-                  let secret = String(data: data, encoding: .utf8) else {
+            guard let secret = GenericPasswordKeychain.secret(reference: reference) else {
                 throw LocalAPIServerError.missingSecret
             }
-
             return secret
         }
 
         static func delete(reference: String) throws {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrAccount as String: reference
-            ]
-            SecItemDelete(query as CFDictionary)
+            GenericPasswordKeychain.delete(reference: reference)
         }
     }
 

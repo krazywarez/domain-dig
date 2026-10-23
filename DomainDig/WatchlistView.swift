@@ -150,36 +150,7 @@ struct WatchlistView: View {
                             }
                         }
 
-                        Button("Export TXT") {
-                            shareTrackedDomains(format: .text)
-                        }
-
-                        if FeatureAccessService.hasAccess(to: .advancedExports) {
-                            Button("Export CSV") {
-                                shareTrackedDomains(format: .csv)
-                            }
-
-                            Button("Export JSON") {
-                                shareTrackedDomains(format: .json)
-                            }
-
-                            Button("Export Markdown") {
-                                shareTrackedDomains(format: .markdown)
-                            }
-
-                            Button("Export PDF") {
-                                shareTrackedDomains(format: .pdf)
-                            }
-                        } else {
-                            Button("CSV Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                .disabled(true)
-                            Button("JSON Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                .disabled(true)
-                            Button("Markdown Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                .disabled(true)
-                            Button("PDF Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                .disabled(true)
-                        }
+                        ExportFormatButtons(share: shareTrackedDomains)
                     } label: {
                         Image(systemName: "line.3.horizontal.decrease.circle")
                     }
@@ -313,76 +284,72 @@ struct WatchlistView: View {
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            Button {
-                AppHaptics.refresh()
-                viewModel.refreshTrackedDomain(trackedDomain)
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .tint(Color(.statusInfo))
-
-            Button {
-                viewModel.togglePinned(for: trackedDomain)
-            } label: {
-                Label(trackedDomain.isPinned ? "Unpin" : "Pin", systemImage: trackedDomain.isPinned ? "pin.slash" : "pin")
-            }
-            .tint(Color(.statusWarning))
+            refreshButton(trackedDomain)
+                .tint(Color(.statusInfo))
+            pinButton(trackedDomain)
+                .tint(Color(.statusWarning))
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button {
-                AppHaptics.refresh()
-                viewModel.refreshTrackedDomain(trackedDomain)
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .tint(Color(.statusInfo))
-
-            if viewModel.canDelete(trackedDomain) {
-                Button(role: .destructive) {
-                    viewModel.deleteTrackedDomain(trackedDomain)
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-            }
+            refreshButton(trackedDomain)
+                .tint(Color(.statusInfo))
+            deleteButton(trackedDomain)
         }
         .contextMenu {
-            Button {
-                AppHaptics.refresh()
-                viewModel.refreshTrackedDomain(trackedDomain)
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-
-            Button {
-                dismiss()
-                viewModel.rerunInspection(for: trackedDomain)
-            } label: {
-                Label("Open Inspection", systemImage: "magnifyingglass")
-            }
-
-            Button {
-                viewModel.togglePinned(for: trackedDomain)
-            } label: {
-                Label(trackedDomain.isPinned ? "Unpin" : "Pin", systemImage: trackedDomain.isPinned ? "pin.slash" : "pin")
-            }
-            .disabled(!viewModel.canEdit(trackedDomain))
-
-            Button {
-                // The system sharing UI manages participants and permissions.
-            } label: {
-                Label(trackedDomain.collaboration?.isShared == true ? "Shared" : "Private", systemImage: "person.2")
-            }
-            .disabled(true)
-
-            if viewModel.canDelete(trackedDomain) {
-                Button(role: .destructive) {
-                    viewModel.deleteTrackedDomain(trackedDomain)
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-            }
+            rowMenu(trackedDomain)
         }
         .listRowBackground(Color(.appSurface))
+    }
+
+    @ViewBuilder
+    private func rowMenu(_ trackedDomain: TrackedDomain) -> some View {
+        refreshButton(trackedDomain)
+
+        Button {
+            dismiss()
+            viewModel.rerunInspection(for: trackedDomain)
+        } label: {
+            Label("Open Inspection", systemImage: "magnifyingglass")
+        }
+
+        pinButton(trackedDomain)
+            .disabled(!viewModel.canEdit(trackedDomain))
+
+        Button {
+            // The system sharing UI manages participants and permissions.
+        } label: {
+            Label(trackedDomain.collaboration?.isShared == true ? "Shared" : "Private", systemImage: "person.2")
+        }
+        .disabled(true)
+
+        deleteButton(trackedDomain)
+    }
+
+    private func refreshButton(_ trackedDomain: TrackedDomain) -> some View {
+        Button {
+            AppHaptics.refresh()
+            viewModel.refreshTrackedDomain(trackedDomain)
+        } label: {
+            Label("Refresh", systemImage: "arrow.clockwise")
+        }
+    }
+
+    private func pinButton(_ trackedDomain: TrackedDomain) -> some View {
+        Button {
+            viewModel.togglePinned(for: trackedDomain)
+        } label: {
+            Label(trackedDomain.isPinned ? "Unpin" : "Pin", systemImage: trackedDomain.isPinned ? "pin.slash" : "pin")
+        }
+    }
+
+    @ViewBuilder
+    private func deleteButton(_ trackedDomain: TrackedDomain) -> some View {
+        if viewModel.canDelete(trackedDomain) {
+            Button(role: .destructive) {
+                viewModel.deleteTrackedDomain(trackedDomain)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 
     private var batchSummaryBinding: Binding<BatchSweepSummary?> {

@@ -234,43 +234,48 @@ struct OwnershipSectionView: View {
                         MessageRowView(text: error, isError: error != "Unavailable")
                             .padding(.top, 4)
                     }
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("History")
-                                .font(appDensity.font(.caption))
-                                .foregroundStyle(Color(.appTextSecondary))
-                            Spacer()
-                            if let onLoadHistory, history.isEmpty, !historyLoading, !showsHistoryPlaceholder {
-                                Button("Load") {
-                                    onLoadHistory()
-                                }
-                                .buttonStyle(.bordered)
-                                .font(appDensity.font(.caption2))
-                            }
-                        }
-                        if historyLoading {
-                            ProgressView("Loading history…")
-                                .appLoadingStyle()
-                        } else if !history.isEmpty {
-                            ForEach(history) { event in
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(event.date.formatted(date: .abbreviated, time: .omitted))
-                                        .font(appDensity.font(.caption2))
-                                        .foregroundStyle(Color(.appTextSecondary))
-                                    Text(event.summary)
-                                        .font(appDensity.font(.caption))
-                                    Text(event.source)
-                                        .font(appDensity.font(.caption2))
-                                        .foregroundStyle(Color(.appTextSecondary))
-                                }
-                            }
-                        } else if let historyError {
-                            MessageRowView(text: historyError, isError: false)
-                        } else if showsHistoryPlaceholder {
-                            MessageRowView(text: "Ownership history available in Pro+", isError: false)
-                        }
+                    historyBlock
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var historyBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("History")
+                    .font(appDensity.font(.caption))
+                    .foregroundStyle(Color(.appTextSecondary))
+                Spacer()
+                if let onLoadHistory, history.isEmpty, !historyLoading, !showsHistoryPlaceholder {
+                    Button("Load") {
+                        onLoadHistory()
+                    }
+                    .buttonStyle(.bordered)
+                    .font(appDensity.font(.caption2))
+                }
+            }
+            if historyLoading {
+                ProgressView("Loading history…")
+                    .appLoadingStyle()
+            } else if !history.isEmpty {
+                ForEach(history) { event in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(event.date.formatted(date: .abbreviated, time: .omitted))
+                            .font(appDensity.font(.caption2))
+                            .foregroundStyle(Color(.appTextSecondary))
+                        Text(event.summary)
+                            .font(appDensity.font(.caption))
+                        Text(event.source)
+                            .font(appDensity.font(.caption2))
+                            .foregroundStyle(Color(.appTextSecondary))
                     }
                 }
+            } else if let historyError {
+                MessageRowView(text: historyError, isError: false)
+            } else if showsHistoryPlaceholder {
+                MessageRowView(text: "Ownership history available in Pro+", isError: false)
             }
         }
     }
@@ -463,54 +468,69 @@ struct SubdomainsSectionView: View {
                         .buttonStyle(.bordered)
                         .font(appDensity.font(.caption2))
                     }
-                    if !groups.isEmpty {
-                        Text("Groups")
-                            .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
-                        ForEach(groups) { group in
-                            HStack {
-                                Text("\(group.label).*")
-                                    .font(appDensity.font(.caption))
-                                    .foregroundStyle(Color(.statusInfo))
-                                Spacer()
-                                Text("\(group.subdomains.count)")
-                                    .font(appDensity.font(.caption2))
-                                    .foregroundStyle(Color(.appTextSecondary))
-                            }
-                        }
-                    }
-                    ForEach(rows) { row in
-                        HStack(spacing: 8) {
-                            Text(row.hostname)
-                                .font(appDensity.font(.caption))
-                                .foregroundStyle(.primary)
-                                .textSelection(.enabled)
-                            Spacer()
-                            if row.isInteresting {
-                                Text("Interesting")
-                                    .font(.system(.caption2, design: .monospaced))
-                                    .foregroundStyle(Color(.statusWarning))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color(.statusWarningSurface))
-                                    .clipShape(Capsule())
-                            }
-                        }
-                    }
-                    if extendedLoading {
-                        ProgressView("Loading extended subdomains…")
-                            .appLoadingStyle()
-                            .padding(.top, 4)
-                    } else if extendedCount > 0 {
-                        MessageRowView(text: "\(extendedCount) extended results included", isError: false)
-                            .padding(.top, 4)
-                    } else if let extendedError {
-                        MessageRowView(text: extendedError, isError: false)
-                            .padding(.top, 4)
-                    } else if showsExtendedPlaceholder {
-                        MessageRowView(text: "Extended subdomain discovery available in Pro+", isError: false)
-                            .padding(.top, 4)
-                    }
+                    groupList
+                    subdomainRows
+                    extendedStatus
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var extendedStatus: some View {
+        if extendedLoading {
+            ProgressView("Loading extended subdomains…")
+                .appLoadingStyle()
+                .padding(.top, 4)
+        } else if extendedCount > 0 {
+            MessageRowView(text: "\(extendedCount) extended results included", isError: false)
+                .padding(.top, 4)
+        } else if let extendedError {
+            MessageRowView(text: extendedError, isError: false)
+                .padding(.top, 4)
+        } else if showsExtendedPlaceholder {
+            MessageRowView(text: "Extended subdomain discovery available in Pro+", isError: false)
+                .padding(.top, 4)
+        }
+    }
+
+    @ViewBuilder
+    private var groupList: some View {
+        if !groups.isEmpty {
+            Text("Groups")
+                .font(appDensity.font(.caption2))
+                .foregroundStyle(Color(.appTextSecondary))
+            ForEach(groups) { group in
+                HStack {
+                    Text("\(group.label).*")
+                        .font(appDensity.font(.caption))
+                        .foregroundStyle(Color(.statusInfo))
+                    Spacer()
+                    Text("\(group.subdomains.count)")
+                        .font(appDensity.font(.caption2))
+                        .foregroundStyle(Color(.appTextSecondary))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var subdomainRows: some View {
+        ForEach(rows) { row in
+            HStack(spacing: 8) {
+                Text(row.hostname)
+                    .font(appDensity.font(.caption))
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                Spacer()
+                if row.isInteresting {
+                    Text("Interesting")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(Color(.statusWarning))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(.statusWarningSurface))
+                        .clipShape(Capsule())
                 }
             }
         }
@@ -576,21 +596,7 @@ struct DNSSectionView: View {
             } else if let sectionError, sections.isEmpty {
                 MessageCardView(text: sectionError, isError: true)
             } else {
-                if dnsProvenance != nil {
-                    CardView(allowsHorizontalScroll: false) {
-                        SectionTrustMetadataView(provenance: dnsProvenance, confidence: nil)
-                        if let patternSummary {
-                            if !patternSummary.providers.isEmpty {
-                                MessageRowView(text: "Providers: \(patternSummary.providers.joined(separator: ", "))", isError: false)
-                            }
-                            if !patternSummary.patterns.isEmpty {
-                                ForEach(Array(patternSummary.patterns.enumerated()), id: \.offset) { _, pattern in
-                                    MessageRowView(text: pattern, isError: false)
-                                }
-                            }
-                        }
-                    }
-                }
+                provenanceCard
                 ForEach(sections) { section in
                     CardView {
                         Text(section.title)
@@ -643,33 +649,57 @@ struct DNSSectionView: View {
                             .font(appDensity.font(.caption2))
                         }
                     }
-                    if historyLoading {
-                        ProgressView("Loading DNS history…")
-                            .appLoadingStyle()
-                    } else if !history.isEmpty {
-                        ForEach(history) { event in
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(event.date.formatted(date: .abbreviated, time: .omitted))
-                                    .font(appDensity.font(.caption2))
-                                    .foregroundStyle(Color(.appTextSecondary))
-                                Text(event.summary)
-                                    .font(appDensity.font(.caption))
-                                if !event.aRecords.isEmpty {
-                                    Text("A: \(event.aRecords.joined(separator: ", "))")
-                                        .font(appDensity.font(.caption2))
-                                        .foregroundStyle(Color(.appTextSecondary))
-                                }
-                                if !event.nameservers.isEmpty {
-                                    Text("NS: \(event.nameservers.joined(separator: ", "))")
-                                        .font(appDensity.font(.caption2))
-                                        .foregroundStyle(Color(.appTextSecondary))
-                                }
-                            }
+                    historyContent
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var historyContent: some View {
+        if historyLoading {
+            ProgressView("Loading DNS history…")
+                .appLoadingStyle()
+        } else if !history.isEmpty {
+            ForEach(history) { event in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(event.date.formatted(date: .abbreviated, time: .omitted))
+                        .font(appDensity.font(.caption2))
+                        .foregroundStyle(Color(.appTextSecondary))
+                    Text(event.summary)
+                        .font(appDensity.font(.caption))
+                    if !event.aRecords.isEmpty {
+                        Text("A: \(event.aRecords.joined(separator: ", "))")
+                            .font(appDensity.font(.caption2))
+                            .foregroundStyle(Color(.appTextSecondary))
+                    }
+                    if !event.nameservers.isEmpty {
+                        Text("NS: \(event.nameservers.joined(separator: ", "))")
+                            .font(appDensity.font(.caption2))
+                            .foregroundStyle(Color(.appTextSecondary))
+                    }
+                }
+            }
+        } else if let historyError {
+            MessageRowView(text: historyError, isError: false)
+        } else if showsHistoryPlaceholder {
+            MessageRowView(text: "DNS history available in Pro+", isError: false)
+        }
+    }
+
+    @ViewBuilder
+    private var provenanceCard: some View {
+        if dnsProvenance != nil {
+            CardView(allowsHorizontalScroll: false) {
+                SectionTrustMetadataView(provenance: dnsProvenance, confidence: nil)
+                if let patternSummary {
+                    if !patternSummary.providers.isEmpty {
+                        MessageRowView(text: "Providers: \(patternSummary.providers.joined(separator: ", "))", isError: false)
+                    }
+                    if !patternSummary.patterns.isEmpty {
+                        ForEach(Array(patternSummary.patterns.enumerated()), id: \.offset) { _, pattern in
+                            MessageRowView(text: pattern, isError: false)
                         }
-                    } else if let historyError {
-                        MessageRowView(text: historyError, isError: false)
-                    } else if showsHistoryPlaceholder {
-                        MessageRowView(text: "DNS history available in Pro+", isError: false)
                     }
                 }
             }

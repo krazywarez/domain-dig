@@ -602,38 +602,13 @@ final class DomainMonitoringService {
 
                 if settings.alertsEnabled,
                    alertDescriptor.severity >= settings.alertFilter.minimumSeverity {
-                    let pendingAlert = MonitoringPendingAlert(
-                        detectedAt: now,
-                        message: alertDescriptor.message,
-                        severity: alertDescriptor.severity,
-                        changeHash: alertDescriptor.changeHash
+                    alertsTriggered += await raiseAlert(
+                        alertDescriptor,
+                        for: &updated,
+                        state: &state,
+                        deferred: isQuiet || !notificationsAuthorized,
+                        now: now
                     )
-
-                    if isQuiet || !notificationsAuthorized {
-                        updated.pendingMonitoringAlerts = deduplicatedPendingAlerts(
-                            updated.pendingMonitoringAlerts + [pendingAlert]
-                        )
-                    } else {
-                        let pendingAlerts = deduplicatedPendingAlerts(
-                            updated.pendingMonitoringAlerts + [pendingAlert]
-                        )
-                        if pendingAlerts.count > 1 {
-                            await LocalNotificationService.shared.notifyMonitoringSummary(
-                                domain: trackedDomain.domain,
-                                alerts: pendingAlerts
-                            )
-                        } else {
-                            await LocalNotificationService.shared.notifyMonitoringAlert(
-                                domain: trackedDomain.domain,
-                                message: alertDescriptor.message,
-                                severity: alertDescriptor.severity
-                            )
-                        }
-                        alertsTriggered += 1
-                        updated.pendingMonitoringAlerts = []
-                        updated.lastAlertAt = now
-                        state.lastAlertDate = now
-                    }
                 }
             }
         } else {
@@ -666,6 +641,45 @@ final class DomainMonitoringService {
         state.lastCheck = now
         updated.monitoringState = state
         return (updated, alertsTriggered)
+    }
+
+    /// Queues the alert while notifications are deferred; otherwise notifies, folding in
+    /// any queued alerts, and returns the number of notifications sent.
+    private func raiseAlert(
+        _ alertDescriptor: MonitoringAlertDescriptor,
+        for updated: inout TrackedDomain,
+        state: inout MonitoringState,
+        deferred: Bool,
+        now: Date
+    ) async -> Int {
+        let pendingAlert = MonitoringPendingAlert(
+            detectedAt: now,
+            message: alertDescriptor.message,
+            severity: alertDescriptor.severity,
+            changeHash: alertDescriptor.changeHash
+        )
+        let pendingAlerts = deduplicatedPendingAlerts(updated.pendingMonitoringAlerts + [pendingAlert])
+        if deferred {
+            updated.pendingMonitoringAlerts = pendingAlerts
+            return 0
+        }
+
+        if pendingAlerts.count > 1 {
+            await LocalNotificationService.shared.notifyMonitoringSummary(
+                domain: updated.domain,
+                alerts: pendingAlerts
+            )
+        } else {
+            await LocalNotificationService.shared.notifyMonitoringAlert(
+                domain: updated.domain,
+                message: alertDescriptor.message,
+                severity: alertDescriptor.severity
+            )
+        }
+        updated.pendingMonitoringAlerts = []
+        updated.lastAlertAt = now
+        state.lastAlertDate = now
+        return 1
     }
 
     private func deduplicatedPendingAlerts(_ alerts: [MonitoringPendingAlert]) -> [MonitoringPendingAlert] {
