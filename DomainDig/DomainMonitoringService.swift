@@ -187,16 +187,11 @@ final class DomainMonitoringScheduler {
     private func handleAppRefresh(task: BGAppRefreshTask) {
         _ = syncSchedule()
 
-        let worker = Task {
-            let outcome = await DomainMonitoringService.shared.performMonitoring(
+        task.run {
+            await DomainMonitoringService.shared.performMonitoring(
                 trigger: .background,
                 requireEnabledSetting: true
-            )
-            task.setTaskCompleted(success: outcome.success)
-        }
-
-        task.expirationHandler = {
-            worker.cancel()
+            ).success
         }
     }
 #endif
@@ -903,3 +898,19 @@ final class DomainMonitoringService {
         return snapshot.emailSecurityError
     }
 }
+
+#if canImport(BackgroundTasks)
+extension BGAppRefreshTask {
+    /// Runs `work` for this refresh, completing the task with whether it succeeded, and cancels it
+    /// when the system ends the task early.
+    @MainActor
+    func run(_ work: @escaping @MainActor () async -> Bool) {
+        let worker = Task {
+            setTaskCompleted(success: await work())
+        }
+        expirationHandler = {
+            worker.cancel()
+        }
+    }
+}
+#endif

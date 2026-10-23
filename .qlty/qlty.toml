@@ -11,6 +11,8 @@ exclude_patterns = [
   "**/generated/**",
   ".claude/**",
   "**/Pods/**",
+  # DEBUG-only seed data for the accessibility audit tests.
+  "DomainDig/AuditFixtures.swift",
 ]
 
 test_patterns = [

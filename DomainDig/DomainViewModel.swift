@@ -1282,70 +1282,60 @@ final class DomainViewModel {
     }
 
     func loadOwnershipHistory() async {
-        guard !searchedDomain.isEmpty else { return }
-        guard DataAccessService.hasAccess(to: .ownershipHistory) else {
-            upgradePrompt = FeatureAccessService.upgradePrompt(for: .ownershipHistory)
-            return
+        await loadLookup(.ownershipHistory, into: \.ownershipHistory, loading: \.ownershipHistoryLoading, error: \.ownershipHistoryError,
+                         fallback: "Ownership history unavailable") {
+            await ExternalDataService.shared.ownershipHistory(
+                domain: searchedDomain,
+                currentOwnership: ownershipResult,
+                historyEntries: history
+            ).value
         }
-        guard ownershipHistory.isEmpty else { return }
-
-        ownershipHistoryLoading = true
-        ownershipHistoryError = nil
-
-        let outcome = await ExternalDataService.shared.ownershipHistory(
-            domain: searchedDomain,
-            currentOwnership: ownershipResult,
-            historyEntries: history
-        )
-
-        (ownershipHistory, ownershipHistoryError) = found(outcome.value, fallback: "Ownership history unavailable")
-
-        ownershipHistoryLoading = false
-        _ = saveHistoryEntry(replaceLatest: true)
     }
 
     func loadDNSHistory() async {
-        guard !searchedDomain.isEmpty else { return }
-        guard DataAccessService.hasAccess(to: .dnsHistory) else {
-            upgradePrompt = FeatureAccessService.upgradePrompt(for: .dnsHistory)
-            return
+        await loadLookup(.dnsHistory, into: \.dnsHistory, loading: \.dnsHistoryLoading, error: \.dnsHistoryError,
+                         fallback: "DNS history unavailable") {
+            await ExternalDataService.shared.dnsHistory(
+                domain: searchedDomain,
+                dnsSections: dnsSections,
+                historyEntries: history
+            ).value
         }
-        guard dnsHistory.isEmpty else { return }
-
-        dnsHistoryLoading = true
-        dnsHistoryError = nil
-
-        let outcome = await ExternalDataService.shared.dnsHistory(
-            domain: searchedDomain,
-            dnsSections: dnsSections,
-            historyEntries: history
-        )
-
-        (dnsHistory, dnsHistoryError) = found(outcome.value, fallback: "DNS history unavailable")
-
-        dnsHistoryLoading = false
-        _ = saveHistoryEntry(replaceLatest: true)
     }
 
     func loadExtendedSubdomains() async {
+        await loadLookup(.extendedSubdomains, into: \.extendedSubdomains, loading: \.extendedSubdomainsLoading, error: \.extendedSubdomainsError,
+                         fallback: "Extended subdomains unavailable") {
+            await ExternalDataService.shared.extendedSubdomains(
+                domain: searchedDomain,
+                existing: subdomains
+            ).value
+        }
+    }
+
+    /// Loads `capability`'s lookup for the searched domain into `items`, unless it is loaded
+    /// already, or shows the upgrade prompt when the plan doesn't include it.
+    private func loadLookup<Item>(
+        _ capability: DataCapability,
+        into items: ReferenceWritableKeyPath<DomainViewModel, [Item]>,
+        loading: ReferenceWritableKeyPath<DomainViewModel, Bool>,
+        error: ReferenceWritableKeyPath<DomainViewModel, String?>,
+        fallback: String,
+        fetch: () async -> ServiceResult<[Item]>
+    ) async {
         guard !searchedDomain.isEmpty else { return }
-        guard DataAccessService.hasAccess(to: .extendedSubdomains) else {
-            upgradePrompt = FeatureAccessService.upgradePrompt(for: .extendedSubdomains)
+        guard DataAccessService.hasAccess(to: capability) else {
+            upgradePrompt = FeatureAccessService.upgradePrompt(for: capability.feature)
             return
         }
-        guard extendedSubdomains.isEmpty else { return }
+        guard self[keyPath: items].isEmpty else { return }
 
-        extendedSubdomainsLoading = true
-        extendedSubdomainsError = nil
+        self[keyPath: loading] = true
+        self[keyPath: error] = nil
 
-        let outcome = await ExternalDataService.shared.extendedSubdomains(
-            domain: searchedDomain,
-            existing: subdomains
-        )
+        (self[keyPath: items], self[keyPath: error]) = found(await fetch(), fallback: fallback)
 
-        (extendedSubdomains, extendedSubdomainsError) = found(outcome.value, fallback: "Extended subdomains unavailable")
-
-        extendedSubdomainsLoading = false
+        self[keyPath: loading] = false
         _ = saveHistoryEntry(replaceLatest: true)
     }
 

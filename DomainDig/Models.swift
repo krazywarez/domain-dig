@@ -1246,25 +1246,11 @@ struct MonitoringState: Codable, Equatable, Sendable {
 }
 
 struct MonitoringPendingAlert: Codable, Identifiable, Equatable, Sendable {
-    let id: UUID
+    var id = UUID()
     var detectedAt: Date
     var message: String
     var severity: MonitoringAlertSeverity
     var changeHash: String
-
-    init(
-        id: UUID = UUID(),
-        detectedAt: Date,
-        message: String,
-        severity: MonitoringAlertSeverity,
-        changeHash: String
-    ) {
-        self.id = id
-        self.detectedAt = detectedAt
-        self.message = message
-        self.severity = severity
-        self.changeHash = changeHash
-    }
 }
 
 

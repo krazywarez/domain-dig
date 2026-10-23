@@ -31,25 +31,11 @@ struct ScheduledReportSettings: Codable, Equatable {
 }
 
 struct ScheduledReportLog: Codable, Identifiable, Equatable {
-    let id: UUID
+    var id = UUID()
     let generatedAt: Date
     let domainCount: Int
     let format: DomainExportFormat
     let fileName: String
-
-    init(
-        id: UUID = UUID(),
-        generatedAt: Date,
-        domainCount: Int,
-        format: DomainExportFormat,
-        fileName: String
-    ) {
-        self.id = id
-        self.generatedAt = generatedAt
-        self.domainCount = domainCount
-        self.format = format
-        self.fileName = fileName
-    }
 }
 
 /// Local, UserDefaults-backed persistence for scheduled-report settings and
@@ -245,13 +231,8 @@ final class ScheduledReportScheduler {
     private func handleAppRefresh(task: BGAppRefreshTask) {
         _ = syncSchedule()
 
-        let worker = Task {
-            let outcome = await ScheduledReportService.shared.generateReport(trigger: .background, requireEnabledSetting: true)
-            task.setTaskCompleted(success: outcome.success)
-        }
-
-        task.expirationHandler = {
-            worker.cancel()
+        task.run {
+            await ScheduledReportService.shared.generateReport(trigger: .background, requireEnabledSetting: true).success
         }
     }
     #endif
