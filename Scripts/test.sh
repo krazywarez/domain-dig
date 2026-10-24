@@ -61,6 +61,15 @@ run_tier() {
     echo "          deployment target, so this is not true floor coverage."
   fi
 
+  # Boot and wait before handing the destination to xcodebuild. Left to
+  # xcodebuild, a cold device races its own boot: the test host fails to launch
+  # with "Application launch did not return a process handle" (NSPOSIXErrorDomain
+  # Code=3), no test reports, and the run stalls about 380 seconds before it
+  # calls that a failure. `bootstatus -b` boots if needed and blocks until the
+  # device is ready, which is the whole fix.
+  echo "    booting and waiting for the device"
+  xcrun simctl bootstatus "$udid" -b > /dev/null 2>&1 || true
+
   set -o pipefail
   xcodebuild test \
     -project "$PROJECT" \
