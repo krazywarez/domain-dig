@@ -204,10 +204,51 @@ final class CloudSyncMergeTests: XCTestCase {
         Date(timeIntervalSinceReferenceDate: offset)
     }
 
+    // MARK: Tags
+
+    /// `payloadTrackedDomain` rebuilds the row field by field, and every field
+    /// it forgets is written back to the local store by `applyMergedPayload`.
+    /// It used to forget `tags`, so one sync emptied every tracked domain's
+    /// tags and the watchlist's tag filter with them.
+    func testTagsSurviveThePayloadSanitizer() {
+        let trackedDomain = TrackedDomain(
+            domain: "example.com",
+            createdAt: at(0),
+            updatedAt: at(100),
+            tags: ["client-a", "production"]
+        )
+
+        let sanitized = CloudSyncMerge.payloadTrackedDomain(trackedDomain)
+
+        XCTAssertEqual(sanitized.tags, ["client-a", "production"])
+    }
+
+    func testTagsSurviveAMerge() {
+        let local = trackedDomainRow("example.com", tags: ["client-a"], serverDate: at(100), deviceDate: at(100))
+        let remote = trackedDomainRow("example.com", tags: ["client-b"], serverDate: at(200), deviceDate: at(200))
+
+        let merged = CloudSyncMerge.mergeTrackedDomains([local], [remote])
+
+        XCTAssertEqual(merged.domains.first?.value.tags, ["client-b"])
+    }
+
+    /// Records written before tags were carried decode with none at all, so an
+    /// empty list means "this side has nothing to say", not "cleared".
+    /// Otherwise the first sync after the fix would still drop them.
+    func testTagsFallBackWhenTheWinningSideHasNone() {
+        let local = trackedDomainRow("example.com", tags: ["client-a"], serverDate: at(100), deviceDate: at(100))
+        let legacyRemote = trackedDomainRow("example.com", tags: [], serverDate: at(200), deviceDate: at(200))
+
+        let merged = CloudSyncMerge.mergeTrackedDomains([local], [legacyRemote])
+
+        XCTAssertEqual(merged.domains.first?.value.tags, ["client-a"])
+    }
+
     private func trackedDomainRow(
         _ domain: String,
         note: String? = nil,
         isPinned: Bool = false,
+        tags: [String] = [],
         serverDate: Date?,
         deviceDate: Date
     ) -> SyncRow<TrackedDomain> {
@@ -217,7 +258,8 @@ final class CloudSyncMergeTests: XCTestCase {
                 createdAt: at(0),
                 updatedAt: deviceDate,
                 note: note,
-                isPinned: isPinned
+                isPinned: isPinned,
+                tags: tags
             ),
             orderKey: SyncOrderKey(serverDate: serverDate, deviceDate: deviceDate)
         )
