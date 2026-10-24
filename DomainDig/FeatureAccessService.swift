@@ -28,11 +28,9 @@ enum FeatureCapability: String, CaseIterable, Identifiable {
     case automatedMonitoring
     case localAlerts
     case advancedExports
-    case ownershipHistory
-    case dnsHistory
     case extendedSubdomains
-    case domainPricing
-    case reputation
+    case sharedPortfolios
+    case auditDepth
 
     var id: String { rawValue }
 
@@ -54,16 +52,12 @@ enum FeatureCapability: String, CaseIterable, Identifiable {
             return "Local alerts"
         case .advancedExports:
             return "Advanced exports"
-        case .ownershipHistory:
-            return "Ownership history"
-        case .dnsHistory:
-            return "DNS history"
         case .extendedSubdomains:
             return "Extended subdomains"
-        case .domainPricing:
-            return "Domain pricing"
-        case .reputation:
-            return "Domain reputation"
+        case .sharedPortfolios:
+            return "Shared portfolios"
+        case .auditDepth:
+            return "Unlimited audits"
         }
     }
 }
@@ -74,6 +68,8 @@ struct FeatureEntitlements: Equatable {
     let trackedDomainLimit: Int
     let workflowLimit: Int?
     let batchSizeLimit: Int?
+    /// Concurrently open audit sessions; nil is unlimited.
+    let activeAuditSessionLimit: Int?
 }
 
 struct UpgradePromptContext: Identifiable, Equatable {
@@ -91,14 +87,19 @@ enum FeatureAccessService {
     }
 
     static var entitlements: FeatureEntitlements {
-        switch currentTier {
+        entitlements(for: currentTier)
+    }
+
+    static func entitlements(for tier: FeatureTier) -> FeatureEntitlements {
+        switch tier {
         case .free:
             return FeatureEntitlements(
                 tier: .free,
                 capabilities: [.singleLookup, .basicHistory, .limitedTracking, .workflows, .batchOperations],
                 trackedDomainLimit: 5,
                 workflowLimit: 1,
-                batchSizeLimit: 10
+                batchSizeLimit: 10,
+                activeAuditSessionLimit: 1
             )
         case .pro:
             return FeatureEntitlements(
@@ -111,11 +112,13 @@ enum FeatureAccessService {
                     .batchOperations,
                     .automatedMonitoring,
                     .localAlerts,
-                    .advancedExports
+                    .advancedExports,
+                    .extendedSubdomains
                 ],
                 trackedDomainLimit: effectivelyUnlimitedTrackedDomains,
                 workflowLimit: nil,
-                batchSizeLimit: nil
+                batchSizeLimit: nil,
+                activeAuditSessionLimit: nil
             )
         case .proPlus:
             return FeatureEntitlements(
@@ -123,7 +126,8 @@ enum FeatureAccessService {
                 capabilities: Set(FeatureCapability.allCases),
                 trackedDomainLimit: effectivelyUnlimitedTrackedDomains,
                 workflowLimit: nil,
-                batchSizeLimit: nil
+                batchSizeLimit: nil,
+                activeAuditSessionLimit: nil
             )
         }
     }
@@ -133,7 +137,11 @@ enum FeatureAccessService {
     }
 
     static func canAddTrackedDomain(currentCount: Int) -> Bool {
-        currentCount < entitlements.trackedDomainLimit
+        canAddTrackedDomain(currentCount: currentCount, tier: currentTier)
+    }
+
+    static func canAddTrackedDomain(currentCount: Int, tier: FeatureTier) -> Bool {
+        currentCount < entitlements(for: tier).trackedDomainLimit
     }
 
     static func trackedDomainLimitMessage(currentCount: Int) -> String? {
@@ -158,9 +166,10 @@ enum FeatureAccessService {
 
     static func upgradeMessage(for capability: FeatureCapability) -> String {
         switch capability {
-        case .workflows, .batchOperations, .automatedMonitoring, .localAlerts, .advancedExports:
+        case .workflows, .batchOperations, .automatedMonitoring, .localAlerts, .advancedExports,
+             .extendedSubdomains:
             return "Available in Pro"
-        case .ownershipHistory, .dnsHistory, .extendedSubdomains, .domainPricing, .reputation:
+        case .sharedPortfolios, .auditDepth:
             return "Available in Pro+"
         case .limitedTracking:
             return "Tracking is limited on Free"
@@ -222,7 +231,7 @@ enum FeatureAccessService {
     static func upgradePrompt(for capability: FeatureCapability) -> UpgradePromptContext {
         let title: String
         switch capability {
-        case .ownershipHistory, .dnsHistory, .extendedSubdomains, .domainPricing, .reputation:
+        case .sharedPortfolios, .auditDepth:
             title = "Available in Pro+"
         default:
             title = "Available in Pro"

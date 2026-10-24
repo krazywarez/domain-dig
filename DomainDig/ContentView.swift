@@ -191,7 +191,6 @@ struct ContentView: View {
             }
         }
         .task {
-            await viewModel.refreshUsageCredits()
         }
         .onChange(of: viewModel.searchedDomain) { _, _ in
             collapsedSections = defaultCollapsedSections
@@ -408,9 +407,7 @@ struct ContentView: View {
             trackedDomain: trackedDomain,
             workflows: workflows,
             trackingLimitMessage: viewModel.trackingLimitMessage,
-            pricingLoading: viewModel.domainPricingLoading,
-            pricingError: viewModel.domainPricingError,
-            showsPricingPlaceholder: !DataAccessService.hasAccess(to: .domainPricing),
+
             onTrack: {
                 _ = viewModel.trackCurrentDomain()
             },
@@ -451,11 +448,9 @@ struct ContentView: View {
             error: viewModel.ownershipError,
             provenance: viewModel.currentSnapshot.provenanceBySection[.ownership],
             confidence: viewModel.currentSnapshot.ownershipConfidence,
-            showsHistoryPlaceholder: !DataAccessService.hasAccess(to: .ownershipHistory),
             history: viewModel.ownershipHistory,
             historyLoading: viewModel.ownershipHistoryLoading,
             historyError: viewModel.ownershipHistoryError,
-            historyCreditStatus: viewModel.ownershipHistoryCreditStatus,
             onLoadHistory: {
                 Task {
                     await viewModel.loadOwnershipHistory()
@@ -477,7 +472,6 @@ struct ContentView: View {
             extendedCount: viewModel.extendedSubdomains.count,
             extendedLoading: viewModel.extendedSubdomainsLoading,
             extendedError: viewModel.extendedSubdomainsError,
-            extendedCreditStatus: viewModel.extendedSubdomainsCreditStatus,
             onLoadExtended: {
                 Task {
                     await viewModel.loadExtendedSubdomains()
@@ -500,8 +494,6 @@ struct ContentView: View {
             history: viewModel.dnsHistory,
             historyLoading: viewModel.dnsHistoryLoading,
             historyError: viewModel.dnsHistoryError,
-            showsHistoryPlaceholder: !DataAccessService.hasAccess(to: .dnsHistory),
-            historyCreditStatus: viewModel.dnsHistoryCreditStatus,
             onLoadHistory: {
                 Task {
                     await viewModel.loadDNSHistory()

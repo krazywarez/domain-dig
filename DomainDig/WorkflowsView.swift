@@ -229,6 +229,11 @@ struct WorkflowDetailView: View {
                         .disabled(!viewModel.canEdit(workflow))
 
                         Button {
+                            guard workflow.collaboration?.isShared == true
+                                || FeatureAccessService.hasAccess(to: .sharedPortfolios) else {
+                                viewModel.upgradePrompt = FeatureAccessService.upgradePrompt(for: .sharedPortfolios)
+                                return
+                            }
                             shareEntity = .workflow(workflow.id)
                         } label: {
                             Label(workflow.collaboration?.isShared == true ? "Manage Share" : "Share Workflow", systemImage: "person.2")

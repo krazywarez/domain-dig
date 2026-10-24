@@ -21,9 +21,6 @@ struct DomainSectionView: View {
     let trackedDomain: TrackedDomain?
     let workflows: [DomainWorkflow]
     let trackingLimitMessage: String?
-    let pricingLoading: Bool
-    let pricingError: String?
-    let showsPricingPlaceholder: Bool
     let onTrack: () -> Void
     let onTogglePinned: () -> Void
     let onEditNote: (() -> Void)?
@@ -160,17 +157,6 @@ struct DomainSectionView: View {
                         }
                     }
                 }
-                if pricingLoading {
-                    ProgressView("Loading external pricing…")
-                        .appLoadingStyle()
-                        .padding(.top, 4)
-                } else if let pricingError {
-                    MessageRowView(text: pricingError, isError: false)
-                        .padding(.top, 4)
-                } else if showsPricingPlaceholder {
-                    MessageRowView(text: "Pricing signals available in Pro+", isError: false)
-                        .padding(.top, 4)
-                }
             }
         }
     }
@@ -184,11 +170,9 @@ struct OwnershipSectionView: View {
     let error: String?
     let provenance: SectionProvenance?
     let confidence: ConfidenceLevel?
-    let showsHistoryPlaceholder: Bool
     let history: [DomainOwnershipHistoryEvent]
     let historyLoading: Bool
     let historyError: String?
-    let historyCreditStatus: UsageCreditStatus?
     let onLoadHistory: (() -> Void)?
 
     init(
@@ -198,11 +182,9 @@ struct OwnershipSectionView: View {
         error: String?,
         provenance: SectionProvenance?,
         confidence: ConfidenceLevel?,
-        showsHistoryPlaceholder: Bool,
         history: [DomainOwnershipHistoryEvent] = [],
         historyLoading: Bool = false,
         historyError: String? = nil,
-        historyCreditStatus: UsageCreditStatus? = nil,
         onLoadHistory: (() -> Void)? = nil
     ) {
         _isCollapsed = isCollapsed
@@ -211,11 +193,9 @@ struct OwnershipSectionView: View {
         self.error = error
         self.provenance = provenance
         self.confidence = confidence
-        self.showsHistoryPlaceholder = showsHistoryPlaceholder
         self.history = history
         self.historyLoading = historyLoading
         self.historyError = historyError
-        self.historyCreditStatus = historyCreditStatus
         self.onLoadHistory = onLoadHistory
     }
 
@@ -248,7 +228,7 @@ struct OwnershipSectionView: View {
                     .font(appDensity.font(.caption))
                     .foregroundStyle(Color(.appTextSecondary))
                 Spacer()
-                if let onLoadHistory, history.isEmpty, !historyLoading, !showsHistoryPlaceholder {
+                if let onLoadHistory, history.isEmpty, !historyLoading {
                     Button("Load") {
                         onLoadHistory()
                     }
@@ -274,8 +254,6 @@ struct OwnershipSectionView: View {
                 }
             } else if let historyError {
                 MessageRowView(text: historyError, isError: false)
-            } else if showsHistoryPlaceholder {
-                MessageRowView(text: "Ownership history available in Pro+", isError: false)
             }
         }
     }
@@ -414,7 +392,6 @@ struct SubdomainsSectionView: View {
     let extendedCount: Int
     let extendedLoading: Bool
     let extendedError: String?
-    let extendedCreditStatus: UsageCreditStatus?
     let onLoadExtended: (() -> Void)?
 
     init(
@@ -429,7 +406,6 @@ struct SubdomainsSectionView: View {
         extendedCount: Int = 0,
         extendedLoading: Bool = false,
         extendedError: String? = nil,
-        extendedCreditStatus: UsageCreditStatus? = nil,
         onLoadExtended: (() -> Void)? = nil
     ) {
         _isCollapsed = isCollapsed
@@ -443,7 +419,6 @@ struct SubdomainsSectionView: View {
         self.extendedCount = extendedCount
         self.extendedLoading = extendedLoading
         self.extendedError = extendedError
-        self.extendedCreditStatus = extendedCreditStatus
         self.onLoadExtended = onLoadExtended
     }
 
@@ -551,8 +526,6 @@ struct DNSSectionView: View {
     let history: [DNSHistoryEvent]
     let historyLoading: Bool
     let historyError: String?
-    let showsHistoryPlaceholder: Bool
-    let historyCreditStatus: UsageCreditStatus?
     let onLoadHistory: (() -> Void)?
 
     init(
@@ -568,8 +541,6 @@ struct DNSSectionView: View {
         history: [DNSHistoryEvent] = [],
         historyLoading: Bool = false,
         historyError: String? = nil,
-        showsHistoryPlaceholder: Bool = false,
-        historyCreditStatus: UsageCreditStatus? = nil,
         onLoadHistory: (() -> Void)? = nil
     ) {
         _isCollapsed = isCollapsed
@@ -584,8 +555,6 @@ struct DNSSectionView: View {
         self.history = history
         self.historyLoading = historyLoading
         self.historyError = historyError
-        self.showsHistoryPlaceholder = showsHistoryPlaceholder
-        self.historyCreditStatus = historyCreditStatus
         self.onLoadHistory = onLoadHistory
     }
 
@@ -641,7 +610,7 @@ struct DNSSectionView: View {
                             .font(appDensity.font(.subheadline, weight: .semibold))
                             .foregroundStyle(Color(.statusInfo))
                         Spacer()
-                        if let onLoadHistory, history.isEmpty, !historyLoading, !showsHistoryPlaceholder {
+                        if let onLoadHistory, history.isEmpty, !historyLoading {
                             Button("Load") {
                                 onLoadHistory()
                             }
@@ -682,8 +651,6 @@ struct DNSSectionView: View {
             }
         } else if let historyError {
             MessageRowView(text: historyError, isError: false)
-        } else if showsHistoryPlaceholder {
-            MessageRowView(text: "DNS history available in Pro+", isError: false)
         }
     }
 

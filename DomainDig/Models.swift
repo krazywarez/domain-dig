@@ -392,55 +392,11 @@ struct WorkflowRunSummary: Identifiable, Equatable {
     let generatedAt: Date
 }
 
+/// Data that a tier gates. Ownership and DNS history derive from the user's own
+/// stored snapshots and are not gated at all; pricing and reputation were
+/// removed, having no local derivation and no configured provider.
 enum DataCapability: String, Codable {
-    case ownershipHistory
-    case dnsHistory
     case extendedSubdomains
-    case domainPricing
-    case reputation
-}
-
-enum UsageCreditFeature: String, Codable, CaseIterable, Identifiable, Sendable {
-    case ownershipHistory
-    case dnsHistory
-    case extendedSubdomains
-
-    nonisolated var id: String { rawValue }
-
-    nonisolated var title: String {
-        switch self {
-        case .ownershipHistory:
-            return "Ownership history"
-        case .dnsHistory:
-            return "DNS history"
-        case .extendedSubdomains:
-            return "Extended subdomains"
-        }
-    }
-
-    nonisolated var defaultAllowance: Int {
-        switch self {
-        case .ownershipHistory, .dnsHistory:
-            return 8
-        case .extendedSubdomains:
-            return 12
-        }
-    }
-}
-
-struct UsageCreditStatus: Codable, Equatable, Sendable {
-    let feature: UsageCreditFeature
-    let remaining: Int
-    let total: Int
-    let resetContext: String
-
-    nonisolated var summary: String {
-        "\(remaining) uses remaining"
-    }
-
-    nonisolated var isExhausted: Bool {
-        remaining <= 0
-    }
 }
 
 struct DomainOwnershipHistoryEvent: Identifiable, Codable, Equatable, Sendable {
