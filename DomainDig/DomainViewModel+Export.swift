@@ -104,7 +104,6 @@ extension DomainViewModel {
         DomainDataPortabilityService.saveAppSettings(
             AppSettingsSnapshot(
                 recentSearches: recentSearches,
-                savedDomains: savedDomains,
                 resolverURLString: resolverURLString,
                 appDensityRawValue: appDensityRawValue
             )

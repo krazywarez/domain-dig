@@ -296,8 +296,6 @@ final class DomainViewModel {
     private static let maxRecent = 20
     var recentSearches: [String] = DomainDataPortabilityService.loadRecentSearches()
 
-    private static let savedDomainsKey = "savedDomains"
-    var savedDomains: [String] = DomainDataPortabilityService.loadSavedDomains()
 
     private static let trackedDomainsKey = "trackedDomains"
     private static let legacyWatchedDomainsKey = "watchedDomains"
@@ -389,10 +387,6 @@ final class DomainViewModel {
 
     var isCloudflareProxied: Bool {
         httpHeaders.contains { $0.name.lowercased() == "cf-ray" }
-    }
-
-    var isCurrentDomainSaved: Bool {
-        !searchedDomain.isEmpty && savedDomains.contains(where: { $0.lowercased() == searchedDomain.lowercased() })
     }
 
     var sortedTrackedDomains: [TrackedDomain] {
@@ -770,24 +764,6 @@ final class DomainViewModel {
         [portScanError, customPortScanError].compactMap { $0 }.joined(separator: "\n").nilIfEmpty
     }
 
-    func toggleSavedDomain() {
-        if isCurrentDomainSaved {
-            savedDomains.removeAll { $0.lowercased() == searchedDomain.lowercased() }
-        } else {
-            savedDomains.append(searchedDomain)
-        }
-        DomainDataPortabilityService.saveSavedDomains(savedDomains)
-        CloudSyncService.shared.markAppSettingsChanged()
-        refreshDataLifecycleSummary()
-    }
-
-    func removeSavedDomains(at offsets: IndexSet) {
-        savedDomains.remove(atOffsets: offsets)
-        DomainDataPortabilityService.saveSavedDomains(savedDomains)
-        CloudSyncService.shared.markAppSettingsChanged()
-        refreshDataLifecycleSummary()
-    }
-
     @discardableResult
     func trackCurrentDomain() -> Bool {
         guard !searchedDomain.isEmpty else { return false }
@@ -1027,7 +1003,6 @@ final class DomainViewModel {
         if auditFixturesActive { return }
         #endif
         recentSearches = DomainDataPortabilityService.loadRecentSearches()
-        savedDomains = DomainDataPortabilityService.loadSavedDomains()
         trackedDomains = Self.loadTrackedDomains()
         history = Self.loadHistoryEntries()
         auditSessions = DomainDataPortabilityService.loadAuditSessions()
@@ -1046,7 +1021,6 @@ final class DomainViewModel {
         reset()
 
         recentSearches = []
-        savedDomains = []
         trackedDomains = []
         history = []
         auditSessions = []

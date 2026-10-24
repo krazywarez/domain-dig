@@ -240,7 +240,6 @@ enum CloudSyncMerge {
         let merged = SyncedAppSettings(
             snapshot: AppSettingsSnapshot(
                 recentSearches: deduplicated(winner.snapshot.recentSearches + loser.snapshot.recentSearches).prefix(20).map { $0 },
-                savedDomains: deduplicated(winner.snapshot.savedDomains + loser.snapshot.savedDomains),
                 resolverURLString: winner.snapshot.resolverURLString,
                 appDensityRawValue: winner.snapshot.appDensityRawValue
             ),
@@ -436,7 +435,6 @@ enum CloudSyncMerge {
 
     static func sameAppSettings(_ lhs: AppSettingsSnapshot, _ rhs: AppSettingsSnapshot) -> Bool {
         lhs.recentSearches == rhs.recentSearches
-            && lhs.savedDomains == rhs.savedDomains
             && lhs.resolverURLString == rhs.resolverURLString
             && lhs.appDensityRawValue == rhs.appDensityRawValue
     }

@@ -19,7 +19,6 @@ struct DomainDigBackup: Codable {
 
 struct AppSettingsSnapshot: Codable {
     let recentSearches: [String]
-    let savedDomains: [String]
     let resolverURLString: String
     let appDensityRawValue: String
 }
@@ -549,7 +548,6 @@ enum DomainDataPortabilityService {
 
     private enum StorageKey {
         static let recentSearches = "recentSearches"
-        static let savedDomains = "savedDomains"
         static let trackedDomains = "trackedDomains"
         static let legacyWatchedDomains = "watchedDomains"
         static let history = "lookupHistory"
@@ -568,14 +566,6 @@ enum DomainDataPortabilityService {
 
     static func saveRecentSearches(_ values: [String], defaults: UserDefaults = .standard) {
         defaults.set(Array(values.prefix(20)), forKey: StorageKey.recentSearches)
-    }
-
-    static func loadSavedDomains(defaults: UserDefaults = .standard) -> [String] {
-        defaults.stringArray(forKey: StorageKey.savedDomains) ?? []
-    }
-
-    static func saveSavedDomains(_ values: [String], defaults: UserDefaults = .standard) {
-        defaults.set(values, forKey: StorageKey.savedDomains)
     }
 
     static func loadTrackedDomains(defaults: UserDefaults = .standard) -> [TrackedDomain] {
@@ -700,7 +690,6 @@ enum DomainDataPortabilityService {
     static func loadAppSettings(defaults: UserDefaults = .standard) -> AppSettingsSnapshot {
         AppSettingsSnapshot(
             recentSearches: loadRecentSearches(defaults: defaults),
-            savedDomains: loadSavedDomains(defaults: defaults),
             resolverURLString: defaults.string(forKey: StorageKey.resolverURL) ?? DNSResolverOption.defaultURLString,
             appDensityRawValue: defaults.string(forKey: StorageKey.appDensity) ?? AppDensity.compact.rawValue
         )
@@ -708,7 +697,6 @@ enum DomainDataPortabilityService {
 
     static func saveAppSettings(_ settings: AppSettingsSnapshot, defaults: UserDefaults = .standard) {
         saveRecentSearches(settings.recentSearches, defaults: defaults)
-        saveSavedDomains(settings.savedDomains, defaults: defaults)
         defaults.set(settings.resolverURLString, forKey: StorageKey.resolverURL)
         defaults.set(settings.appDensityRawValue, forKey: StorageKey.appDensity)
     }
@@ -865,7 +853,6 @@ enum DomainDataPortabilityService {
         let appSettings = loadAppSettings(defaults: defaults)
         let featureMetadata = loadFeatureMetadata(defaults: defaults)
         let cachedItems = appSettings.recentSearches.count
-            + appSettings.savedDomains.count
             + (featureMetadata.cachedEntitlement == nil ? 0 : 1)
 
         return DataLifecycleSummary(
@@ -943,7 +930,6 @@ enum DomainDataPortabilityService {
             let monitoringSettings: MonitoringSettings?
             let monitoringLogs: [MonitoringLog]?
             let recentSearches: [String]?
-            let savedDomains: [String]?
         }
 
         let legacy = try JSONDecoder().decode(LegacyBackup.self, from: data)
@@ -959,7 +945,6 @@ enum DomainDataPortabilityService {
             monitoringLogs: legacy.monitoringLogs ?? [],
             appSettings: AppSettingsSnapshot(
                 recentSearches: legacy.recentSearches ?? [],
-                savedDomains: legacy.savedDomains ?? [],
                 resolverURLString: DNSResolverOption.defaultURLString,
                 appDensityRawValue: AppDensity.compact.rawValue
             ),
@@ -1076,7 +1061,7 @@ enum DomainDataPortabilityService {
                     historySnapshots: backup.historyEntries.count,
                     auditSessions: backup.auditSessions?.count ?? 0,
                     workflows: backup.workflows.count,
-                    cachedItems: backup.appSettings.recentSearches.count + backup.appSettings.savedDomains.count + (backup.featureMetadata?.cachedEntitlement == nil ? 0 : 1),
+                    cachedItems: backup.appSettings.recentSearches.count + (backup.featureMetadata?.cachedEntitlement == nil ? 0 : 1),
                     monitoringLogs: backup.monitoringLogs.count
                 )
             }
@@ -1086,7 +1071,7 @@ enum DomainDataPortabilityService {
                 historySnapshots: mergeHistoryEntries(existing: loadHistoryEntries(defaults: defaults), incoming: backup.historyEntries).count,
                 auditSessions: mergeAuditSessions(existing: loadAuditSessions(defaults: defaults), incoming: backup.auditSessions ?? []).count,
                 workflows: mergeWorkflows(existing: loadWorkflows(defaults: defaults), incoming: backup.workflows).count,
-                cachedItems: max(current.cachedItems, backup.appSettings.recentSearches.count + backup.appSettings.savedDomains.count),
+                cachedItems: max(current.cachedItems, backup.appSettings.recentSearches.count),
                 monitoringLogs: mergeMonitoringLogs(existing: loadMonitoringLogs(defaults: defaults), incoming: backup.monitoringLogs).count
             )
         case .trackedDomains(let trackedDomains, _):
@@ -1269,7 +1254,6 @@ enum DomainDataPortabilityService {
     private static func mergeAppSettings(existing: AppSettingsSnapshot, incoming: AppSettingsSnapshot) -> AppSettingsSnapshot {
         AppSettingsSnapshot(
             recentSearches: deduplicated(incoming.recentSearches + existing.recentSearches).prefix(20).map { $0 },
-            savedDomains: deduplicated(incoming.savedDomains + existing.savedDomains),
             resolverURLString: incoming.resolverURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? existing.resolverURLString : incoming.resolverURLString,
             appDensityRawValue: incoming.appDensityRawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? existing.appDensityRawValue : incoming.appDensityRawValue
         )
