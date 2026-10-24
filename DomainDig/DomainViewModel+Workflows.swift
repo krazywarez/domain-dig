@@ -132,7 +132,7 @@ extension DomainViewModel {
     }
 
     func refreshWorkflowList() async {
-        workflows = Self.loadWorkflows(defaults: defaults)
+        workflows = Self.loadWorkflows(defaults: defaults, historyLocation: historyLocation)
         await Task.yield()
     }
 }

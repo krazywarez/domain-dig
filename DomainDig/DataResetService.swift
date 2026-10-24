@@ -47,6 +47,12 @@ enum DataResetService {
 
         try removeTemporaryFiles()
 
+        // History is a directory in Application Support since the v2 store
+        // migration, so clearing the `UserDefaults` domain no longer reaches
+        // it. A reset that left it behind would leave the user's snapshots on
+        // the device after they asked for everything to go.
+        HistoryFileStore.removeAll()
+
         let defaults = UserDefaults.standard
         defaults.removePersistentDomain(forName: bundleIdentifier)
         defaults.synchronize()

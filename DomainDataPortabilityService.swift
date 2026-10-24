@@ -352,7 +352,7 @@ enum DataPortabilityCSV {
 /// The policy is documented in `Docs/data-migration.md`.
 enum DataMigrationService {
     /// The schema version this build expects the on-device store to be at.
-    static let currentStoreSchemaVersion = 1
+    static let currentStoreSchemaVersion = 2
 
     /// UserDefaults key holding the store's current schema version.
     static let storeSchemaVersionKey = "data.storeSchemaVersion"
@@ -371,7 +371,10 @@ enum DataMigrationService {
         return defaults.bool(forKey: legacyNormalizationMarkerKey) ? 1 : 0
     }
 
-    static func migrateIfNeeded(defaults: UserDefaults = .standard) {
+    static func migrateIfNeeded(
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) {
         // At or ahead of this build's version: nothing to do, and never rewrite
         // a store a newer build may have reshaped (forward compatibility).
         guard storeSchemaVersion(defaults: defaults) < currentStoreSchemaVersion else { return }
@@ -379,31 +382,74 @@ enum DataMigrationService {
         var version = storeSchemaVersion(defaults: defaults)
         while version < currentStoreSchemaVersion {
             let target = version + 1
-            runMigration(to: target, defaults: defaults)
+            runMigration(to: target, defaults: defaults, historyLocation: historyLocation)
             defaults.set(target, forKey: storeSchemaVersionKey)
             version = target
         }
     }
 
-    private static func runMigration(to version: Int, defaults: UserDefaults) {
+    private static func runMigration(
+        to version: Int,
+        defaults: UserDefaults,
+        historyLocation: HistoryFileStore.Location
+    ) {
         switch version {
         case 1:
-            normalizeAllStores(defaults: defaults)
+            normalizeAllStores(defaults: defaults, historyLocation: historyLocation)
+        case 2:
+            moveHistoryToFiles(defaults: defaults, historyLocation: historyLocation)
         default:
             break
         }
+    }
+
+    /// v2: history moves out of the `UserDefaults` blob into one file per
+    /// snapshot plus an index (A1 under D3). Reads the blob directly rather
+    /// than through `loadHistoryEntries`, which already prefers the files and
+    /// would return nothing here, and clears the key only once the files are
+    /// written. Safe on an empty store and on one a v2 build already moved.
+    private static func moveHistoryToFiles(
+        defaults: UserDefaults,
+        historyLocation: HistoryFileStore.Location
+    ) {
+        guard let data = defaults.data(forKey: DomainDataPortabilityService.legacyHistoryBlobKey) else { return }
+
+        let entries = (try? JSONDecoder().decode([HistoryEntry].self, from: data)) ?? []
+        guard !entries.isEmpty else {
+            defaults.removeObject(forKey: DomainDataPortabilityService.legacyHistoryBlobKey)
+            return
+        }
+
+        DomainDataPortabilityService.saveHistoryEntries(
+            entries,
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
+
+        // `saveHistoryEntries` clears the key, but only after the files are on
+        // disk — so an interrupted migration leaves the blob to retry from.
     }
 
     /// v1: load every store through its deduplicating loader and write it back.
     /// This consolidates duplicate rows, drops the legacy `watchedDomains` key
     /// (via `saveTrackedDomains`), and sanitizes monitoring settings against the
     /// surviving tracked domains. Safe on an empty store (every step is a no-op).
-    private static func normalizeAllStores(defaults: UserDefaults) {
+    private static func normalizeAllStores(
+        defaults: UserDefaults,
+        historyLocation: HistoryFileStore.Location
+    ) {
         let trackedDomains = DomainDataPortabilityService.loadTrackedDomains(defaults: defaults)
         DomainDataPortabilityService.saveTrackedDomains(trackedDomains, defaults: defaults)
 
-        let historyEntries = DomainDataPortabilityService.loadHistoryEntries(defaults: defaults)
-        DomainDataPortabilityService.saveHistoryEntries(historyEntries, defaults: defaults)
+        let historyEntries = DomainDataPortabilityService.loadHistoryEntries(
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
+        DomainDataPortabilityService.saveHistoryEntries(
+            historyEntries,
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
 
         let auditSessions = DomainDataPortabilityService.loadAuditSessions(defaults: defaults)
         DomainDataPortabilityService.saveAuditSessions(auditSessions, defaults: defaults)
@@ -601,7 +647,19 @@ enum DomainDataPortabilityService {
         defaults.removeObject(forKey: StorageKey.legacyWatchedDomains)
     }
 
-    static func loadHistoryEntries(defaults: UserDefaults = .standard) -> [HistoryEntry] {
+    /// Every snapshot, in full. The file store is the substrate (A1 under D3);
+    /// the `UserDefaults` branch below is only reached before the v2 migration
+    /// has run, and on a store the migration found empty.
+    ///
+    /// Callers that only list history should read `loadHistoryIndex` instead:
+    /// at the Pro+ cap of 2000 rows that is 11 ms against this path's 243 ms.
+    static func loadHistoryEntries(
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) -> [HistoryEntry] {
+        let fromFiles = HistoryFileStore.loadAllEntries(at: historyLocation)
+        if !fromFiles.isEmpty { return fromFiles }
+
         guard let data = defaults.data(forKey: StorageKey.history) else { return [] }
 
         if let entries = try? JSONDecoder().decode([HistoryEntry].self, from: data) {
@@ -623,11 +681,88 @@ enum DomainDataPortabilityService {
         return deduplicatedHistoryEntries(entries)
     }
 
-    static func saveHistoryEntries(_ historyEntries: [HistoryEntry], defaults: UserDefaults = .standard) {
-        if let data = try? JSONEncoder().encode(deduplicatedHistoryEntries(historyEntries)) {
-            defaults.set(data, forKey: StorageKey.history)
-        }
+    /// Rewrites the whole store. This is the migration, a backup import and an
+    /// explicit prune — the cases that really do change every row. A single new
+    /// snapshot should go through `appendHistoryEntry`, which costs 23 ms at
+    /// the Pro+ cap against this path's 656 ms.
+    static func saveHistoryEntries(
+        _ historyEntries: [HistoryEntry],
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) {
+        // Stores what it is given. The retention cap is the caller's business:
+        // a backup import, an export round trip and the v2 migration must not
+        // silently drop rows the user still has.
+        HistoryFileStore.replaceAll(
+            with: deduplicatedHistoryEntries(historyEntries),
+            cap: Int.max,
+            at: historyLocation
+        )
+        defaults.removeObject(forKey: StorageKey.history)
     }
+
+    /// The index alone: what the history list, its filters and its sorts read.
+    static func loadHistoryIndex(
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) -> [HistoryIndexRow] {
+        HistoryFileStore.loadIndex(at: historyLocation)
+    }
+
+    static func loadHistoryEntry(
+        id: UUID,
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) -> HistoryEntry? {
+        HistoryFileStore.loadEntry(id: id, at: historyLocation)
+    }
+
+    /// `cap` is the caller's effective retention limit. Append is the only
+    /// writer that prunes, because it is the only one that adds a row: the
+    /// snapshot that falls off the end has to be deleted from disk by someone,
+    /// and the in-memory array the view model trims cannot do it.
+    static func appendHistoryEntry(
+        _ entry: HistoryEntry,
+        cap: Int,
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) {
+        HistoryFileStore.append(entry, cap: cap, at: historyLocation)
+    }
+
+    static func updateHistoryEntry(
+        _ entry: HistoryEntry,
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) {
+        HistoryFileStore.update(entry, at: historyLocation)
+    }
+
+    static func removeHistoryEntries(
+        ids: Set<UUID>,
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) {
+        HistoryFileStore.remove(ids: ids, at: historyLocation)
+    }
+
+    static func removeAllHistoryEntries(
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) {
+        HistoryFileStore.removeAll(at: historyLocation)
+        defaults.removeObject(forKey: StorageKey.history)
+    }
+
+    /// The key history occupied before v2 moved it into files. The migration
+    /// reads it; nothing else should.
+    static let legacyHistoryBlobKey = StorageKey.history
+
+    /// The hard ceiling on history, independent of the user's auto-prune
+    /// setting. The per-tier retention dial D1 settled on (50/250/2000)
+    /// replaces this constant; until then every tier shares it.
+    static let historyStorageCap = 250
+
 
     static func loadAuditSessions(defaults: UserDefaults = .standard) -> [AuditSession] {
         guard let data = defaults.data(forKey: StorageKey.audits),
@@ -719,14 +854,17 @@ enum DomainDataPortabilityService {
         }
     }
 
-    static func currentBackup(defaults: UserDefaults = .standard) -> DomainDigBackup {
-        DataMigrationService.migrateIfNeeded(defaults: defaults)
+    static func currentBackup(
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) -> DomainDigBackup {
+        DataMigrationService.migrateIfNeeded(defaults: defaults, historyLocation: historyLocation)
         return DomainDigBackup(
             schemaVersion: DomainDigBackup.currentSchemaVersion,
             exportedAt: Date(),
             appVersion: AppVersion.current,
             trackedDomains: loadTrackedDomains(defaults: defaults),
-            historyEntries: loadHistoryEntries(defaults: defaults),
+            historyEntries: loadHistoryEntries(defaults: defaults, historyLocation: historyLocation),
             auditSessions: loadAuditSessions(defaults: defaults),
             workflows: loadWorkflows(defaults: defaults),
             monitoringSettings: loadMonitoringSettings(defaults: defaults),
@@ -736,8 +874,11 @@ enum DomainDataPortabilityService {
         )
     }
 
-    static func backupData(defaults: UserDefaults = .standard) throws -> Data {
-        try makeEncoder().encode(currentBackup(defaults: defaults))
+    static func backupData(
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) throws -> Data {
+        try makeEncoder().encode(currentBackup(defaults: defaults, historyLocation: historyLocation))
     }
 
     static func trackedDomainsExportData(defaults: UserDefaults = .standard) throws -> Data {
@@ -762,13 +903,16 @@ enum DomainDataPortabilityService {
         )
     }
 
-    static func historyExportData(defaults: UserDefaults = .standard) throws -> Data {
+    static func historyExportData(
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) throws -> Data {
         try makeEncoder().encode(
             HistoryExport(
                 schemaVersion: DomainDigBackup.currentSchemaVersion,
                 exportedAt: Date(),
                 appVersion: AppVersion.current,
-                historyEntries: loadHistoryEntries(defaults: defaults)
+                historyEntries: loadHistoryEntries(defaults: defaults, historyLocation: historyLocation)
             )
         )
     }
@@ -785,13 +929,19 @@ enum DomainDataPortabilityService {
         data: Data,
         fileName: String,
         mode: DataPortabilityImportMode,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
     ) throws -> DataImportPreview {
-        DataMigrationService.migrateIfNeeded(defaults: defaults)
-        let currentCounts = lifecycleSummary(defaults: defaults)
+        DataMigrationService.migrateIfNeeded(defaults: defaults, historyLocation: historyLocation)
+        let currentCounts = lifecycleSummary(defaults: defaults, historyLocation: historyLocation)
 
         let payload = try decodeImportPayload(from: data, fileName: fileName)
-        let projectedCounts = projectCounts(for: payload, mode: mode, defaults: defaults)
+        let projectedCounts = projectCounts(
+            for: payload,
+            mode: mode,
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
 
         return DataImportPreview(
             fileName: fileName,
@@ -808,11 +958,12 @@ enum DomainDataPortabilityService {
     static func applyImport(
         _ preview: DataImportPreview,
         mode: DataPortabilityImportMode,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
     ) throws -> DataImportResult {
         switch preview.payload {
         case .backup(let backup, let report):
-            try applyBackup(backup, mode: mode, defaults: defaults)
+            try applyBackup(backup, mode: mode, defaults: defaults, historyLocation: historyLocation)
             return DataImportResult(
                 kind: .backup,
                 mode: mode,
@@ -849,7 +1000,10 @@ enum DomainDataPortabilityService {
         }
     }
 
-    static func lifecycleSummary(defaults: UserDefaults = .standard) -> DataLifecycleSummary {
+    static func lifecycleSummary(
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location
+    ) -> DataLifecycleSummary {
         let appSettings = loadAppSettings(defaults: defaults)
         let featureMetadata = loadFeatureMetadata(defaults: defaults)
         let cachedItems = appSettings.recentSearches.count
@@ -857,7 +1011,7 @@ enum DomainDataPortabilityService {
 
         return DataLifecycleSummary(
             trackedDomains: loadTrackedDomains(defaults: defaults).count,
-            historySnapshots: loadHistoryEntries(defaults: defaults).count,
+            historySnapshots: loadHistoryEntries(defaults: defaults, historyLocation: historyLocation).count,
             auditSessions: loadAuditSessions(defaults: defaults).count,
             workflows: loadWorkflows(defaults: defaults).count,
             cachedItems: cachedItems,
@@ -955,11 +1109,16 @@ enum DomainDataPortabilityService {
     private static func applyBackup(
         _ backup: DomainDigBackup,
         mode: DataPortabilityImportMode,
-        defaults: UserDefaults
+        defaults: UserDefaults,
+        historyLocation: HistoryFileStore.Location
     ) throws {
         if mode == .replace {
             saveTrackedDomains(deduplicatedTrackedDomains(backup.trackedDomains), defaults: defaults)
-            saveHistoryEntries(deduplicatedHistoryEntries(backup.historyEntries), defaults: defaults)
+            saveHistoryEntries(
+                deduplicatedHistoryEntries(backup.historyEntries),
+                defaults: defaults,
+                historyLocation: historyLocation
+            )
             saveAuditSessions(backup.auditSessions ?? [], defaults: defaults)
             saveWorkflows(deduplicatedWorkflows(backup.workflows), defaults: defaults)
             saveMonitoringSettings(
@@ -979,11 +1138,12 @@ enum DomainDataPortabilityService {
         let mergedTrackedDomains = mergeTrackedDomains(existing: existingTrackedDomains, incoming: backup.trackedDomains)
         saveTrackedDomains(mergedTrackedDomains.domains, defaults: defaults)
 
-        let existingHistoryEntries = loadHistoryEntries(defaults: defaults)
+        let existingHistoryEntries = loadHistoryEntries(defaults: defaults, historyLocation: historyLocation)
         let remappedIncomingHistory = backup.historyEntries.map { remapHistoryEntry($0, using: mergedTrackedDomains.idMap) }
         saveHistoryEntries(
             mergeHistoryEntries(existing: existingHistoryEntries, incoming: remappedIncomingHistory),
-            defaults: defaults
+            defaults: defaults,
+            historyLocation: historyLocation
         )
 
         let existingAuditSessions = loadAuditSessions(defaults: defaults)
@@ -1050,9 +1210,10 @@ enum DomainDataPortabilityService {
     private static func projectCounts(
         for payload: ImportPayload,
         mode: DataPortabilityImportMode,
-        defaults: UserDefaults
+        defaults: UserDefaults,
+        historyLocation: HistoryFileStore.Location
     ) -> DataLifecycleSummary {
-        let current = lifecycleSummary(defaults: defaults)
+        let current = lifecycleSummary(defaults: defaults, historyLocation: historyLocation)
         switch payload {
         case .backup(let backup, _):
             if mode == .replace {
@@ -1068,7 +1229,7 @@ enum DomainDataPortabilityService {
 
             return DataLifecycleSummary(
                 trackedDomains: mergeTrackedDomains(existing: loadTrackedDomains(defaults: defaults), incoming: backup.trackedDomains).domains.count,
-                historySnapshots: mergeHistoryEntries(existing: loadHistoryEntries(defaults: defaults), incoming: backup.historyEntries).count,
+                historySnapshots: mergeHistoryEntries(existing: loadHistoryEntries(defaults: defaults, historyLocation: historyLocation), incoming: backup.historyEntries).count,
                 auditSessions: mergeAuditSessions(existing: loadAuditSessions(defaults: defaults), incoming: backup.auditSessions ?? []).count,
                 workflows: mergeWorkflows(existing: loadWorkflows(defaults: defaults), incoming: backup.workflows).count,
                 cachedItems: max(current.cachedItems, backup.appSettings.recentSearches.count),

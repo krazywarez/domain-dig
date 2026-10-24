@@ -18,15 +18,29 @@ final class HistoryStoreTests: XCTestCase {
     private var suiteName = ""
     private var scratch = UserDefaults.standard
 
+    /// History lives in files now, so a scratch `UserDefaults` is no longer
+    /// enough to keep a test out of the real store — it needs its own
+    /// directory too.
+    private var historyLocation = HistoryFileStore.Location.default
+
     override func setUpWithError() throws {
         try super.setUpWithError()
         suiteName = "net.cleberg.DomainDig.tests.\(UUID().uuidString)"
         scratch = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        historyLocation = Self.scratchLocation()
     }
 
     override func tearDown() {
         UserDefaults.standard.removePersistentDomain(forName: suiteName)
+        HistoryFileStore.removeAll(at: historyLocation)
         super.tearDown()
+    }
+
+    private static func scratchLocation() -> HistoryFileStore.Location {
+        HistoryFileStore.Location(
+            root: URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("DomainDigTestHistory-\(UUID().uuidString)", isDirectory: true)
+        )
     }
 
     private func entries(_ count: Int) -> [HistoryEntry] {
@@ -38,8 +52,8 @@ final class HistoryStoreTests: XCTestCase {
     func testTwoThousandEntriesSurviveASaveAndLoad() {
         let saved = entries(Self.proPlusCap)
 
-        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch)
-        let loaded = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch)
+        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch, historyLocation: historyLocation)
+        let loaded = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch, historyLocation: historyLocation)
 
         XCTAssertEqual(loaded.count, Self.proPlusCap, "the store dropped or added rows")
         XCTAssertEqual(Set(loaded.map(\.id)), Set(saved.map(\.id)), "the store changed which rows exist")
@@ -49,9 +63,9 @@ final class HistoryStoreTests: XCTestCase {
     /// history list, the dashboard's recent activity, the diff view's
     /// "previous snapshot" — takes that for granted.
     func testTheStoreReturnsRowsNewestFirst() {
-        DomainDataPortabilityService.saveHistoryEntries(entries(Self.proPlusCap), defaults: scratch)
+        DomainDataPortabilityService.saveHistoryEntries(entries(Self.proPlusCap), defaults: scratch, historyLocation: historyLocation)
 
-        let loaded = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch)
+        let loaded = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch, historyLocation: historyLocation)
 
         XCTAssertEqual(loaded.map(\.timestamp), loaded.map(\.timestamp).sorted(by: >))
         XCTAssertEqual(loaded.first?.snapshotIndex, Self.proPlusCap - 1)
@@ -61,10 +75,10 @@ final class HistoryStoreTests: XCTestCase {
     func testNoRowIsDuplicatedAcrossRepeatedSaves() {
         let saved = entries(Self.proPlusCap)
 
-        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch)
-        let once = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch)
-        DomainDataPortabilityService.saveHistoryEntries(once, defaults: scratch)
-        let twice = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch)
+        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch, historyLocation: historyLocation)
+        let once = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch, historyLocation: historyLocation)
+        DomainDataPortabilityService.saveHistoryEntries(once, defaults: scratch, historyLocation: historyLocation)
+        let twice = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch, historyLocation: historyLocation)
 
         XCTAssertEqual(twice.count, Self.proPlusCap)
         XCTAssertEqual(Set(twice.map(\.id)).count, Self.proPlusCap, "a row was duplicated")
@@ -77,9 +91,9 @@ final class HistoryStoreTests: XCTestCase {
     func testEveryPopulatedFieldSurvivesTheRoundTrip() throws {
         let original = SnapshotFixture.historyEntry(index: 7)
 
-        DomainDataPortabilityService.saveHistoryEntries([original], defaults: scratch)
+        DomainDataPortabilityService.saveHistoryEntries([original], defaults: scratch, historyLocation: historyLocation)
         let restored = try XCTUnwrap(
-            DomainDataPortabilityService.loadHistoryEntries(defaults: scratch).first
+            DomainDataPortabilityService.loadHistoryEntries(defaults: scratch, historyLocation: historyLocation).first
         )
 
         XCTAssertEqual(restored.id, original.id)
@@ -135,23 +149,34 @@ final class HistoryStoreTests: XCTestCase {
 
     func testABackupAtTheCapRestoresEveryRow() throws {
         let saved = entries(Self.proPlusCap)
-        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch)
+        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch, historyLocation: historyLocation)
 
-        let backup = try DomainDataPortabilityService.backupData(defaults: scratch)
+        let backup = try DomainDataPortabilityService.backupData(defaults: scratch, historyLocation: historyLocation)
 
         let restoreName = "net.cleberg.DomainDig.tests.\(UUID().uuidString)"
         defer { UserDefaults.standard.removePersistentDomain(forName: restoreName) }
         let restoreStore = try XCTUnwrap(UserDefaults(suiteName: restoreName))
+        let restoreLocation = Self.scratchLocation()
+        defer { HistoryFileStore.removeAll(at: restoreLocation) }
 
         let preview = try DomainDataPortabilityService.prepareImport(
             data: backup,
             fileName: "backup.json",
             mode: .replace,
-            defaults: restoreStore
+            defaults: restoreStore,
+            historyLocation: restoreLocation
         )
-        _ = try DomainDataPortabilityService.applyImport(preview, mode: .replace, defaults: restoreStore)
+        _ = try DomainDataPortabilityService.applyImport(
+            preview,
+            mode: .replace,
+            defaults: restoreStore,
+            historyLocation: restoreLocation
+        )
 
-        let restored = DomainDataPortabilityService.loadHistoryEntries(defaults: restoreStore)
+        let restored = DomainDataPortabilityService.loadHistoryEntries(
+            defaults: restoreStore,
+            historyLocation: restoreLocation
+        )
         XCTAssertEqual(restored.count, Self.proPlusCap, "the backup round trip changed the row count")
         XCTAssertEqual(Set(restored.map(\.id)), Set(saved.map(\.id)), "the backup round trip changed which rows exist")
     }
@@ -159,29 +184,177 @@ final class HistoryStoreTests: XCTestCase {
     /// A merge import of a backup of the same store must not double every row.
     func testMergingABackupOfTheSameStoreDoesNotDuplicateRows() throws {
         let saved = entries(500)
-        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch)
+        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch, historyLocation: historyLocation)
 
-        let backup = try DomainDataPortabilityService.backupData(defaults: scratch)
+        let backup = try DomainDataPortabilityService.backupData(defaults: scratch, historyLocation: historyLocation)
         let preview = try DomainDataPortabilityService.prepareImport(
             data: backup,
             fileName: "backup.json",
             mode: .merge,
-            defaults: scratch
+            defaults: scratch,
+            historyLocation: historyLocation
         )
-        _ = try DomainDataPortabilityService.applyImport(preview, mode: .merge, defaults: scratch)
+        _ = try DomainDataPortabilityService.applyImport(preview, mode: .merge, defaults: scratch, historyLocation: historyLocation)
 
-        let merged = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch)
+        let merged = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch, historyLocation: historyLocation)
         XCTAssertEqual(merged.count, 500, "merging a backup of the same store duplicated rows")
         XCTAssertEqual(Set(merged.map(\.id)).count, 500)
+    }
+
+    // MARK: The v2 migration off UserDefaults
+
+    /// An install that predates the file store has its history in one
+    /// `UserDefaults` blob. The migration must move every row and then clear
+    /// the key, not before.
+    func testTheMigrationMovesHistoryOutOfUserDefaults() throws {
+        let saved = entries(250)
+        let blob = try JSONEncoder().encode(saved)
+        scratch.set(blob, forKey: DomainDataPortabilityService.legacyHistoryBlobKey)
+        scratch.set(1, forKey: DataMigrationService.storeSchemaVersionKey)
+
+        DataMigrationService.migrateIfNeeded(defaults: scratch, historyLocation: historyLocation)
+
+        XCTAssertNil(
+            scratch.data(forKey: DomainDataPortabilityService.legacyHistoryBlobKey),
+            "the legacy blob survived the migration"
+        )
+        let moved = DomainDataPortabilityService.loadHistoryEntries(
+            defaults: scratch,
+            historyLocation: historyLocation
+        )
+        XCTAssertEqual(Set(moved.map(\.id)), Set(saved.map(\.id)))
+    }
+
+    func testTheMigrationIsSafeOnAnEmptyStore() {
+        scratch.set(1, forKey: DataMigrationService.storeSchemaVersionKey)
+
+        DataMigrationService.migrateIfNeeded(defaults: scratch, historyLocation: historyLocation)
+
+        XCTAssertEqual(DataMigrationService.storeSchemaVersion(defaults: scratch), DataMigrationService.currentStoreSchemaVersion)
+    }
+
+    /// Running it twice must not resurrect or duplicate anything.
+    func testTheMigrationIsIdempotent() throws {
+        let saved = entries(50)
+        scratch.set(try JSONEncoder().encode(saved), forKey: DomainDataPortabilityService.legacyHistoryBlobKey)
+        scratch.set(1, forKey: DataMigrationService.storeSchemaVersionKey)
+
+        DataMigrationService.migrateIfNeeded(defaults: scratch, historyLocation: historyLocation)
+        DataMigrationService.migrateIfNeeded(defaults: scratch, historyLocation: historyLocation)
+
+        let moved = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch, historyLocation: historyLocation)
+        XCTAssertEqual(moved.count, 50)
+    }
+
+    // MARK: Per-entry writes
+
+    /// The reason for the directory: appending one snapshot must not rewrite
+    /// the rest. Measured at the Pro+ cap, 23 ms against 656 ms.
+    func testAppendingOneSnapshotLeavesTheOthersAlone() {
+        let existing = entries(100)
+        DomainDataPortabilityService.saveHistoryEntries(existing, defaults: scratch, historyLocation: historyLocation)
+
+        let fresh = SnapshotFixture.historyEntry(index: 5000)
+        DomainDataPortabilityService.appendHistoryEntry(
+            fresh,
+            cap: 250,
+            defaults: scratch,
+            historyLocation: historyLocation
+        )
+
+        let loaded = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch, historyLocation: historyLocation)
+        XCTAssertEqual(loaded.count, 101)
+        XCTAssertTrue(loaded.contains { $0.id == fresh.id })
+        XCTAssertEqual(Set(existing.map(\.id)).subtracting(loaded.map(\.id)), [])
+    }
+
+    func testUpdatingOneSnapshotChangesOnlyThatRow() throws {
+        var saved = entries(20)
+        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch, historyLocation: historyLocation)
+
+        saved[3].note = "edited"
+        DomainDataPortabilityService.updateHistoryEntry(saved[3], defaults: scratch, historyLocation: historyLocation)
+
+        let loaded = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch, historyLocation: historyLocation)
+        XCTAssertEqual(loaded.count, 20)
+        let edited = try XCTUnwrap(loaded.first { $0.id == saved[3].id })
+        XCTAssertEqual(edited.note, "edited")
+        XCTAssertEqual(loaded.filter { $0.note == "edited" }.count, 1)
+    }
+
+    func testRemovingSnapshotsDropsOnlyThoseRows() {
+        let saved = entries(30)
+        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch, historyLocation: historyLocation)
+
+        let doomed = Set(saved.prefix(5).map(\.id))
+        DomainDataPortabilityService.removeHistoryEntries(ids: doomed, defaults: scratch, historyLocation: historyLocation)
+
+        let loaded = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch, historyLocation: historyLocation)
+        XCTAssertEqual(loaded.count, 25)
+        XCTAssertTrue(Set(loaded.map(\.id)).isDisjoint(with: doomed))
+    }
+
+    /// The index is what a list view reads, and it must agree with the files.
+    func testTheIndexMatchesTheStoredEntries() {
+        let saved = entries(120)
+        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch, historyLocation: historyLocation)
+
+        let index = DomainDataPortabilityService.loadHistoryIndex(defaults: scratch, historyLocation: historyLocation)
+        let full = DomainDataPortabilityService.loadHistoryEntries(defaults: scratch, historyLocation: historyLocation)
+
+        XCTAssertEqual(index.map(\.id), full.map(\.id))
+        XCTAssertEqual(index.map(\.domain), full.map(\.domain))
+        XCTAssertEqual(index.map(\.timestamp), full.map(\.timestamp))
+    }
+
+    /// Append is the only writer that prunes: it adds the row that pushes the
+    /// oldest one past the limit, so it is the only one that can delete it.
+    func testAppendingPastTheCapDropsTheOldestRow() {
+        let saved = entries(250)
+        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch, historyLocation: historyLocation)
+        let oldest = DomainDataPortabilityService.loadHistoryIndex(
+            defaults: scratch,
+            historyLocation: historyLocation
+        ).last
+
+        DomainDataPortabilityService.appendHistoryEntry(
+            SnapshotFixture.historyEntry(index: 7000),
+            cap: 250,
+            defaults: scratch,
+            historyLocation: historyLocation
+        )
+
+        let loaded = DomainDataPortabilityService.loadHistoryIndex(defaults: scratch, historyLocation: historyLocation)
+        XCTAssertEqual(loaded.count, 250)
+        XCTAssertFalse(loaded.contains { $0.id == oldest?.id }, "the oldest row survived the cap")
+    }
+
+    /// A full rewrite stores what it is given. The old `UserDefaults` store
+    /// had no cap here either, and a backup import that quietly truncated a
+    /// user's history to 250 rows would be data loss.
+    func testAFullRewriteDoesNotImposeACap() {
+        DomainDataPortabilityService.saveHistoryEntries(
+            entries(Self.proPlusCap),
+            defaults: scratch,
+            historyLocation: historyLocation
+        )
+
+        XCTAssertEqual(
+            DomainDataPortabilityService.loadHistoryIndex(
+                defaults: scratch,
+                historyLocation: historyLocation
+            ).count,
+            Self.proPlusCap
+        )
     }
 
     // MARK: Validation at the cap
 
     func testValidationAcceptsAStoreAtTheCap() throws {
         let saved = entries(Self.proPlusCap)
-        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch)
+        DomainDataPortabilityService.saveHistoryEntries(saved, defaults: scratch, historyLocation: historyLocation)
 
-        let backup = try DomainDataPortabilityService.backupData(defaults: scratch)
+        let backup = try DomainDataPortabilityService.backupData(defaults: scratch, historyLocation: historyLocation)
         let report = try DomainDataPortabilityService.validateBackup(data: backup)
 
         XCTAssertTrue(report.errors.isEmpty, "a store at the Pro+ cap failed validation: \(report.errors)")

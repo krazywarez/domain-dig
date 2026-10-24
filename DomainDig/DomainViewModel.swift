@@ -342,17 +342,25 @@ final class DomainViewModel {
     /// one the app is using.
     let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard) {
+    /// History lives in files rather than in `defaults`, so the directory is
+    /// injected alongside the store it used to be part of.
+    let historyLocation: HistoryFileStore.Location
+
+    init(
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location = .default
+    ) {
         self.defaults = defaults
+        self.historyLocation = historyLocation
         recentSearches = DomainDataPortabilityService.loadRecentSearches(defaults: defaults)
-        trackedDomains = DomainViewModel.loadTrackedDomains(defaults: defaults)
-        history = DomainViewModel.loadHistoryEntries(defaults: defaults)
+        trackedDomains = DomainViewModel.loadTrackedDomains(defaults: defaults, historyLocation: historyLocation)
+        history = DomainViewModel.loadHistoryEntries(defaults: defaults, historyLocation: historyLocation)
         auditSessions = DomainDataPortabilityService.loadAuditSessions(defaults: defaults)
-        workflows = DomainViewModel.loadWorkflows(defaults: defaults)
+        workflows = DomainViewModel.loadWorkflows(defaults: defaults, historyLocation: historyLocation)
         watchlistSavedViews = DomainViewModel.loadWatchlistSavedViews(defaults: defaults)
         monitoringSettings = MonitoringStorage.loadSettings(defaults: defaults)
         monitoringLogs = MonitoringStorage.loadLogs(defaults: defaults)
-        dataLifecycleSummary = DomainDataPortabilityService.lifecycleSummary(defaults: defaults)
+        dataLifecycleSummary = DomainDataPortabilityService.lifecycleSummary(defaults: defaults, historyLocation: historyLocation)
         historyAutoPruneOption = DomainViewModel.loadHistoryAutoPruneOption(defaults: defaults)
     }
 
@@ -843,13 +851,15 @@ final class DomainViewModel {
         let ids = removedDomains.map(\.id)
         CloudSyncService.shared.recordTrackedDomainReset(removedDomains)
         trackedDomains.removeAll { ids.contains($0.id) }
+        var relinked: [HistoryEntry] = []
         history.indices.forEach { index in
             if let trackedDomainID = history[index].trackedDomainID, ids.contains(trackedDomainID) {
                 history[index].trackedDomainID = nil
+                relinked.append(history[index])
             }
         }
         persistTrackedDomains()
-        persistHistory()
+        relinked.forEach { storeHistoryEntry($0, replacingExisting: true) }
         sanitizeMonitoringSelection()
     }
 
@@ -857,13 +867,15 @@ final class DomainViewModel {
         guard canDelete(trackedDomain) else { return }
         CloudSyncService.shared.recordTrackedDomainDeletion(trackedDomain)
         trackedDomains.removeAll { $0.id == trackedDomain.id }
+        var relinked: [HistoryEntry] = []
         history.indices.forEach { index in
             if history[index].trackedDomainID == trackedDomain.id {
                 history[index].trackedDomainID = nil
+                relinked.append(history[index])
             }
         }
         persistTrackedDomains()
-        persistHistory()
+        relinked.forEach { storeHistoryEntry($0, replacingExisting: true) }
         sanitizeMonitoringSelection()
     }
 
@@ -948,18 +960,23 @@ final class DomainViewModel {
     }
 
     func removeHistoryEntries(at offsets: IndexSet) {
+        let removed = Set(offsets.map { history[$0].id })
         history.remove(atOffsets: offsets)
-        persistHistory()
+        removeStoredHistory(ids: removed)
     }
 
     func removeHistoryEntries(withIDs ids: [UUID]) {
         history.removeAll { ids.contains($0.id) }
-        persistHistory()
+        removeStoredHistory(ids: Set(ids))
     }
 
     func clearHistory() {
         history.removeAll()
-        persistHistory()
+        DomainDataPortabilityService.removeAllHistoryEntries(
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
+        refreshDataLifecycleSummary()
         clearMonitoringLogs()
         refreshDataLifecycleSummary()
     }
@@ -1001,9 +1018,9 @@ final class DomainViewModel {
         // scene activation); the disk reload below would wipe the fixtures.
         if auditFixturesActive { return }
         #endif
-        DataMigrationService.migrateIfNeeded(defaults: defaults)
-        trackedDomains = Self.loadTrackedDomains(defaults: defaults)
-        history = Self.loadHistoryEntries(defaults: defaults)
+        DataMigrationService.migrateIfNeeded(defaults: defaults, historyLocation: historyLocation)
+        trackedDomains = Self.loadTrackedDomains(defaults: defaults, historyLocation: historyLocation)
+        history = Self.loadHistoryEntries(defaults: defaults, historyLocation: historyLocation)
         monitoringSettings = MonitoringStorage.sanitizeSettings(
             MonitoringStorage.loadSettings(defaults: defaults),
             trackedDomains: trackedDomains
@@ -1014,7 +1031,7 @@ final class DomainViewModel {
     }
 
     func refreshDataLifecycleSummary() {
-        dataLifecycleSummary = DomainDataPortabilityService.lifecycleSummary(defaults: defaults)
+        dataLifecycleSummary = DomainDataPortabilityService.lifecycleSummary(defaults: defaults, historyLocation: historyLocation)
     }
 
     func refreshPersistedData() {
@@ -1023,10 +1040,10 @@ final class DomainViewModel {
         if auditFixturesActive { return }
         #endif
         recentSearches = DomainDataPortabilityService.loadRecentSearches(defaults: defaults)
-        trackedDomains = Self.loadTrackedDomains(defaults: defaults)
-        history = Self.loadHistoryEntries(defaults: defaults)
+        trackedDomains = Self.loadTrackedDomains(defaults: defaults, historyLocation: historyLocation)
+        history = Self.loadHistoryEntries(defaults: defaults, historyLocation: historyLocation)
         auditSessions = DomainDataPortabilityService.loadAuditSessions(defaults: defaults)
-        workflows = Self.loadWorkflows(defaults: defaults)
+        workflows = Self.loadWorkflows(defaults: defaults, historyLocation: historyLocation)
         monitoringSettings = MonitoringStorage.sanitizeSettings(
             MonitoringStorage.loadSettings(defaults: defaults),
             trackedDomains: trackedDomains
@@ -1792,7 +1809,10 @@ final class DomainViewModel {
             currentHistoryEntryID = entry.id
         }
 
-        if replaceLatest, !history.isEmpty, history[0].domain.caseInsensitiveCompare(snapshot.domain) == .orderedSame {
+        let replacedLatest = replaceLatest
+            && !history.isEmpty
+            && history[0].domain.caseInsensitiveCompare(snapshot.domain) == .orderedSame
+        if replacedLatest {
             history[0] = entry
         } else {
             history.insert(entry, at: 0)
@@ -1809,18 +1829,59 @@ final class DomainViewModel {
             certificateWarningLevel: DomainDiffService.certificateWarningLevel(for: snapshot),
             certificateDaysRemaining: snapshot.sslInfo?.daysUntilExpiry
         )
-        persistHistory()
+        storeHistoryEntry(entry, replacingExisting: replacedLatest)
         notifyIfNeeded(for: entry, snapshot: snapshot, previousSnapshot: previousSnapshot)
         return entry
     }
 
+    /// A single snapshot written on its own. `persistHistory` rewrites every
+    /// row because it cannot tell what changed; these callers can, and at the
+    /// Pro+ cap that is the difference between 23 ms and 656 ms.
+    private func storeHistoryEntry(_ entry: HistoryEntry, replacingExisting: Bool) {
+        if historyPersistenceSuspended {
+            historyPersistenceDirty = true
+            return
+        }
+        if replacingExisting {
+            DomainDataPortabilityService.updateHistoryEntry(
+                entry,
+                defaults: defaults,
+                historyLocation: historyLocation
+            )
+        } else {
+            DomainDataPortabilityService.appendHistoryEntry(
+                entry,
+                cap: effectiveHistoryLimit,
+                defaults: defaults,
+                historyLocation: historyLocation
+            )
+        }
+        refreshDataLifecycleSummary()
+    }
+
+    private func removeStoredHistory(ids: Set<UUID>) {
+        if historyPersistenceSuspended {
+            historyPersistenceDirty = true
+            return
+        }
+        DomainDataPortabilityService.removeHistoryEntries(
+            ids: ids,
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
+        refreshDataLifecycleSummary()
+    }
+
+    /// Rewrites the whole store. Only the auto-prune setting needs this — it
+    /// drops rows from the middle and cannot say which. Every other writer
+    /// goes through `storeHistoryEntry` or `removeStoredHistory`.
     private func persistHistory() {
         if historyPersistenceSuspended {
             historyPersistenceDirty = true
             return
         }
         let persistStartedAt = DomainDebugLog.signpostStart("DomainViewModel.persistHistory")
-        DomainDataPortabilityService.saveHistoryEntries(history, defaults: defaults)
+        DomainDataPortabilityService.saveHistoryEntries(history, defaults: defaults, historyLocation: historyLocation)
         refreshDataLifecycleSummary()
         DomainDebugLog.signpostEnd("DomainViewModel.persistHistory", start: persistStartedAt, extra: "count=\(history.count)")
     }
@@ -1840,7 +1901,7 @@ final class DomainViewModel {
     func updateHistoryNote(_ note: String, for entry: HistoryEntry) {
         guard let index = history.firstIndex(where: { $0.id == entry.id }) else { return }
         history[index].note = note.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-        persistHistory()
+        storeHistoryEntry(history[index], replacingExisting: true)
     }
 
     #if DEBUG
@@ -1891,15 +1952,20 @@ final class DomainViewModel {
 
         if historyPersistenceDirty {
             historyPersistenceDirty = false
-            DomainDataPortabilityService.saveHistoryEntries(history, defaults: defaults)
+            DomainDataPortabilityService.saveHistoryEntries(history, defaults: defaults, historyLocation: historyLocation)
         }
 
         refreshDataLifecycleSummary()
     }
 
+    /// The number of snapshots this install keeps: the user's auto-prune
+    /// choice, never above the store's own ceiling.
+    private var effectiveHistoryLimit: Int {
+        min(historyAutoPruneOption.keepCount ?? Self.maxHistory, Self.maxHistory)
+    }
+
     private func trimHistoryToLimit() {
-        let hardLimit = historyAutoPruneOption.keepCount ?? Self.maxHistory
-        history = Array(history.prefix(min(hardLimit, Self.maxHistory)))
+        history = Array(history.prefix(effectiveHistoryLimit))
     }
 
     private func nextSnapshotIndex(for domain: String, trackedDomainID: UUID?) -> Int {
@@ -2024,18 +2090,16 @@ final class DomainViewModel {
 
     private func linkTrackedDomainHistory(for domain: String) {
         guard let trackedDomain = trackedDomain(for: domain) else { return }
-        var didChange = false
 
+        var relinked: [HistoryEntry] = []
         for index in history.indices where history[index].domain.caseInsensitiveCompare(domain) == .orderedSame {
             if history[index].trackedDomainID != trackedDomain.id {
                 history[index].trackedDomainID = trackedDomain.id
-                didChange = true
+                relinked.append(history[index])
             }
         }
 
-        if didChange {
-            persistHistory()
-        }
+        relinked.forEach { storeHistoryEntry($0, replacingExisting: true) }
 
         if let latestEntry = history.first(where: { $0.domain.caseInsensitiveCompare(domain) == .orderedSame }),
            let trackedIndex = trackedDomains.firstIndex(where: { $0.id == trackedDomain.id }) {
@@ -3013,9 +3077,15 @@ final class DomainViewModel {
         )
     }
 
-    private static func loadHistoryEntries(defaults: UserDefaults) -> [HistoryEntry] {
-        DataMigrationService.migrateIfNeeded(defaults: defaults)
-        return DomainDataPortabilityService.loadHistoryEntries(defaults: defaults)
+    private static func loadHistoryEntries(
+        defaults: UserDefaults,
+        historyLocation: HistoryFileStore.Location
+    ) -> [HistoryEntry] {
+        DataMigrationService.migrateIfNeeded(defaults: defaults, historyLocation: historyLocation)
+        return DomainDataPortabilityService.loadHistoryEntries(
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
     }
 
     private static func loadHistoryAutoPruneOption(defaults: UserDefaults) -> HistoryAutoPruneOption {
@@ -3026,8 +3096,11 @@ final class DomainViewModel {
         return option
     }
 
-    private static func loadTrackedDomains(defaults: UserDefaults) -> [TrackedDomain] {
-        DataMigrationService.migrateIfNeeded(defaults: defaults)
+    private static func loadTrackedDomains(
+        defaults: UserDefaults,
+        historyLocation: HistoryFileStore.Location
+    ) -> [TrackedDomain] {
+        DataMigrationService.migrateIfNeeded(defaults: defaults, historyLocation: historyLocation)
         return DomainDataPortabilityService.loadTrackedDomains(defaults: defaults)
     }
 
@@ -3037,8 +3110,11 @@ final class DomainViewModel {
         refreshDataLifecycleSummary()
     }
 
-    static func loadWorkflows(defaults: UserDefaults) -> [DomainWorkflow] {
-        DataMigrationService.migrateIfNeeded(defaults: defaults)
+    static func loadWorkflows(
+        defaults: UserDefaults,
+        historyLocation: HistoryFileStore.Location
+    ) -> [DomainWorkflow] {
+        DataMigrationService.migrateIfNeeded(defaults: defaults, historyLocation: historyLocation)
         return DomainDataPortabilityService.loadWorkflows(defaults: defaults)
     }
 

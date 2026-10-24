@@ -59,7 +59,7 @@ extension DomainViewModel {
     }
 
     func exportFullBackupData() -> Data? {
-        try? DomainDataPortabilityService.backupData(defaults: defaults)
+        try? DomainDataPortabilityService.backupData(defaults: defaults, historyLocation: historyLocation)
     }
 
     func exportPortableTrackedDomainsJSONData() -> Data? {
@@ -79,7 +79,7 @@ extension DomainViewModel {
     }
 
     func exportPortableHistoryJSONData() -> Data? {
-        try? DomainDataPortabilityService.historyExportData(defaults: defaults)
+        try? DomainDataPortabilityService.historyExportData(defaults: defaults, historyLocation: historyLocation)
     }
 
     func prepareDataImport(
@@ -87,11 +87,22 @@ extension DomainViewModel {
         fileName: String,
         mode: DataPortabilityImportMode
     ) throws -> DataImportPreview {
-        try DomainDataPortabilityService.prepareImport(data: data, fileName: fileName, mode: mode, defaults: defaults)
+        try DomainDataPortabilityService.prepareImport(
+            data: data,
+            fileName: fileName,
+            mode: mode,
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
     }
 
     func applyDataImport(_ preview: DataImportPreview, mode: DataPortabilityImportMode) throws -> DataImportResult {
-        let result = try DomainDataPortabilityService.applyImport(preview, mode: mode, defaults: defaults)
+        let result = try DomainDataPortabilityService.applyImport(
+            preview,
+            mode: mode,
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
         refreshPersistedData()
         portabilityStatusMessage = result.summary
         CloudSyncService.shared.markAppSettingsChanged()

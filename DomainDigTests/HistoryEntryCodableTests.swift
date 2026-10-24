@@ -126,8 +126,21 @@ final class HistoryEntryCodableTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        DomainDataPortabilityService.saveHistoryEntries([makeEntry()], defaults: defaults)
-        let loaded = DomainDataPortabilityService.loadHistoryEntries(defaults: defaults)
+        let historyLocation = HistoryFileStore.Location(
+            root: URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("DomainDigCodableTest-\(UUID().uuidString)", isDirectory: true)
+        )
+        defer { HistoryFileStore.removeAll(at: historyLocation) }
+
+        DomainDataPortabilityService.saveHistoryEntries(
+            [makeEntry()],
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
+        let loaded = DomainDataPortabilityService.loadHistoryEntries(
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
 
         XCTAssertEqual(loaded.count, 1, "entry was silently dropped by the load path")
         XCTAssertEqual(loaded.first?.domain, "example.com")

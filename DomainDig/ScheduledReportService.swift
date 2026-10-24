@@ -116,7 +116,7 @@ final class ScheduledReportService {
             return ScheduledReportOutcome(success: false, message: "No tracked domains to report on.", log: nil)
         }
 
-        let history = DomainDataPortabilityService.loadHistoryEntries()
+        let history = DomainDataPortabilityService.loadHistoryEntries(historyLocation: .default)
         let builder = DomainReportBuilder()
         let reports = trackedDomains.compactMap { trackedDomain -> DomainReport? in
             let entry = history.first { entry in

@@ -663,7 +663,7 @@ struct LocalAPIRequestHandler {
 
     private func buildPortfolioSummary() -> PortfolioSummary {
         let trackedDomains = DomainDataPortabilityService.loadTrackedDomains()
-        let history = DomainDataPortabilityService.loadHistoryEntries()
+        let history = DomainDataPortabilityService.loadHistoryEntries(historyLocation: .default)
 
         var healthyCount = 0
         var warningCount = 0
@@ -743,13 +743,13 @@ struct LocalAPIRequestHandler {
 
     private func historyEntries(for domain: String) -> [HistoryEntry] {
         let normalized = normalizedDomain(domain)
-        return DomainDataPortabilityService.loadHistoryEntries().filter {
+        return DomainDataPortabilityService.loadHistoryEntries(historyLocation: .default).filter {
             $0.domain.caseInsensitiveCompare(normalized) == .orderedSame
         }
     }
 
     private func latestHistoryEntry(for domain: String, history: [HistoryEntry]? = nil) -> HistoryEntry? {
-        let entries = history ?? DomainDataPortabilityService.loadHistoryEntries()
+        let entries = history ?? DomainDataPortabilityService.loadHistoryEntries(historyLocation: .default)
         let normalized = normalizedDomain(domain)
         return entries.first { $0.domain.caseInsensitiveCompare(normalized) == .orderedSame }
     }

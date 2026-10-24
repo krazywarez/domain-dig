@@ -18,7 +18,7 @@ enum MonitoringStorage {
     static let maxLogs = 40
 
     static func loadSettings(defaults: UserDefaults = .standard) -> MonitoringSettings {
-        DataMigrationService.migrateIfNeeded(defaults: defaults)
+        DataMigrationService.migrateIfNeeded(defaults: defaults, historyLocation: .default)
         return DomainDataPortabilityService.loadMonitoringSettings(defaults: defaults)
     }
 
@@ -27,7 +27,7 @@ enum MonitoringStorage {
     }
 
     static func loadLogs(defaults: UserDefaults = .standard) -> [MonitoringLog] {
-        DataMigrationService.migrateIfNeeded(defaults: defaults)
+        DataMigrationService.migrateIfNeeded(defaults: defaults, historyLocation: .default)
         return DomainDataPortabilityService.loadMonitoringLogs(defaults: defaults)
     }
 
@@ -36,7 +36,7 @@ enum MonitoringStorage {
     }
 
     static func loadTrackedDomains(defaults: UserDefaults = .standard) -> [TrackedDomain] {
-        DataMigrationService.migrateIfNeeded(defaults: defaults)
+        DataMigrationService.migrateIfNeeded(defaults: defaults, historyLocation: .default)
         return DomainDataPortabilityService.loadTrackedDomains(defaults: defaults)
     }
 
@@ -44,13 +44,25 @@ enum MonitoringStorage {
         DomainDataPortabilityService.saveTrackedDomains(domains, defaults: defaults)
     }
 
-    static func loadHistoryEntries(defaults: UserDefaults = .standard) -> [HistoryEntry] {
-        DataMigrationService.migrateIfNeeded(defaults: defaults)
-        return DomainDataPortabilityService.loadHistoryEntries(defaults: defaults)
+    /// The background monitoring run has no view model, so the real store is
+    /// the right one here. Stated rather than defaulted: every other history
+    /// caller names its directory.
+    static func loadHistoryEntries(
+        defaults: UserDefaults = .standard,
+        historyLocation: HistoryFileStore.Location = .default
+    ) -> [HistoryEntry] {
+        DataMigrationService.migrateIfNeeded(defaults: defaults, historyLocation: historyLocation)
+        return DomainDataPortabilityService.loadHistoryEntries(
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
     }
 
-    static func saveHistoryEntries(_ entries: [HistoryEntry]) {
-        DomainDataPortabilityService.saveHistoryEntries(entries)
+    static func saveHistoryEntries(
+        _ entries: [HistoryEntry],
+        historyLocation: HistoryFileStore.Location = .default
+    ) {
+        DomainDataPortabilityService.saveHistoryEntries(entries, historyLocation: historyLocation)
     }
 
     static func sanitizeSettings(_ settings: MonitoringSettings, trackedDomains: [TrackedDomain]) -> MonitoringSettings {

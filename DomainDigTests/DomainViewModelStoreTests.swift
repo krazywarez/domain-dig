@@ -13,14 +13,22 @@ final class DomainViewModelStoreTests: XCTestCase {
     private var suiteName = ""
     private var scratch = UserDefaults.standard
 
+    /// History lives in a directory now, so the scratch store has two halves.
+    private var historyLocation = HistoryFileStore.Location.default
+
     override func setUpWithError() throws {
         try super.setUpWithError()
         suiteName = "net.cleberg.DomainDig.tests.\(UUID().uuidString)"
         scratch = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        historyLocation = HistoryFileStore.Location(
+            root: URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("DomainDigVMTest-\(UUID().uuidString)", isDirectory: true)
+        )
     }
 
     override func tearDown() {
         UserDefaults.standard.removePersistentDomain(forName: suiteName)
+        HistoryFileStore.removeAll(at: historyLocation)
         super.tearDown()
     }
 
@@ -32,7 +40,7 @@ final class DomainViewModelStoreTests: XCTestCase {
     private static var retained: [DomainViewModel] = []
 
     private func makeViewModel() -> DomainViewModel {
-        let viewModel = DomainViewModel(defaults: scratch)
+        let viewModel = DomainViewModel(defaults: scratch, historyLocation: historyLocation)
         Self.retained.append(viewModel)
         return viewModel
     }
@@ -68,7 +76,7 @@ final class DomainViewModelStoreTests: XCTestCase {
             [TrackedDomain(domain: "tracked.example", createdAt: Date(), updatedAt: Date())],
             defaults: scratch
         )
-        DomainDataPortabilityService.saveHistoryEntries(makeEntries(3), defaults: scratch)
+        DomainDataPortabilityService.saveHistoryEntries(makeEntries(3), defaults: scratch, historyLocation: historyLocation)
 
         let viewModel = makeViewModel()
 
@@ -98,7 +106,7 @@ final class DomainViewModelStoreTests: XCTestCase {
         let other = try XCTUnwrap(UserDefaults(suiteName: otherName))
 
         let first = makeViewModel()
-        let second = DomainViewModel(defaults: other)
+        let second = DomainViewModel(defaults: other, historyLocation: historyLocation)
         Self.retained.append(second)
 
         first.addRecentSearch("first.example")
@@ -142,7 +150,7 @@ final class DomainViewModelStoreTests: XCTestCase {
         viewModel.setHistoryAutoPruneOption(.keep50)
 
         XCTAssertEqual(viewModel.history.count, 50)
-        XCTAssertEqual(DomainDataPortabilityService.loadHistoryEntries(defaults: scratch).count, 50)
+        XCTAssertEqual(DomainDataPortabilityService.loadHistoryEntries(defaults: scratch, historyLocation: historyLocation).count, 50)
     }
 
     /// Pruning trims from the front, so the rows kept must be the newest ones.
@@ -172,7 +180,7 @@ final class DomainViewModelStoreTests: XCTestCase {
     /// A store already over the cap must still be readable. Pruning happens on
     /// a write, not on a read, so loading must not drop rows.
     func testAStoreAlreadyOverTheCapLoadsEveryRow() {
-        DomainDataPortabilityService.saveHistoryEntries(makeEntries(300), defaults: scratch)
+        DomainDataPortabilityService.saveHistoryEntries(makeEntries(300), defaults: scratch, historyLocation: historyLocation)
 
         XCTAssertEqual(makeViewModel().history.count, 300)
     }
