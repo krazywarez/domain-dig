@@ -14,6 +14,8 @@
 # only iOS 26.x runtimes, so it structurally cannot cover the floor. This machine
 # can.
 #
+# Scripts/test.sh does the same for the unit suite, for its own reasons.
+#
 # CI covers "current" on a clean checkout (which a local run cannot, since it
 # would miss an uncommitted file). This script covers "floor" (which CI cannot).
 # Together they cover both; neither duplicates the other.
@@ -29,6 +31,9 @@ PROJECT="DomainDig.xcodeproj"
 SCHEME="DomainDig"
 TIER="${1:-both}"
 
+# shellcheck source=lib/simulators.sh
+source "$(dirname "$0")/lib/simulators.sh"
+
 case "$TIER" in
   floor | current | both) ;;
   *)
@@ -38,44 +43,8 @@ case "$TIER" in
 esac
 
 echo "==> Reading deployment target from $PROJECT"
-DEPLOYMENT_TARGET=$(
-  xcodebuild -project "$PROJECT" -scheme "$SCHEME" -showBuildSettings 2>/dev/null \
-    | awk -F' = ' '/ IPHONEOS_DEPLOYMENT_TARGET = /{print $2; exit}'
-)
-
-if [[ -z "${DEPLOYMENT_TARGET:-}" ]]; then
-  echo "error: could not read IPHONEOS_DEPLOYMENT_TARGET" >&2
-  exit 1
-fi
-
-DT_MAJOR="${DEPLOYMENT_TARGET%%.*}"
-DT_MINOR="${DEPLOYMENT_TARGET##*.}"
-[[ "$DT_MINOR" = "$DEPLOYMENT_TARGET" ]] && DT_MINOR=0
-FLOOR_RANK=$(( DT_MAJOR * 1000 + DT_MINOR ))
-
+read_deployment_target
 echo "    deployment target: $DEPLOYMENT_TARGET (rank $FLOOR_RANK)"
-
-# Pick an iPhone simulator at or above the deployment target. A runtime BELOW it
-# is useless — the app cannot install there — which is why this filters rather
-# than just taking the oldest installed runtime.
-select_sim() {
-  local which="$1"
-  xcrun simctl list devices available --json \
-    | jq -c --argjson floor "$FLOOR_RANK" --arg which "$which" '
-        [ .devices | to_entries[]
-          | (.key | capture("SimRuntime\\.iOS-(?<maj>[0-9]+)-(?<min>[0-9]+)$")) as $v
-          | (($v.maj | tonumber) * 1000 + ($v.min | tonumber)) as $rank
-          | select($rank >= $floor)
-          | .value[]
-          | select(.name | startswith("iPhone"))
-          | { rank: $rank, udid: .udid, name: .name, os: "\($v.maj).\($v.min)" }
-        ]
-        | sort_by(.rank, .name)
-        | if length == 0 then empty
-          elif $which == "floor" then first
-          else last end
-      '
-}
 
 run_tier() {
   local which="$1"
@@ -94,7 +63,7 @@ run_tier() {
   echo
   echo "==> $which: $label"
 
-  if [[ "$which" = "floor" ]] && [[ "$(echo "$sim" | jq -r .rank)" -ge $(( (DT_MAJOR + 1) * 1000 )) ]]; then
+  if [[ "$which" = "floor" ]] && floor_is_approximate "$sim"; then
     echo "    NOTE: nearest installed runtime is a major version above the $DEPLOYMENT_TARGET"
     echo "          deployment target, so this is not true floor coverage."
   fi
