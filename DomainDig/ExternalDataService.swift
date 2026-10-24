@@ -145,7 +145,16 @@ actor ExternalDataService {
             await self.enforceRateLimit(for: rateLimitBucket)
             return await operation()
         }
-        inFlight[key] = Task { await task.value as any Sendable }
+        // `inFlight` can only hold the erased task, and cancelling that erased
+        // wrapper does not reach the work it is waiting on. `clearCache()`
+        // cancels what is in flight, so the wrapper forwards cancellation.
+        inFlight[key] = Task {
+            await withTaskCancellationHandler {
+                await task.value as any Sendable
+            } onCancel: {
+                task.cancel()
+            }
+        }
 
         let value = await task.value
         cache[key] = CacheEntry(value: value, expiresAt: Date().addingTimeInterval(ttl))

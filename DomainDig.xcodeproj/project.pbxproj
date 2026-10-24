@@ -32,6 +32,7 @@
 		A1B2C3D40000000000000802 /* LocalAPIRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000801 /* LocalAPIRoutingTests.swift */; };
 		A1B2C3D40000000000000902 /* MonitoringSchedulingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000901 /* MonitoringSchedulingTests.swift */; };
 		A1B2C3D40000000000001002 /* DomainViewModelStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001001 /* DomainViewModelStoreTests.swift */; };
+		A1B2C3D40000000000001102 /* LookupCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001101 /* LookupCacheTests.swift */; };
 		A1B2C3D40000000000000302 /* AvailabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000301 /* AvailabilityTests.swift */; };
 		A1B2C3D40000000000000402 /* CloudSyncMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000401 /* CloudSyncMergeTests.swift */; };
 		A1B2C3D40000000000000502 /* DomainNameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000501 /* DomainNameTests.swift */; };
@@ -111,6 +112,7 @@
 		A1B2C3D40000000000000801 /* LocalAPIRoutingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalAPIRoutingTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000901 /* MonitoringSchedulingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MonitoringSchedulingTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000001001 /* DomainViewModelStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DomainViewModelStoreTests.swift; sourceTree = "<group>"; };
+		A1B2C3D40000000000001101 /* LookupCacheTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LookupCacheTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000301 /* AvailabilityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AvailabilityTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000401 /* CloudSyncMergeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CloudSyncMergeTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000501 /* DomainNameTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DomainNameTests.swift; sourceTree = "<group>"; };
@@ -255,6 +257,7 @@
 				A1B2C3D40000000000000801 /* LocalAPIRoutingTests.swift */,
 				A1B2C3D40000000000000901 /* MonitoringSchedulingTests.swift */,
 				A1B2C3D40000000000001001 /* DomainViewModelStoreTests.swift */,
+				A1B2C3D40000000000001101 /* LookupCacheTests.swift */,
 				A1B2C3D40000000000000301 /* AvailabilityTests.swift */,
 				A1B2C3D40000000000000401 /* CloudSyncMergeTests.swift */,
 				A1B2C3D40000000000000501 /* DomainNameTests.swift */,
@@ -524,6 +527,7 @@
 				A1B2C3D40000000000000802 /* LocalAPIRoutingTests.swift in Sources */,
 				A1B2C3D40000000000000902 /* MonitoringSchedulingTests.swift in Sources */,
 				A1B2C3D40000000000001002 /* DomainViewModelStoreTests.swift in Sources */,
+				A1B2C3D40000000000001102 /* LookupCacheTests.swift in Sources */,
 				A1B2C3D40000000000000302 /* AvailabilityTests.swift in Sources */,
 				A1B2C3D40000000000000402 /* CloudSyncMergeTests.swift in Sources */,
 				A1B2C3D40000000000000502 /* DomainNameTests.swift in Sources */,
