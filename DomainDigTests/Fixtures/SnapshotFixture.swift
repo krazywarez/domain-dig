@@ -173,6 +173,82 @@ enum SnapshotFixture {
         )
     }
 
+    /// A `HistoryEntry` with every section populated, for the tests that care
+    /// about the persisted store rather than about one field. The store holds
+    /// up to 2000 of these at the Pro+ cap, so `index` varies the content: an
+    /// entry repeated verbatim would not measure a realistic encode.
+    static func historyEntry(index: Int = 0, domain: String? = nil) -> HistoryEntry {
+        let host = domain ?? "domain\(index).example"
+        return HistoryEntry(
+            identity: .init(
+                domain: host,
+                timestamp: referenceDate.addingTimeInterval(Double(index)),
+                trackedDomainID: UUID(),
+                note: "note for \(host)"
+            ),
+            inspection: .init(
+                dnsSections: [
+                    dnsSection(type: .A, values: ["203.0.113.\(index % 256)", "198.51.100.\(index % 256)"]),
+                    dnsSection(type: .MX, values: ["10 mail.\(host)"]),
+                    dnsSection(type: .TXT, values: ["v=spf1 include:_spf.\(host) -all"])
+                ],
+                sslInfo: certificate(commonName: host, daysUntilExpiry: 30 + index % 300),
+                httpHeaders: [
+                    HTTPHeader(name: "strict-transport-security", value: "max-age=31536000"),
+                    HTTPHeader(name: "content-security-policy", value: "default-src 'self'"),
+                    HTTPHeader(name: "server", value: "test/\(index)")
+                ],
+                reachabilityResults: [
+                    PortReachability(port: 80, reachable: true, latencyMs: 12 + index % 50),
+                    PortReachability(port: 443, reachable: true, latencyMs: 15 + index % 50)
+                ],
+                ipGeolocation: IPGeolocation(
+                    ip: "203.0.113.\(index % 256)",
+                    city: "Testville",
+                    region: "Test Region",
+                    countryName: "Testland",
+                    org: "Test Org \(index)",
+                    latitude: 45.0,
+                    longitude: -93.0
+                ),
+                ptrRecord: "host\(index).\(host)",
+                redirectChain: [
+                    RedirectHop(stepNumber: 1, statusCode: 301, url: "http://\(host)", isFinal: false),
+                    RedirectHop(stepNumber: 2, statusCode: 200, url: "https://\(host)", isFinal: true)
+                ],
+                subdomains: (0..<5).map { DiscoveredSubdomain(hostname: "sub\($0).\(host)", source: "crt.sh") },
+                hstsPreloaded: index.isMultiple(of: 2)
+            ),
+            registration: .init(priorProviders: ["Provider \(index)", "Provider \(index + 1)"]),
+            intelligence: .init(
+                riskSignals: [
+                    IntelligenceRiskSignal(
+                        id: "signal-\(index)",
+                        title: "Signal \(index)",
+                        detail: "A detail string long enough to be representative of a real finding.",
+                        severity: .medium,
+                        firstObserved: referenceDate,
+                        lastObserved: referenceDate.addingTimeInterval(Double(index))
+                    )
+                ]
+            ),
+            provenance: .init(
+                dataSources: ["dns", "tls", "http", "crt.sh"],
+                validationIssues: [],
+                resolverDisplayName: "Test Resolver",
+                resolverURLString: defaultResolverURL,
+                totalLookupDurationMs: 1200 + index
+            ),
+            summary: .init(
+                primaryIP: "203.0.113.\(index % 256)",
+                finalRedirectURL: "https://\(host)",
+                tlsStatusSummary: "Valid",
+                snapshotIndex: index,
+                changeCount: index % 4
+            )
+        )
+    }
+
     static func certificate(
         commonName: String = "example.com",
         issuer: String = "Test CA",

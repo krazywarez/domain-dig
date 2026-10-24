@@ -1307,11 +1307,13 @@ enum DomainDataPortabilityService {
         return score
     }
 
+    /// `HistoryEntry.id` is non-optional with a `UUID()` default, so every
+    /// entry has one and the id is the whole key. This used to branch on
+    /// `entry.id != UUID()` — a comparison against a freshly generated random
+    /// UUID, true for every entry — behind which the domain-plus-timestamp
+    /// fallback had never run.
     private static func historyKey(for entry: HistoryEntry) -> String {
-        if entry.id != UUID() {
-            return "id:\(entry.id.uuidString)"
-        }
-        return "domain:\(normalizeDomain(entry.domain))|timestamp:\(entry.timestamp.timeIntervalSince1970)"
+        "id:\(entry.id.uuidString)"
     }
 
     private nonisolated static func normalizeDomain(_ value: String) -> String {
