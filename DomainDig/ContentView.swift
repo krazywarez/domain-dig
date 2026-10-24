@@ -436,7 +436,7 @@ struct ContentView: View {
         IntelligenceSectionView(
             isCollapsed: sectionCollapsedBinding(.intelligence),
             report: report,
-            showsPlaceholder: FeatureAccessService.currentTier != .proPlus
+            showsPlaceholder: !FeatureAccessService.hasAccess(to: .intelligenceDetail)
         )
     }
 

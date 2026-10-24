@@ -183,7 +183,7 @@ struct HistoryDetailView: View {
                 IntelligenceSectionView(
                     isCollapsed: .constant(false),
                     report: report,
-                    showsPlaceholder: FeatureAccessService.currentTier != .proPlus
+                    showsPlaceholder: !FeatureAccessService.hasAccess(to: .intelligenceDetail)
                 )
                 .padding(.top, 8)
                 DomainSectionView(

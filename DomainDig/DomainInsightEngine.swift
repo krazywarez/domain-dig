@@ -192,7 +192,6 @@ enum DomainInsightEngine {
                 tally.add(4, "Observed risk has increased materially since the previous snapshot", .negative)
             }
         }
-        scoreReputation(snapshot, into: &tally)
 
         let clampedScore = min(max(tally.score, 0), 100)
         let level: RiskLevel
@@ -330,19 +329,6 @@ enum DomainInsightEngine {
         }
     }
 
-    private static func scoreReputation(_ snapshot: LookupSnapshot, into tally: inout RiskTally) {
-        guard let reputation = snapshot.reputation else { return }
-        switch reputation.status {
-        case .listed:
-            let sourceList = reputation.listedSources.isEmpty ? "" : " (\(reputation.listedSources.joined(separator: ", ")))"
-            tally.add(25, "Domain is flagged by a configured reputation source\(sourceList)", .negative)
-        case .clean:
-            tally.add(0, "Domain is clean against the configured reputation source", .positive)
-        case .unknown:
-            break
-        }
-    }
-
     private static func insights(
         for snapshot: LookupSnapshot,
         previousSnapshot: LookupSnapshot?,
@@ -353,9 +339,6 @@ enum DomainInsightEngine {
     ) -> [String] {
         var items: [String] = []
 
-        if snapshot.reputation?.status == .listed {
-            items.append("Domain is flagged by a configured reputation source")
-        }
         if let group = subdomainGroups.first(where: { $0.label == "staging" || $0.label == "dev" }) {
             items.append("Multiple \(group.label) subdomains suggest non-production environments are exposed")
         }
