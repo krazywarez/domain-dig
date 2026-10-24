@@ -175,6 +175,7 @@ private struct PortfolioDashboardStamp: Equatable {
 final class DomainViewModel {
     var domain: String = ""
     var bulkInput: String = ""
+    var domainInputError: String?
 
     var dnsSections: [DNSSection] = []
     var dnsLoading = false
@@ -1138,8 +1139,16 @@ final class DomainViewModel {
     }
 
     func run() {
-        let target = trimmedDomain
-        guard !target.isEmpty else { return }
+        let target: String
+        switch DomainName.validate(trimmedDomain) {
+        case .success(let host):
+            target = host
+            domainInputError = nil
+        case .failure(let error):
+            domainInputError = error.localizedDescription
+            return
+        }
+
         clearBatchState()
         let lookupID = beginLookup(for: target)
 
@@ -2166,13 +2175,12 @@ final class DomainViewModel {
     }
 
     private func parsedDomains(from input: String) -> [String] {
-        let separators = CharacterSet(charactersIn: ",\n")
+        let separators = CharacterSet(charactersIn: ",").union(.whitespacesAndNewlines)
         var seen = Set<String>()
 
         return input
             .components(separatedBy: separators)
-            .map(normalizedDomain)
-            .filter { !$0.isEmpty }
+            .compactMap { try? DomainName.validate($0).get() }
             .filter { seen.insert($0).inserted }
     }
 

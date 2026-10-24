@@ -96,3 +96,35 @@ final class DomainNameTests: XCTestCase {
         }
     }
 }
+
+/// The validator sits at the input boundary only. `normalizedDomain` is the key
+/// that matches already-stored rows, so it stays lenient: routing it through the
+/// validator would turn tracking and workflow lookups into no-ops for any stored
+/// domain the rules reject.
+@MainActor
+final class DomainViewModelInputTests: XCTestCase {
+    /// Shared and never released: deallocating a `DomainViewModel` runs its
+    /// implicit main-actor-isolated deinit through the iOS 17 back-deployment
+    /// shim, which aborts in the simulator. The app holds one for its whole
+    /// lifetime, so nothing releases one there either.
+    private static let viewModel = DomainViewModel()
+
+    func testAnInvalidDomainDoesNotStartALookup() {
+        let viewModel = Self.viewModel
+        viewModel.domain = "localhost"
+
+        viewModel.run()
+
+        XCTAssertFalse(viewModel.hasRun)
+        XCTAssertNotNil(viewModel.domainInputError)
+    }
+
+    func testAStoredSingleLabelDomainStillTracksAndMatchesWorkflows() {
+        let viewModel = Self.viewModel
+        viewModel.trackedDomains = []
+        viewModel.workflows = [DomainWorkflow(name: "Internal", domains: ["localhost"])]
+
+        XCTAssertTrue(viewModel.trackDomain(domain: "localhost", availabilityStatus: nil))
+        XCTAssertEqual(viewModel.workflowsContaining(domain: "localhost").count, 1)
+    }
+}
