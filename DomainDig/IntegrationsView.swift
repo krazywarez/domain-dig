@@ -290,6 +290,10 @@ private struct IntegrationEditorView: View {
                     TextField("Port", text: $emailPort)
                         .keyboardType(.numberPad)
 
+                    Text("Port 465 with Direct TLS is supported. Port 587 (STARTTLS) is not.")
+                        .font(.caption)
+                        .foregroundStyle(Color(.appTextSecondary))
+
                     TextField("Username", text: $emailUsername)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
