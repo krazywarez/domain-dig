@@ -118,8 +118,6 @@
 		8B1B506D2F666F64005C246F /* Exceptions for "DomainDig" folder in "DomainDig" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				AuditMode.swift,
-				AuditModeView.swift,
 				Info.plist,
 			);
 			target = 8B7800682F6090E300933221 /* DomainDig */;

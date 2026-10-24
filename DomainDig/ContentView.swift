@@ -555,16 +555,6 @@ struct ContentView: View {
                         .foregroundStyle(Color(.appTextSecondary))
                 }
                 .accessibilityLabel("Actions")
-                Button {
-                    viewModel.toggleSavedDomain()
-                } label: {
-                    Image(systemName: viewModel.isCurrentDomainSaved ? "bookmark.fill" : "bookmark")
-                        .font(appDensity.font(.body, design: .default))
-                        .foregroundStyle(viewModel.isCurrentDomainSaved ? Color(.statusWarning) : .secondary)
-                }
-                .accessibilityLabel("Save domain")
-                .accessibilityValue(viewModel.isCurrentDomainSaved ? "Saved" : "Not saved")
-                .accessibilityAddTraits(viewModel.isCurrentDomainSaved ? .isSelected : [])
                 Menu {
                     ExportFormatButtons(share: shareSingleResults)
                 } label: {
