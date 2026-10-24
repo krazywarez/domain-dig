@@ -1808,7 +1808,7 @@ enum SMTPSecurityMode: String, Codable, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .plain:
-            return "Plain"
+            return "None (no TLS)"
         case .directTLS:
             return "Direct TLS"
         }
