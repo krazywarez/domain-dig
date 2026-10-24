@@ -85,8 +85,14 @@ struct UpgradePromptContext: Identifiable, Equatable {
 enum FeatureAccessService {
     private static let effectivelyUnlimitedTrackedDomains = 5_000
 
+    /// Reads the observable property rather than `PurchaseService.cachedTier`,
+    /// the static over UserDefaults. SwiftUI records a dependency for any
+    /// observable property read while a body evaluates, however deep in the
+    /// call tree, so every `hasAccess` call site in a view now updates when a
+    /// purchase lands. The nine `let _ = purchaseService.currentTier` discards
+    /// that used to manufacture that dependency are gone with this.
     static var currentTier: FeatureTier {
-        PurchaseService.cachedTier
+        PurchaseService.shared.currentTier
     }
 
     static var entitlements: FeatureEntitlements {
