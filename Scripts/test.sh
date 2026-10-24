@@ -23,6 +23,7 @@ cd "$(dirname "$0")/.."
 PROJECT="DomainDig.xcodeproj"
 SCHEME="DomainDig"
 TIER="${1:-both}"
+MAX_LAUNCH_ATTEMPTS=3
 
 # shellcheck source=lib/simulators.sh
 source "$(dirname "$0")/lib/simulators.sh"
@@ -42,6 +43,7 @@ echo "    deployment target: $DEPLOYMENT_TARGET (rank $FLOOR_RANK)"
 run_tier() {
   local which="$1"
   local sim udid label
+  local attempt=1
 
   sim=$(select_sim "$which")
   if [[ -z "$sim" ]]; then
@@ -61,22 +63,50 @@ run_tier() {
     echo "          deployment target, so this is not true floor coverage."
   fi
 
-  # Boot and wait before handing the destination to xcodebuild. Left to
-  # xcodebuild, a cold device races its own boot: the test host fails to launch
-  # with "Application launch did not return a process handle" (NSPOSIXErrorDomain
-  # Code=3), no test reports, and the run stalls about 380 seconds before it
-  # calls that a failure. `bootstatus -b` boots if needed and blocks until the
-  # device is ready, which is the whole fix.
-  echo "    booting and waiting for the device"
-  xcrun simctl bootstatus "$udid" -b > /dev/null 2>&1 || true
+  local log
+  log=$(mktemp -t "domaindig-test-$which")
 
-  set -o pipefail
-  xcodebuild test \
-    -project "$PROJECT" \
-    -scheme "$SCHEME" \
-    -destination "id=$udid" \
-    -only-testing:DomainDigTests 2>&1 \
-    | grep -E 'Executed [0-9]+ test|\*\* TEST (SUCCEEDED|FAILED)|error:|malloc: \*\*\*|^Test Case .* failed'
+  while :; do
+    # Boot and wait rather than letting xcodebuild race its own boot.
+    xcrun simctl bootstatus "$udid" -b > /dev/null 2>&1 || true
+
+    set +e
+    xcodebuild test \
+      -project "$PROJECT" \
+      -scheme "$SCHEME" \
+      -destination "id=$udid" \
+      -only-testing:DomainDigTests > "$log" 2>&1
+    local code=$?
+    set -e
+
+    grep -E 'Executed [0-9]+ test|\*\* TEST (SUCCEEDED|FAILED)|error:|malloc: \*\*\*|^Test Case .* failed|failed to launch|did not return a process handle' "$log" || true
+
+    xcrun simctl shutdown "$udid" > /dev/null 2>&1 || true
+
+    if [[ "$code" -eq 0 ]] || ! launch_failed "$log" || [[ "$attempt" -ge "$MAX_LAUNCH_ATTEMPTS" ]]; then
+      rm -f "$log"
+      return "$code"
+    fi
+
+    echo "    launch failed before any test ran; retrying ($attempt/$((MAX_LAUNCH_ATTEMPTS - 1)))"
+    attempt=$((attempt + 1))
+  done
+}
+
+# A CoreSimulator flake, not a test result. The device accepts the install and
+# then the test host never starts: sometimes with "Application launch ... did
+# not return a process handle nor launch error", sometimes with no diagnostic
+# at all beyond "** TEST FAILED **", and left alone xcodebuild can sit ~380s
+# before saying so. Seen on roughly a third of invocations here, on several
+# devices and both runtimes, and not fixed by booting and waiting first.
+#
+# Retrying is a workaround for that, so the test is what makes it safe rather
+# than the error text, which varies: a run that executed no tests at all did
+# not get far enough to have a test result, and a compile failure is excluded
+# so a broken build is not retried three times.
+launch_failed() {
+  local log="$1"
+  ! grep -qE 'Executed [0-9]+ test' "$log" && ! grep -qE ': error:' "$log"
 }
 
 status=0
