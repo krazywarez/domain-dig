@@ -1,13 +1,28 @@
 import Foundation
 
+/// The HTTP fetch behind an RDAP query, injectable so the status mapping can be
+/// exercised without network.
+protocol RDAPTransport {
+    func fetch(_ request: URLRequest) async throws -> (Data, URLResponse)
+}
+
+struct URLSessionRDAPTransport: RDAPTransport {
+    func fetch(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        try await URLSession.shared.data(for: request)
+    }
+}
+
 enum RDAPService {
     /// The registry's answer about `domain`, or nil when the registry did not
     /// give one.
-    static func registrationStatus(for domain: String) async -> DomainAvailabilityStatus? {
+    static func registrationStatus(
+        for domain: String,
+        transport: RDAPTransport = URLSessionRDAPTransport()
+    ) async -> DomainAvailabilityStatus? {
         let normalizedDomain = normalize(domain)
         guard !normalizedDomain.isEmpty else { return nil }
 
-        switch await fetchRDAPResponse(for: normalizedDomain) {
+        switch await fetchRDAPResponse(for: normalizedDomain, transport: transport) {
         case .found:
             return .registered
         case .notRegistered:
@@ -29,13 +44,16 @@ enum RDAPService {
         return host != bootstrapHost && !host.hasSuffix(".\(bootstrapHost)")
     }
 
-    static func ownership(for domain: String) async -> ServiceResult<DomainOwnership> {
+    static func ownership(
+        for domain: String,
+        transport: RDAPTransport = URLSessionRDAPTransport()
+    ) async -> ServiceResult<DomainOwnership> {
         let normalizedDomain = normalize(domain)
         guard !normalizedDomain.isEmpty else {
             return .empty("Unavailable")
         }
 
-        switch await fetchRDAPResponse(for: normalizedDomain) {
+        switch await fetchRDAPResponse(for: normalizedDomain, transport: transport) {
         case let .found(response):
             let ownership = DomainOwnership(
                 registrar: response.registrarName,
@@ -77,7 +95,7 @@ private enum RDAPFetchOutcome {
     case failed(String)
 }
 
-private func fetchRDAPResponse(for domain: String) async -> RDAPFetchOutcome {
+private func fetchRDAPResponse(for domain: String, transport: RDAPTransport) async -> RDAPFetchOutcome {
     let startedAt = DomainDebugLog.signpostStart("RDAP.fetch", domain: domain)
     guard let url = URL(string: "https://\(bootstrapHost)/domain/\(domain)") else {
         return .failed("Unavailable")
@@ -88,7 +106,7 @@ private func fetchRDAPResponse(for domain: String) async -> RDAPFetchOutcome {
         request.setValue("application/rdap+json, application/json", forHTTPHeaderField: "Accept")
         DomainDebugLog.debug("RDAP.request url=\(url.absoluteString) timeout=8")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await transport.fetch(request)
         guard let httpResponse = response as? HTTPURLResponse else {
             DomainDebugLog.error("RDAP.badResponse domain=\(domain) response=nil")
             return .failed(URLError(.badServerResponse).localizedDescription)

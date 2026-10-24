@@ -68,6 +68,7 @@ git config core.hooksPath .githooks
 #+begin_example
 local api:      Docs/local-api.txt
 data migration: Docs/data-migration.txt
+integrations:   Docs/integrations.txt
 accessibility:  Docs/ACCESSIBILITY.txt
 security:       SECURITY.txt
 #+end_example
