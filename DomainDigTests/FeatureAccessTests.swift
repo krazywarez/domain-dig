@@ -58,6 +58,7 @@ final class FeatureAccessTests: XCTestCase {
 
         XCTAssertFalse(pro.capabilities.contains(.sharedPortfolios))
         XCTAssertFalse(pro.capabilities.contains(.auditDepth))
+        XCTAssertFalse(pro.capabilities.contains(.intelligenceDetail))
     }
 
     func testProLiftsTheAllowances() {
@@ -71,11 +72,22 @@ final class FeatureAccessTests: XCTestCase {
 
     // MARK: Pro+
 
-    func testProPlusAddsSharedPortfoliosAndAuditDepth() {
+    func testProPlusAddsSharedPortfoliosAuditDepthAndIntelligence() {
         let proPlus = FeatureAccessService.entitlements(for: .proPlus)
 
         XCTAssertTrue(proPlus.capabilities.contains(.sharedPortfolios))
         XCTAssertTrue(proPlus.capabilities.contains(.auditDepth))
+        XCTAssertTrue(proPlus.capabilities.contains(.intelligenceDetail))
+    }
+
+    /// The intelligence breakdown was gated by a bare `currentTier != .proPlus`
+    /// in two view bodies, which no audit of the capability table could see. It
+    /// is a capability now so the table, the paywall and `enabledFeatureLabels`
+    /// all agree, and so a test like this one can exist at all.
+    func testIntelligenceDetailIsAProPlusCapability() {
+        XCTAssertFalse(FeatureAccessService.entitlements(for: .free).capabilities.contains(.intelligenceDetail))
+        XCTAssertFalse(FeatureAccessService.entitlements(for: .pro).capabilities.contains(.intelligenceDetail))
+        XCTAssertTrue(FeatureAccessService.entitlements(for: .proPlus).capabilities.contains(.intelligenceDetail))
     }
 
     /// The finding this table replaces: Pro+ cost twice Pro and its only
