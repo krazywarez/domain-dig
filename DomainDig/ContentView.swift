@@ -468,7 +468,7 @@ struct ContentView: View {
             error: viewModel.subdomainsError,
             provenance: viewModel.currentSnapshot.provenanceBySection[.subdomains],
             confidence: viewModel.currentSnapshot.subdomainConfidence,
-            showsExtendedPlaceholder: !DataAccessService.hasAccess(to: .extendedSubdomains),
+            showsExtendedPlaceholder: !FeatureAccessService.hasAccess(to: .extendedSubdomains),
             extendedCount: viewModel.extendedSubdomains.count,
             extendedLoading: viewModel.extendedSubdomainsLoading,
             extendedError: viewModel.extendedSubdomainsError,

@@ -803,7 +803,7 @@ final class DomainViewModel {
             return true
         }
 
-        guard PremiumAccessService.canAddTrackedDomain(currentCount: trackedDomains.count) else {
+        guard FeatureAccessService.canAddTrackedDomain(currentCount: trackedDomains.count) else {
             upgradePrompt = FeatureAccessService.upgradePromptForTrackedDomains(currentCount: trackedDomains.count)
             return false
         }
@@ -1320,7 +1320,7 @@ final class DomainViewModel {
     /// already. With a `capability`, shows the upgrade prompt when the plan
     /// doesn't include it; without one the lookup is open to every tier.
     private func loadLookup<Item>(
-        _ capability: DataCapability? = nil,
+        _ capability: FeatureCapability? = nil,
         into items: ReferenceWritableKeyPath<DomainViewModel, [Item]>,
         loading: ReferenceWritableKeyPath<DomainViewModel, Bool>,
         error: ReferenceWritableKeyPath<DomainViewModel, String?>,
@@ -1328,8 +1328,8 @@ final class DomainViewModel {
         fetch: () async -> ServiceResult<[Item]>
     ) async {
         guard !searchedDomain.isEmpty else { return }
-        if let capability, !DataAccessService.hasAccess(to: capability) {
-            upgradePrompt = FeatureAccessService.upgradePrompt(for: capability.feature)
+        if let capability, !FeatureAccessService.hasAccess(to: capability) {
+            upgradePrompt = FeatureAccessService.upgradePrompt(for: capability)
             return
         }
         guard self[keyPath: items].isEmpty else { return }
@@ -3576,7 +3576,7 @@ final class DomainViewModel {
                 lines.append("  \(subdomain.hostname)\(marker)")
             }
         }
-        if !DataAccessService.hasAccess(to: .extendedSubdomains) {
+        if !FeatureAccessService.hasAccess(to: .extendedSubdomains) {
             lines.append("  Extended subdomain discovery (Pro)")
         }
         return lines
