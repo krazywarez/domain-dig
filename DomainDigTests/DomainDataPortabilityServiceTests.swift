@@ -65,6 +65,25 @@ final class DomainDataPortabilityServiceTests: XCTestCase {
 
     // MARK: - Merge / dedup
 
+    /// `CloudSyncService` decides whether a row has been pushed by comparing a
+    /// recorded date against the row's own `updatedAt` after it has been written
+    /// to the store and read back. If that comparison were lossy, every row
+    /// would read as unpushed forever and local would always win every merge.
+    func testUpdatedAtSurvivesAStoreRoundTripExactly() {
+        let updatedAt = Date()
+        let trackedDomain = TrackedDomain(
+            domain: "example.com",
+            createdAt: updatedAt.addingTimeInterval(-3600),
+            updatedAt: updatedAt
+        )
+
+        DomainDataPortabilityService.saveTrackedDomains([trackedDomain], defaults: defaults)
+        let loaded = DomainDataPortabilityService.loadTrackedDomains(defaults: defaults)
+
+        XCTAssertEqual(loaded.count, 1)
+        XCTAssertEqual(loaded.first?.updatedAt, updatedAt)
+    }
+
     func testSaveLoadDeduplicatesSameDomainCaseInsensitively() {
         let older = TrackedDomain(
             domain: "example.com",
