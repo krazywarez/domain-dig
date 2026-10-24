@@ -90,6 +90,22 @@ private struct SyncPayload {
     var tombstones: [SyncRow<SyncTombstone>]
 }
 
+/// What a remote fetch produced: the payload, and the change token each zone
+/// may resume from once the payload has been merged and pushed.
+private struct RemoteSyncState {
+    var payload: SyncPayload
+    var changeTokens: [String: CKServerChangeToken]
+}
+
+/// One pass of `CKFetchRecordZoneChangesOperation`: the zones that still have
+/// more coming, the token each zone reached, and the zones whose stored token
+/// the server has aged out.
+private struct ZoneChangesStep {
+    var pendingByZone: [CKRecordZone.ID: CKServerChangeToken?]
+    var tokensByZone: [CKRecordZone.ID: CKServerChangeToken]
+    var expiredZones: [CKRecordZone.ID]
+}
+
 /// The server date this device last saw for a record, with the payload date the
 /// row carried at that moment. A row whose payload date has moved since has a
 /// local change the server has not seen.
@@ -146,6 +162,7 @@ final class CloudSyncService {
         static let tombstones = "cloudSync.tombstones"
         static let monitoringLocalActivationConfirmed = "cloudSync.monitoringLocalActivationConfirmed"
         static let rowAuthority = "cloudSync.rowAuthority"
+        static let changeTokenPrefix = "cloudSync.changeToken."
     }
 
     private init(defaults: UserDefaults = .standard) {
@@ -433,7 +450,7 @@ final class CloudSyncService {
         do {
             let local = loadLocalPayload()
             let remote = try await fetchRemotePayload()
-            let merged = merge(local: local, remote: remote)
+            let merged = merge(local: local, remote: remote.payload)
             applyMergedPayload(merged.payload)
             let pushedServerDates = try await pushMergedPayload(merged.payload)
 
@@ -441,7 +458,12 @@ final class CloudSyncService {
             // local stores round-trip dates through ISO-8601 and through
             // `JSONEncoder`, and the next sync compares against what they read
             // back, not against the in-memory values.
-            recordRowAuthority(in: loadLocalPayload(), remote: remote, pushedServerDates: pushedServerDates)
+            recordRowAuthority(in: loadLocalPayload(), remote: remote.payload, pushedServerDates: pushedServerDates)
+
+            // Only once the fetched changes are on disk and the push went
+            // through: a token committed earlier would skip those changes
+            // forever if either step failed.
+            commitChangeTokens(remote.changeTokens)
 
             lastSyncDate = Date()
             defaults.set(lastSyncDate, forKey: StorageKey.lastSyncDate)
@@ -555,9 +577,11 @@ final class CloudSyncService {
         )
     }
 
-    private func fetchRemotePayload() async throws -> SyncPayload {
-        let privateRecords = try await fetchZoneRecords(in: .privateDatabase)
-        let sharedRecords = try await fetchZoneRecords(in: .sharedDatabase)
+    private func fetchRemotePayload() async throws -> RemoteSyncState {
+        let privateFetch = try await fetchZoneRecords(in: .privateDatabase)
+        let sharedFetch = try await fetchZoneRecords(in: .sharedDatabase)
+        let privateRecords = privateFetch.records
+        let sharedRecords = sharedFetch.records
 
         let privateTrackedDomains = try await trackedDomains(from: privateRecords, in: .privateDatabase)
         let sharedTrackedDomains = try await trackedDomains(from: sharedRecords, in: .sharedDatabase)
@@ -601,7 +625,7 @@ final class CloudSyncService {
                 orderKey: Self.absentRemoteOrderKey
             )
 
-        return SyncPayload(
+        let payload = SyncPayload(
             trackedDomains: privateTrackedDomains + sharedTrackedDomains,
             workflows: privateWorkflows + sharedWorkflows,
             appSettings: appSettings,
@@ -615,6 +639,11 @@ final class CloudSyncService {
                 uniquingKeysWith: { SyncOrderKey.isAtLeastAsRecent($0.orderKey, $1.orderKey) ? $0 : $1 }
             ),
             tombstones: tombstones
+        )
+
+        return RemoteSyncState(
+            payload: payload,
+            changeTokens: privateFetch.changeTokens.merging(sharedFetch.changeTokens) { _, shared in shared }
         )
     }
 
@@ -864,10 +893,11 @@ final class CloudSyncService {
             if let serverDate = pushedServerDates[entry.recordName] ?? remoteServerDates[entry.recordName] {
                 authority[entry.recordName] = StoredRowAuthority(serverDate: serverDate, deviceDate: entry.deviceDate)
             } else if let carried = previous[entry.recordName], carried.deviceDate == entry.deviceDate {
-                // A read-only shared row is never pushed, so it can turn up
-                // in neither list. Keeping the date already recorded for it is
-                // what stops it from looking like a local change this device
-                // never pushed.
+                // A fetch that resumed from a change token only returns what
+                // changed, and a read-only shared row is never pushed, so a row
+                // can appear in neither list. Keeping the date already recorded
+                // for it is what stops it from looking like a local change this
+                // device never pushed.
                 authority[entry.recordName] = carried
             }
         }
@@ -983,10 +1013,12 @@ final class CloudSyncService {
     /// on a brand-new zone. The private database holds the user's own records in
     /// a single custom zone; the shared database exposes one zone per accepted
     /// share, so every shared zone is fetched.
-    private func fetchZoneRecords(in scope: SyncDatabaseScope) async throws -> [CKRecord] {
+    private func fetchZoneRecords(
+        in scope: SyncDatabaseScope
+    ) async throws -> (records: [CKRecord], changeTokens: [String: CKServerChangeToken]) {
         guard let database = cloudKitDatabase(in: scope) else {
             if scope == .sharedDatabase {
-                return []
+                return ([], [:])
             }
             throw CloudSyncRuntimeError.missingEntitlement
         }
@@ -1000,31 +1032,48 @@ final class CloudSyncService {
             zoneIDs = try await database.allRecordZones().map(\.zoneID)
         }
 
-        guard !zoneIDs.isEmpty else { return [] }
-        return try await fetchZoneChanges(in: database, zoneIDs: zoneIDs)
+        guard !zoneIDs.isEmpty else { return ([], [:]) }
+        return try await fetchZoneChanges(in: database, scope: scope, zoneIDs: zoneIDs)
     }
 
-    private func fetchZoneChanges(in database: CKDatabase, zoneIDs: [CKRecordZone.ID]) async throws -> [CKRecord] {
-        // A nil change token requests every record in the zone. The server may
-        // truncate a large response and set `moreComing`, so keep re-fetching
-        // the still-truncated zones with their latest tokens until all drain.
-        var tokensByZone: [CKRecordZone.ID: CKServerChangeToken?] = [:]
+    /// Fetches what changed in each zone since the token stored for it, and
+    /// returns the tokens the caller should store once the changes are safely
+    /// applied. A zone with no stored token is fetched in full.
+    ///
+    /// The server may truncate a large response and set `moreComing`, so keep
+    /// re-fetching the still-truncated zones with their latest tokens until all
+    /// drain. A token the server has aged out comes back as
+    /// `.changeTokenExpired`, and the only recovery is to drop it and refetch
+    /// that zone in full; that is done at most once per zone per sync, so a
+    /// token that keeps expiring cannot spin here.
+    private func fetchZoneChanges(
+        in database: CKDatabase,
+        scope: SyncDatabaseScope,
+        zoneIDs: [CKRecordZone.ID]
+    ) async throws -> (records: [CKRecord], changeTokens: [String: CKServerChangeToken]) {
+        var pendingByZone: [CKRecordZone.ID: CKServerChangeToken?] = [:]
         for zoneID in zoneIDs {
-            tokensByZone[zoneID] = .some(nil)
+            pendingByZone[zoneID] = .some(loadChangeToken(forKey: changeTokenStorageKey(scope: scope, zoneID: zoneID)))
         }
 
         var records: [CKRecord] = []
-        while !tokensByZone.isEmpty {
-            tokensByZone = try await withCheckedThrowingContinuation { continuation in
+        var tokensByZone: [CKRecordZone.ID: CKServerChangeToken] = [:]
+        var refetchedAfterExpiry: Set<CKRecordZone.ID> = []
+
+        while !pendingByZone.isEmpty {
+            let step: ZoneChangesStep = try await withCheckedThrowingContinuation { continuation in
                 var moreByZone: [CKRecordZone.ID: CKServerChangeToken?] = [:]
-                let configurations = tokensByZone.mapValues { token -> CKFetchRecordZoneChangesOperation.ZoneConfiguration in
+                var fetchedByZone: [CKRecordZone.ID: CKServerChangeToken] = [:]
+                var expiredZones: [CKRecordZone.ID] = []
+
+                let configurations = pendingByZone.mapValues { token -> CKFetchRecordZoneChangesOperation.ZoneConfiguration in
                     let configuration = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
                     configuration.previousServerChangeToken = token ?? nil
                     return configuration
                 }
 
                 let operation = CKFetchRecordZoneChangesOperation(
-                    recordZoneIDs: Array(tokensByZone.keys),
+                    recordZoneIDs: Array(pendingByZone.keys),
                     configurationsByRecordZoneID: configurations
                 )
                 operation.recordWasChangedBlock = { _, result in
@@ -1033,23 +1082,73 @@ final class CloudSyncService {
                     }
                 }
                 operation.recordZoneFetchResultBlock = { zoneID, result in
-                    if case .success(let value) = result, value.moreComing {
-                        moreByZone[zoneID] = .some(value.serverChangeToken)
+                    switch result {
+                    case .success(let value):
+                        fetchedByZone[zoneID] = value.serverChangeToken
+                        if value.moreComing {
+                            moreByZone[zoneID] = .some(value.serverChangeToken)
+                        }
+                    case .failure(let error):
+                        if (error as? CKError)?.code == .changeTokenExpired {
+                            expiredZones.append(zoneID)
+                        }
                     }
                 }
                 operation.fetchRecordZoneChangesResultBlock = { result in
                     switch result {
                     case .success:
-                        continuation.resume(returning: moreByZone)
+                        continuation.resume(
+                            returning: ZoneChangesStep(pendingByZone: moreByZone, tokensByZone: fetchedByZone, expiredZones: expiredZones)
+                        )
                     case .failure(let error):
-                        continuation.resume(throwing: error)
+                        // An expired token is reported per zone and also fails
+                        // the operation as a whole. That is the one failure the
+                        // loop can recover from, and only when a zone actually
+                        // reported it — anything else still throws.
+                        let code = (error as? CKError)?.code
+                        if !expiredZones.isEmpty, code == .partialFailure || code == .changeTokenExpired {
+                            continuation.resume(
+                                returning: ZoneChangesStep(pendingByZone: moreByZone, tokensByZone: fetchedByZone, expiredZones: expiredZones)
+                            )
+                        } else {
+                            continuation.resume(throwing: error)
+                        }
                     }
                 }
                 database.add(operation)
             }
+
+            tokensByZone.merge(step.tokensByZone) { _, fetched in fetched }
+            pendingByZone = step.pendingByZone
+
+            for zoneID in step.expiredZones where !refetchedAfterExpiry.contains(zoneID) {
+                refetchedAfterExpiry.insert(zoneID)
+                tokensByZone.removeValue(forKey: zoneID)
+                pendingByZone[zoneID] = .some(nil)
+            }
         }
 
-        return records
+        let changeTokens = tokensByZone.reduce(into: [String: CKServerChangeToken]()) { partialResult, entry in
+            partialResult[changeTokenStorageKey(scope: scope, zoneID: entry.key)] = entry.value
+        }
+        return (records, changeTokens)
+    }
+
+    private func changeTokenStorageKey(scope: SyncDatabaseScope, zoneID: CKRecordZone.ID) -> String {
+        let scopeName = scope == .privateDatabase ? "private" : "shared"
+        return "\(StorageKey.changeTokenPrefix)\(scopeName).\(zoneID.ownerName).\(zoneID.zoneName)"
+    }
+
+    private func loadChangeToken(forKey key: String) -> CKServerChangeToken? {
+        guard let data = defaults.data(forKey: key) else { return nil }
+        return try? NSKeyedUnarchiver.unarchivedObject(ofClass: CKServerChangeToken.self, from: data)
+    }
+
+    private func commitChangeTokens(_ changeTokens: [String: CKServerChangeToken]) {
+        for (key, token) in changeTokens {
+            guard let data = try? NSKeyedArchiver.archivedData(withRootObject: token, requiringSecureCoding: true) else { continue }
+            defaults.set(data, forKey: key)
+        }
     }
 
     /// Decodes the payload blob and pairs it with the record's server-assigned
