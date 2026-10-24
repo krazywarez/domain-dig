@@ -45,6 +45,18 @@ xcodebuild -project DomainDig.xcodeproj -scheme DomainDig \
 deterministic core coverage lives in DomainDigTests:
 
 #+begin_src sh
+./Scripts/test.sh                # oldest supported + newest
+./Scripts/test.sh current        # newest only
+#+end_src
+
+both tiers matter. releasing a main-actor-isolated object aborts the runner
+under ios 18.6 — a swift runtime bug in MarkerItem::create, fixed by 26.5 — so
+a test can pass on one runtime and die on the other. pinning one destination
+hides whichever direction it is pinned away from.
+
+a one-off run against a specific simulator:
+
+#+begin_src sh
 xcodebuild test -project DomainDig.xcodeproj -scheme DomainDig \
   -destination 'platform=iOS Simulator,name=iPhone 16' \
   -only-testing:DomainDigTests
