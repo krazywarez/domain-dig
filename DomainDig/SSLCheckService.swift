@@ -4,6 +4,10 @@ import Security
 struct SSLCheckService {
 
     static func check(domain: String) async -> ServiceResult<SSLCertificateInfo> {
+        guard let url = DomainHostURL.https(domain) else {
+            return .error("Not a valid domain name")
+        }
+
         let delegate = SSLSessionDelegate()
         let session = URLSession(
             configuration: .ephemeral,
@@ -12,7 +16,6 @@ struct SSLCheckService {
         )
         defer { session.invalidateAndCancel() }
 
-        let url = URL(string: "https://\(domain)")!
         let request = URLRequest(url: url, timeoutInterval: 10)
 
         do {

@@ -2,7 +2,10 @@ import Foundation
 
 struct IPGeolocationService {
     static func lookup(ip: String) async -> ServiceResult<IPGeolocation> {
-        let url = URL(string: "https://ipapi.co/\(ip)/json/")!
+        guard let url = URL(string: "https://ipapi.co/\(ip)/json/") else {
+            return .error("Not a valid IP address")
+        }
+
         let request = URLRequest(url: url, timeoutInterval: 10)
 
         do {
