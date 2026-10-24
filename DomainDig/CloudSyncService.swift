@@ -80,52 +80,38 @@ private enum CloudRecordKey {
     static let deletedAt = "deletedAt"
 }
 
-private enum SyncEntityType: String, Codable {
-    case trackedDomain
-    case workflow
-}
-
-private struct SyncedAppSettings: Codable {
-    var snapshot: AppSettingsSnapshot
-    var updatedAt: Date
-}
-
-private struct SyncedMonitoringSettings: Codable {
-    var settings: MonitoringSettings
-    var updatedAt: Date
-}
-
-private struct SyncedDomainNote: Codable, Equatable {
-    var domain: String
-    var text: String
-    var updatedAt: Date
-}
-
-private struct SyncedHistoryMetadata: Codable, Equatable {
-    var domain: String
-    var lastKnownAvailabilityRawValue: String?
-    var lastChangeMessage: String?
-    var lastChangeSeverityRawValue: Int?
-    var certificateWarningLevelRawValue: String
-    var certificateDaysRemaining: Int?
-    var lastObservedAt: Date?
-    var updatedAt: Date
-}
-
-private struct SyncTombstone: Codable, Equatable {
-    var entityType: SyncEntityType
-    var identifier: String
-    var deletedAt: Date
-}
-
 private struct SyncPayload {
-    var trackedDomains: [TrackedDomain]
-    var workflows: [DomainWorkflow]
-    var appSettings: SyncedAppSettings
-    var monitoringSettings: SyncedMonitoringSettings
-    var notesByDomain: [String: SyncedDomainNote]
-    var historyMetadataByDomain: [String: SyncedHistoryMetadata]
-    var tombstones: [SyncTombstone]
+    var trackedDomains: [SyncRow<TrackedDomain>]
+    var workflows: [SyncRow<DomainWorkflow>]
+    var appSettings: SyncRow<SyncedAppSettings>
+    var monitoringSettings: SyncRow<SyncedMonitoringSettings>
+    var notesByDomain: [String: SyncRow<SyncedDomainNote>]
+    var historyMetadataByDomain: [String: SyncRow<SyncedHistoryMetadata>]
+    var tombstones: [SyncRow<SyncTombstone>]
+}
+
+/// What a remote fetch produced: the payload, and the change token each zone
+/// may resume from once the payload has been merged and pushed.
+private struct RemoteSyncState {
+    var payload: SyncPayload
+    var changeTokens: [String: CKServerChangeToken]
+}
+
+/// One pass of `CKFetchRecordZoneChangesOperation`: the zones that still have
+/// more coming, the token each zone reached, and the zones whose stored token
+/// the server has aged out.
+private struct ZoneChangesStep {
+    var pendingByZone: [CKRecordZone.ID: CKServerChangeToken?]
+    var tokensByZone: [CKRecordZone.ID: CKServerChangeToken]
+    var expiredZones: [CKRecordZone.ID]
+}
+
+/// The server date this device last saw for a record, with the payload date the
+/// row carried at that moment. A row whose payload date has moved since has a
+/// local change the server has not seen.
+private struct StoredRowAuthority: Codable {
+    var serverDate: Date
+    var deviceDate: Date
 }
 
 private enum SyncDatabaseScope {
@@ -175,6 +161,8 @@ final class CloudSyncService {
         static let noteUpdatedAtByDomain = "cloudSync.noteUpdatedAtByDomain"
         static let tombstones = "cloudSync.tombstones"
         static let monitoringLocalActivationConfirmed = "cloudSync.monitoringLocalActivationConfirmed"
+        static let rowAuthority = "cloudSync.rowAuthority"
+        static let changeTokenPrefix = "cloudSync.changeToken."
     }
 
     private init(defaults: UserDefaults = .standard) {
@@ -283,7 +271,7 @@ final class CloudSyncService {
     }
 
     func markNoteChanged(for domain: String, updatedAt: Date = Date()) {
-        let normalized = Self.normalizeDomain(domain)
+        let normalized = CloudSyncMerge.normalizeDomain(domain)
         guard !normalized.isEmpty else { return }
 
         var noteDates = loadNoteUpdatedAtByDomain()
@@ -293,7 +281,7 @@ final class CloudSyncService {
     }
 
     func recordTrackedDomainDeletion(_ trackedDomain: TrackedDomain, deletedAt: Date = Date()) {
-        let normalized = Self.normalizeDomain(trackedDomain.domain)
+        let normalized = CloudSyncMerge.normalizeDomain(trackedDomain.domain)
         guard !normalized.isEmpty else { return }
         saveTombstone(.init(entityType: .trackedDomain, identifier: normalized, deletedAt: deletedAt))
 
@@ -363,9 +351,9 @@ final class CloudSyncService {
 
         switch entity {
         case .trackedDomain(let domain):
-            let normalized = Self.normalizeDomain(domain)
+            let normalized = CloudSyncMerge.normalizeDomain(domain)
             let trackedDomain = DomainDataPortabilityService.loadTrackedDomains()
-                .first(where: { Self.normalizeDomain($0.domain) == normalized })
+                .first(where: { CloudSyncMerge.normalizeDomain($0.domain) == normalized })
             guard let trackedDomain else {
                 throw CloudSyncRuntimeError.missingLocalItem
             }
@@ -462,9 +450,20 @@ final class CloudSyncService {
         do {
             let local = loadLocalPayload()
             let remote = try await fetchRemotePayload()
-            let merged = merge(local: local, remote: remote)
+            let merged = merge(local: local, remote: remote.payload)
             applyMergedPayload(merged.payload)
-            try await pushMergedPayload(merged.payload)
+            let pushedServerDates = try await pushMergedPayload(merged.payload)
+
+            // Recorded from a reload rather than from the merged payload: the
+            // local stores round-trip dates through ISO-8601 and through
+            // `JSONEncoder`, and the next sync compares against what they read
+            // back, not against the in-memory values.
+            recordRowAuthority(in: loadLocalPayload(), remote: remote.payload, pushedServerDates: pushedServerDates)
+
+            // Only once the fetched changes are on disk and the push went
+            // through: a token committed earlier would skip those changes
+            // forever if either step failed.
+            commitChangeTokens(remote.changeTokens)
 
             lastSyncDate = Date()
             defaults.set(lastSyncDate, forKey: StorageKey.lastSyncDate)
@@ -486,8 +485,10 @@ final class CloudSyncService {
     }
 
     private func loadLocalPayload() -> SyncPayload {
+        let authority = loadRowAuthority()
         let trackedDomains = DomainDataPortabilityService.loadTrackedDomains()
         let workflows = DomainDataPortabilityService.loadWorkflows()
+
         let appSettings = SyncedAppSettings(
             snapshot: DomainDataPortabilityService.loadAppSettings(),
             updatedAt: defaults.object(forKey: StorageKey.appSettingsUpdatedAt) as? Date ?? .distantPast
@@ -498,84 +499,164 @@ final class CloudSyncService {
         )
 
         let noteDates = loadNoteUpdatedAtByDomain()
-        let notesByDomain = Dictionary(uniqueKeysWithValues: trackedDomains.compactMap { trackedDomain -> (String, SyncedDomainNote)? in
-            guard trackedDomain.collaboration?.scope != .sharedDatabase else { return nil }
-            let normalized = Self.normalizeDomain(trackedDomain.domain)
-            guard !normalized.isEmpty else { return nil }
-            let noteText = trackedDomain.note ?? ""
-            let updatedAt = noteDates[normalized] ?? trackedDomain.updatedAt
-            return (
-                normalized,
-                SyncedDomainNote(
-                    domain: normalized,
-                    text: noteText,
-                    updatedAt: updatedAt
-                )
-            )
-        })
+        var notesByDomain: [String: SyncRow<SyncedDomainNote>] = [:]
+        var historyMetadataByDomain: [String: SyncRow<SyncedHistoryMetadata>] = [:]
 
-        let historyMetadataByDomain = Dictionary(uniqueKeysWithValues: trackedDomains.compactMap { trackedDomain -> (String, SyncedHistoryMetadata)? in
-            guard trackedDomain.collaboration?.scope != .sharedDatabase else { return nil }
-            let normalized = Self.normalizeDomain(trackedDomain.domain)
-            guard !normalized.isEmpty else { return nil }
-            return (
-                normalized,
-                SyncedHistoryMetadata(
-                    domain: normalized,
-                    lastKnownAvailabilityRawValue: trackedDomain.lastKnownAvailability?.rawValue,
-                    lastChangeMessage: trackedDomain.lastChangeSummary?.message,
-                    lastChangeSeverityRawValue: trackedDomain.lastChangeSeverity?.rawValue ?? trackedDomain.lastChangeSummary?.severity.rawValue,
-                    certificateWarningLevelRawValue: trackedDomain.certificateWarningLevel.rawValue,
-                    certificateDaysRemaining: trackedDomain.certificateDaysRemaining,
-                    lastObservedAt: trackedDomain.updatedAt,
-                    updatedAt: trackedDomain.updatedAt
-                )
+        for trackedDomain in trackedDomains {
+            guard trackedDomain.collaboration?.scope != .sharedDatabase else { continue }
+            let normalized = CloudSyncMerge.normalizeDomain(trackedDomain.domain)
+            guard !normalized.isEmpty else { continue }
+
+            let note = SyncedDomainNote(
+                domain: normalized,
+                text: trackedDomain.note ?? "",
+                updatedAt: noteDates[normalized] ?? trackedDomain.updatedAt
             )
-        })
+            notesByDomain[normalized] = SyncRow(
+                value: note,
+                orderKey: localOrderKey(authority, recordName: domainNoteRecordName(for: normalized), deviceDate: note.updatedAt)
+            )
+
+            let metadata = SyncedHistoryMetadata(
+                domain: normalized,
+                lastKnownAvailabilityRawValue: trackedDomain.lastKnownAvailability?.rawValue,
+                lastChangeMessage: trackedDomain.lastChangeSummary?.message,
+                lastChangeSeverityRawValue: trackedDomain.lastChangeSeverity?.rawValue ?? trackedDomain.lastChangeSummary?.severity.rawValue,
+                certificateWarningLevelRawValue: trackedDomain.certificateWarningLevel.rawValue,
+                certificateDaysRemaining: trackedDomain.certificateDaysRemaining,
+                lastObservedAt: trackedDomain.updatedAt,
+                updatedAt: trackedDomain.updatedAt
+            )
+            historyMetadataByDomain[normalized] = SyncRow(
+                value: metadata,
+                orderKey: localOrderKey(authority, recordName: historyMetadataRecordName(for: normalized), deviceDate: metadata.updatedAt)
+            )
+        }
 
         return SyncPayload(
-            trackedDomains: trackedDomains,
-            workflows: workflows,
-            appSettings: appSettings,
-            monitoringSettings: monitoringSettings,
+            trackedDomains: trackedDomains.map { trackedDomain in
+                SyncRow(
+                    value: trackedDomain,
+                    orderKey: localOrderKey(
+                        authority,
+                        recordName: trackedDomainRecordName(for: CloudSyncMerge.normalizeDomain(trackedDomain.domain)),
+                        deviceDate: trackedDomain.updatedAt
+                    )
+                )
+            },
+            workflows: workflows.map { workflow in
+                SyncRow(
+                    value: workflow,
+                    orderKey: localOrderKey(
+                        authority,
+                        recordName: workflowRecordName(for: workflow.id.uuidString),
+                        deviceDate: workflow.updatedAt
+                    )
+                )
+            },
+            appSettings: SyncRow(
+                value: appSettings,
+                orderKey: localOrderKey(authority, recordName: appSettingsRecordName, deviceDate: appSettings.updatedAt)
+            ),
+            monitoringSettings: SyncRow(
+                value: monitoringSettings,
+                orderKey: localOrderKey(authority, recordName: monitoringSettingsRecordName, deviceDate: monitoringSettings.updatedAt)
+            ),
             notesByDomain: notesByDomain,
             historyMetadataByDomain: historyMetadataByDomain,
-            tombstones: loadTombstones()
+            tombstones: loadTombstones().map { tombstone in
+                SyncRow(
+                    value: tombstone,
+                    orderKey: localOrderKey(
+                        authority,
+                        recordName: tombstoneRecordName(for: tombstone.entityType, identifier: tombstone.identifier),
+                        deviceDate: tombstone.deletedAt
+                    )
+                )
+            }
         )
     }
 
-    private func fetchRemotePayload() async throws -> SyncPayload {
-        let privateRecords = try await fetchZoneRecords(in: .privateDatabase)
-        let sharedRecords = try await fetchZoneRecords(in: .sharedDatabase)
+    private func fetchRemotePayload() async throws -> RemoteSyncState {
+        let privateFetch = try await fetchZoneRecords(in: .privateDatabase)
+        let sharedFetch = try await fetchZoneRecords(in: .sharedDatabase)
+        let privateRecords = privateFetch.records
+        let sharedRecords = sharedFetch.records
 
         let privateTrackedDomains = try await trackedDomains(from: privateRecords, in: .privateDatabase)
         let sharedTrackedDomains = try await trackedDomains(from: sharedRecords, in: .sharedDatabase)
         let privateWorkflows = try await workflows(from: privateRecords, in: .privateDatabase)
         let sharedWorkflows = try await workflows(from: sharedRecords, in: .sharedDatabase)
 
-        let appSettingsRecords: [SyncedAppSettings] = decodeRecords(privateRecords, ofType: CloudRecordType.appSettings)
-        let monitoringSettingsRecords: [SyncedMonitoringSettings] = decodeRecords(privateRecords, ofType: CloudRecordType.monitoringSettings)
-        let domainNotes: [SyncedDomainNote] = decodeRecords(privateRecords, ofType: CloudRecordType.domainNote)
-        let historyMetadata: [SyncedHistoryMetadata] = decodeRecords(privateRecords, ofType: CloudRecordType.historyMetadata)
-        let tombstones: [SyncTombstone] = decodeRecords(privateRecords, ofType: CloudRecordType.tombstone)
+        let appSettingsRecords: [SyncRow<SyncedAppSettings>] = decodeRecords(
+            privateRecords,
+            ofType: CloudRecordType.appSettings,
+            deviceDate: \.updatedAt
+        )
+        let monitoringSettingsRecords: [SyncRow<SyncedMonitoringSettings>] = decodeRecords(
+            privateRecords,
+            ofType: CloudRecordType.monitoringSettings,
+            deviceDate: \.updatedAt
+        )
+        let domainNotes: [SyncRow<SyncedDomainNote>] = decodeRecords(
+            privateRecords,
+            ofType: CloudRecordType.domainNote,
+            deviceDate: \.updatedAt
+        )
+        let historyMetadata: [SyncRow<SyncedHistoryMetadata>] = decodeRecords(
+            privateRecords,
+            ofType: CloudRecordType.historyMetadata,
+            deviceDate: \.updatedAt
+        )
+        let tombstones: [SyncRow<SyncTombstone>] = decodeRecords(
+            privateRecords,
+            ofType: CloudRecordType.tombstone,
+            deviceDate: \.deletedAt
+        )
 
-        let appSettings = appSettingsRecords.max(by: { $0.updatedAt < $1.updatedAt })
-            ?? SyncedAppSettings(snapshot: DomainDataPortabilityService.loadAppSettings(), updatedAt: .distantPast)
-        let monitoringSettings = monitoringSettingsRecords.max(by: { $0.updatedAt < $1.updatedAt })
-            ?? SyncedMonitoringSettings(settings: DomainDataPortabilityService.loadMonitoringSettings(), updatedAt: .distantPast)
+        let appSettings = appSettingsRecords.max(by: { SyncOrderKey.isNewer($1.orderKey, $0.orderKey) })
+            ?? SyncRow(
+                value: SyncedAppSettings(snapshot: DomainDataPortabilityService.loadAppSettings(), updatedAt: .distantPast),
+                orderKey: Self.absentRemoteOrderKey
+            )
+        let monitoringSettings = monitoringSettingsRecords.max(by: { SyncOrderKey.isNewer($1.orderKey, $0.orderKey) })
+            ?? SyncRow(
+                value: SyncedMonitoringSettings(settings: DomainDataPortabilityService.loadMonitoringSettings(), updatedAt: .distantPast),
+                orderKey: Self.absentRemoteOrderKey
+            )
 
-        return SyncPayload(
+        let payload = SyncPayload(
             trackedDomains: privateTrackedDomains + sharedTrackedDomains,
             workflows: privateWorkflows + sharedWorkflows,
             appSettings: appSettings,
             monitoringSettings: monitoringSettings,
-            notesByDomain: Dictionary(uniqueKeysWithValues: domainNotes.map { (Self.normalizeDomain($0.domain), $0) }),
-            historyMetadataByDomain: Dictionary(uniqueKeysWithValues: historyMetadata.map { (Self.normalizeDomain($0.domain), $0) }),
+            notesByDomain: Dictionary(
+                domainNotes.map { (CloudSyncMerge.normalizeDomain($0.value.domain), $0) },
+                uniquingKeysWith: { SyncOrderKey.isAtLeastAsRecent($0.orderKey, $1.orderKey) ? $0 : $1 }
+            ),
+            historyMetadataByDomain: Dictionary(
+                historyMetadata.map { (CloudSyncMerge.normalizeDomain($0.value.domain), $0) },
+                uniquingKeysWith: { SyncOrderKey.isAtLeastAsRecent($0.orderKey, $1.orderKey) ? $0 : $1 }
+            ),
             tombstones: tombstones
+        )
+
+        return RemoteSyncState(
+            payload: payload,
+            changeTokens: privateFetch.changeTokens.merging(sharedFetch.changeTokens) { _, shared in shared }
         )
     }
 
-    private func pushMergedPayload(_ payload: SyncPayload) async throws {
+    /// Stands in for a singleton record the zone does not hold yet. It has to
+    /// lose to anything real, so it carries the oldest possible server date
+    /// rather than none — no server date means an unpushed local change, which
+    /// wins.
+    private static let absentRemoteOrderKey = SyncOrderKey(serverDate: .distantPast, deviceDate: .distantPast)
+
+    /// Returns the server-assigned modification date of every record the push
+    /// saved, keyed by record name. Those dates are what the next sync orders
+    /// its conflicts by.
+    private func pushMergedPayload(_ payload: SyncPayload) async throws -> [String: Date] {
         guard let privateDatabase = cloudKitDatabase(in: .privateDatabase) else {
             throw CloudSyncRuntimeError.missingEntitlement
         }
@@ -586,7 +667,7 @@ final class CloudSyncService {
         var sharedRecordsToSave: [CKRecord] = []
         var recordIDsToDelete: [CKRecord.ID] = []
 
-        for trackedDomain in payload.trackedDomains {
+        for trackedDomain in payload.trackedDomains.map(\.value) {
             switch trackedDomain.collaboration?.scope ?? .privateDatabase {
             case .privateDatabase:
                 privateRecordsToSave.append(makeTrackedDomainRecord(trackedDomain))
@@ -597,7 +678,7 @@ final class CloudSyncService {
             }
         }
 
-        for workflow in payload.workflows {
+        for workflow in payload.workflows.map(\.value) {
             switch workflow.collaboration?.scope ?? .privateDatabase {
             case .privateDatabase:
                 privateRecordsToSave.append(makeWorkflowRecord(workflow))
@@ -608,13 +689,13 @@ final class CloudSyncService {
             }
         }
 
-        privateRecordsToSave.append(makeAppSettingsRecord(payload.appSettings))
-        privateRecordsToSave.append(makeMonitoringSettingsRecord(payload.monitoringSettings))
-        privateRecordsToSave.append(contentsOf: payload.notesByDomain.values.map(makeDomainNoteRecord))
-        privateRecordsToSave.append(contentsOf: payload.historyMetadataByDomain.values.map(makeHistoryMetadataRecord))
-        privateRecordsToSave.append(contentsOf: payload.tombstones.map(makeTombstoneRecord))
+        privateRecordsToSave.append(makeAppSettingsRecord(payload.appSettings.value))
+        privateRecordsToSave.append(makeMonitoringSettingsRecord(payload.monitoringSettings.value))
+        privateRecordsToSave.append(contentsOf: payload.notesByDomain.values.map { makeDomainNoteRecord($0.value) })
+        privateRecordsToSave.append(contentsOf: payload.historyMetadataByDomain.values.map { makeHistoryMetadataRecord($0.value) })
+        privateRecordsToSave.append(contentsOf: payload.tombstones.map { makeTombstoneRecord($0.value) })
 
-        for tombstone in payload.tombstones {
+        for tombstone in payload.tombstones.map(\.value) {
             switch tombstone.entityType {
             case .trackedDomain:
                 let identifier = tombstone.identifier
@@ -626,76 +707,97 @@ final class CloudSyncService {
             }
         }
 
-        _ = try await privateDatabase.modifyRecords(
+        let privateResults = try await privateDatabase.modifyRecords(
             saving: privateRecordsToSave,
             deleting: Array(Set(recordIDsToDelete)),
             savePolicy: .changedKeys,
             atomically: false
         )
+        var serverDates = Self.serverDates(from: privateResults.saveResults)
 
         if !sharedRecordsToSave.isEmpty, let sharedDatabase = cloudKitDatabase(in: .sharedDatabase) {
-            _ = try await sharedDatabase.modifyRecords(
+            let sharedResults = try await sharedDatabase.modifyRecords(
                 saving: sharedRecordsToSave,
                 deleting: [],
                 savePolicy: .changedKeys,
                 atomically: false
             )
+            serverDates.merge(Self.serverDates(from: sharedResults.saveResults)) { _, shared in shared }
+        }
+
+        return serverDates
+    }
+
+    private static func serverDates(from results: [CKRecord.ID: Result<CKRecord, Error>]) -> [String: Date] {
+        results.reduce(into: [String: Date]()) { partialResult, entry in
+            guard case .success(let record) = entry.value, let modificationDate = record.modificationDate else { return }
+            partialResult[entry.key.recordName] = modificationDate
         }
     }
 
     private func applyMergedPayload(_ payload: SyncPayload) {
-        DomainDataPortabilityService.saveTrackedDomains(payload.trackedDomains)
-        DomainDataPortabilityService.saveWorkflows(payload.workflows)
-        DomainDataPortabilityService.saveAppSettings(payload.appSettings.snapshot)
-        DomainDataPortabilityService.saveMonitoringSettings(payload.monitoringSettings.settings)
+        DomainDataPortabilityService.saveTrackedDomains(payload.trackedDomains.map(\.value))
+        DomainDataPortabilityService.saveWorkflows(payload.workflows.map(\.value))
+        DomainDataPortabilityService.saveAppSettings(payload.appSettings.value.snapshot)
+        DomainDataPortabilityService.saveMonitoringSettings(payload.monitoringSettings.value.settings)
 
-        defaults.set(payload.appSettings.updatedAt, forKey: StorageKey.appSettingsUpdatedAt)
-        defaults.set(payload.monitoringSettings.updatedAt, forKey: StorageKey.monitoringSettingsUpdatedAt)
-        saveNoteUpdatedAtByDomain(Dictionary(uniqueKeysWithValues: payload.notesByDomain.map { ($0.key, $0.value.updatedAt) }))
+        defaults.set(payload.appSettings.value.updatedAt, forKey: StorageKey.appSettingsUpdatedAt)
+        defaults.set(payload.monitoringSettings.value.updatedAt, forKey: StorageKey.monitoringSettingsUpdatedAt)
+        saveNoteUpdatedAtByDomain(Dictionary(uniqueKeysWithValues: payload.notesByDomain.map { ($0.key, $0.value.value.updatedAt) }))
         saveTombstones(payload.tombstones)
     }
 
     private func merge(local: SyncPayload, remote: SyncPayload) -> MergedSyncPayload {
         var hadConflict = false
 
-        let tombstones = latestTombstones(local.tombstones + remote.tombstones)
+        let tombstones = CloudSyncMerge.latestTombstones(local.tombstones + remote.tombstones)
 
-        let trackedDomainsResult = mergeTrackedDomains(local.trackedDomains, remote.trackedDomains)
+        let trackedDomainsResult = CloudSyncMerge.mergeTrackedDomains(local.trackedDomains, remote.trackedDomains)
         hadConflict = hadConflict || trackedDomainsResult.hadConflict
-        var trackedDomains = applyTrackedDomainTombstones(trackedDomainsResult.domains, tombstones: tombstones)
+        var trackedDomains = CloudSyncMerge.applyTrackedDomainTombstones(trackedDomainsResult.domains, tombstones: tombstones)
 
-        let workflowsResult = mergeWorkflows(local.workflows, remote.workflows)
+        let workflowsResult = CloudSyncMerge.mergeWorkflows(local.workflows, remote.workflows)
         hadConflict = hadConflict || workflowsResult.hadConflict
-        let workflows = applyWorkflowTombstones(workflowsResult.workflows, tombstones: tombstones)
+        let workflows = CloudSyncMerge.applyWorkflowTombstones(workflowsResult.workflows, tombstones: tombstones)
 
-        let notesResult = mergeNotes(local.notesByDomain, remote.notesByDomain)
+        let notesResult = CloudSyncMerge.mergeNotes(local.notesByDomain, remote.notesByDomain)
         hadConflict = hadConflict || notesResult.hadConflict
-        trackedDomains = applyNotes(notesResult.notesByDomain, to: trackedDomains, tombstones: tombstones)
+        trackedDomains = CloudSyncMerge.applyNotes(notesResult.notesByDomain, to: trackedDomains, tombstones: tombstones)
 
-        let historyResult = mergeHistoryMetadata(local.historyMetadataByDomain, remote.historyMetadataByDomain)
+        let historyResult = CloudSyncMerge.mergeHistoryMetadata(local.historyMetadataByDomain, remote.historyMetadataByDomain)
         hadConflict = hadConflict || historyResult.hadConflict
-        trackedDomains = applyHistoryMetadata(historyResult.historyMetadataByDomain, to: trackedDomains, tombstones: tombstones)
+        trackedDomains = CloudSyncMerge.applyHistoryMetadata(historyResult.historyMetadataByDomain, to: trackedDomains, tombstones: tombstones)
 
-        let appSettingsResult = mergeAppSettings(local.appSettings, remote.appSettings)
+        let appSettingsResult = CloudSyncMerge.mergeAppSettings(local.appSettings, remote.appSettings)
         hadConflict = hadConflict || appSettingsResult.hadConflict
 
-        let monitoringResult = mergeMonitoringSettings(local.monitoringSettings, remote.monitoringSettings)
+        let monitoringResult = CloudSyncMerge.mergeMonitoringSettings(
+            local.monitoringSettings,
+            remote.monitoringSettings,
+            localActivationConfirmed: defaults.bool(forKey: StorageKey.monitoringLocalActivationConfirmed)
+        )
         hadConflict = hadConflict || monitoringResult.hadConflict
 
         let mergedPayload = SyncPayload(
             trackedDomains: trackedDomains,
             workflows: workflows,
-            appSettings: appSettingsResult.settings,
-            monitoringSettings: monitoringResult.settings,
-            notesByDomain: Dictionary(uniqueKeysWithValues: trackedDomains.compactMap { trackedDomain -> (String, SyncedDomainNote)? in
-                guard trackedDomain.collaboration?.scope != .sharedDatabase else { return nil }
-                let normalized = Self.normalizeDomain(trackedDomain.domain)
+            appSettings: SyncRow(
+                value: appSettingsResult.settings,
+                orderKey: CloudSyncMerge.mergedOrderKey(local.appSettings.orderKey, remote.appSettings.orderKey)
+            ),
+            monitoringSettings: SyncRow(
+                value: monitoringResult.settings,
+                orderKey: CloudSyncMerge.mergedOrderKey(local.monitoringSettings.orderKey, remote.monitoringSettings.orderKey)
+            ),
+            notesByDomain: Dictionary(uniqueKeysWithValues: trackedDomains.compactMap { row -> (String, SyncRow<SyncedDomainNote>)? in
+                guard row.value.collaboration?.scope != .sharedDatabase else { return nil }
+                let normalized = CloudSyncMerge.normalizeDomain(row.value.domain)
                 guard let note = notesResult.notesByDomain[normalized] else { return nil }
                 return (normalized, note)
             }),
-            historyMetadataByDomain: Dictionary(uniqueKeysWithValues: trackedDomains.compactMap { trackedDomain -> (String, SyncedHistoryMetadata)? in
-                guard trackedDomain.collaboration?.scope != .sharedDatabase else { return nil }
-                let normalized = Self.normalizeDomain(trackedDomain.domain)
+            historyMetadataByDomain: Dictionary(uniqueKeysWithValues: trackedDomains.compactMap { row -> (String, SyncRow<SyncedHistoryMetadata>)? in
+                guard row.value.collaboration?.scope != .sharedDatabase else { return nil }
+                let normalized = CloudSyncMerge.normalizeDomain(row.value.domain)
                 guard let metadata = historyResult.historyMetadataByDomain[normalized] else { return nil }
                 return (normalized, metadata)
             }),
@@ -703,10 +805,10 @@ final class CloudSyncService {
         )
 
         let changedLocalData =
-            mergedPayload.trackedDomains != local.trackedDomains
-            || mergedPayload.workflows != local.workflows
-            || !sameAppSettings(mergedPayload.appSettings.snapshot, local.appSettings.snapshot)
-            || mergedPayload.monitoringSettings.settings != local.monitoringSettings.settings
+            mergedPayload.trackedDomains.map(\.value) != local.trackedDomains.map(\.value)
+            || mergedPayload.workflows.map(\.value) != local.workflows.map(\.value)
+            || !CloudSyncMerge.sameAppSettings(mergedPayload.appSettings.value.snapshot, local.appSettings.value.snapshot)
+            || mergedPayload.monitoringSettings.value.settings != local.monitoringSettings.value.settings
 
         return MergedSyncPayload(
             payload: mergedPayload,
@@ -715,250 +817,22 @@ final class CloudSyncService {
         )
     }
 
-    private func mergeTrackedDomains(_ lhs: [TrackedDomain], _ rhs: [TrackedDomain]) -> (domains: [TrackedDomain], hadConflict: Bool) {
-        var mergedByDomain = Dictionary(uniqueKeysWithValues: lhs.map { (Self.normalizeDomain($0.domain), Self.payloadTrackedDomain($0)) })
-        var hadConflict = false
-
-        for trackedDomain in rhs.map(Self.payloadTrackedDomain) {
-            let key = Self.normalizeDomain(trackedDomain.domain)
-            guard !key.isEmpty else { continue }
-
-            if let existing = mergedByDomain[key] {
-                if existing != trackedDomain {
-                    hadConflict = true
-                }
-                mergedByDomain[key] = mergedTrackedDomain(existing, trackedDomain)
-            } else {
-                mergedByDomain[key] = trackedDomain
-            }
-        }
-
-        let domains = mergedByDomain.values.sorted {
-            if $0.updatedAt != $1.updatedAt {
-                return $0.updatedAt > $1.updatedAt
-            }
-            return $0.domain.localizedCaseInsensitiveCompare($1.domain) == .orderedAscending
-        }
-
-        return (domains, hadConflict)
-    }
-
-    private func mergeWorkflows(_ lhs: [DomainWorkflow], _ rhs: [DomainWorkflow]) -> (workflows: [DomainWorkflow], hadConflict: Bool) {
-        var merged = Dictionary(uniqueKeysWithValues: lhs.map { ($0.id, normalizedWorkflow($0)) })
-        var hadConflict = false
-
-        for workflow in rhs.map(normalizedWorkflow) {
-            if let existing = merged[workflow.id] {
-                if existing != workflow {
-                    hadConflict = true
-                }
-                let winner = preferredWorkflow(existing, workflow)
-                merged[workflow.id] = DomainWorkflow(
-                    id: existing.id,
-                    name: winner.name,
-                    domains: deduplicated(existing.domains + workflow.domains),
-                    createdAt: min(existing.createdAt, workflow.createdAt),
-                    updatedAt: max(existing.updatedAt, workflow.updatedAt),
-                    notes: winner.notes ?? existing.notes ?? workflow.notes,
-                    collaboration: preferredCollaboration(existing.collaboration, workflow.collaboration)
-                )
-            } else {
-                merged[workflow.id] = workflow
-            }
-        }
-
-        return (
-            merged.values.sorted {
-                if $0.updatedAt != $1.updatedAt {
-                    return $0.updatedAt > $1.updatedAt
-                }
-                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-            },
-            hadConflict
-        )
-    }
-
-    private func mergeNotes(
-        _ lhs: [String: SyncedDomainNote],
-        _ rhs: [String: SyncedDomainNote]
-    ) -> (notesByDomain: [String: SyncedDomainNote], hadConflict: Bool) {
-        let result = mergeLatest(lhs, rhs, updatedAt: \.updatedAt)
-        return (result.merged, result.hadConflict)
-    }
-
-    private func mergeHistoryMetadata(
-        _ lhs: [String: SyncedHistoryMetadata],
-        _ rhs: [String: SyncedHistoryMetadata]
-    ) -> (historyMetadataByDomain: [String: SyncedHistoryMetadata], hadConflict: Bool) {
-        let result = mergeLatest(lhs, rhs, updatedAt: \.updatedAt)
-        return (result.merged, result.hadConflict)
-    }
-
-    /// `rhs` merged over `lhs` by domain; where both differ, the newer wins
-    /// (the local one on a tie) and the merge reports a conflict.
-    private func mergeLatest<Value: Equatable>(
-        _ lhs: [String: Value],
-        _ rhs: [String: Value],
-        updatedAt: KeyPath<Value, Date>
-    ) -> (merged: [String: Value], hadConflict: Bool) {
-        var merged = lhs
-        var hadConflict = false
-
-        for (domain, remote) in rhs {
-            if let local = merged[domain], local != remote {
-                hadConflict = true
-                merged[domain] = local[keyPath: updatedAt] >= remote[keyPath: updatedAt] ? local : remote
-            } else {
-                merged[domain] = remote
-            }
-        }
-
-        return (merged, hadConflict)
-    }
-
-    private func mergeAppSettings(_ lhs: SyncedAppSettings, _ rhs: SyncedAppSettings) -> (settings: SyncedAppSettings, hadConflict: Bool) {
-        let winner = lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
-        let loser = winner.updatedAt == lhs.updatedAt ? rhs : lhs
-
-        let merged = SyncedAppSettings(
-            snapshot: AppSettingsSnapshot(
-                recentSearches: deduplicated(winner.snapshot.recentSearches + loser.snapshot.recentSearches).prefix(20).map { $0 },
-                savedDomains: deduplicated(winner.snapshot.savedDomains + loser.snapshot.savedDomains),
-                resolverURLString: winner.snapshot.resolverURLString,
-                appDensityRawValue: winner.snapshot.appDensityRawValue
-            ),
-            updatedAt: max(lhs.updatedAt, rhs.updatedAt)
-        )
-
-        return (merged, !sameAppSettings(lhs.snapshot, rhs.snapshot) || lhs.updatedAt != rhs.updatedAt)
-    }
-
-    private func mergeMonitoringSettings(
-        _ lhs: SyncedMonitoringSettings,
-        _ rhs: SyncedMonitoringSettings
-    ) -> (settings: SyncedMonitoringSettings, hadConflict: Bool) {
-        let winner = lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
-        var merged = winner
-
-        if merged.settings.isEnabled && !defaults.bool(forKey: StorageKey.monitoringLocalActivationConfirmed) {
-            merged.settings.isEnabled = false
-        }
-
-        if merged.settings.alertsEnabled {
-            merged.settings.alertsEnabled = false
-        }
-
-        merged.updatedAt = max(lhs.updatedAt, rhs.updatedAt)
-        return (merged, lhs.settings != rhs.settings || lhs.updatedAt != rhs.updatedAt)
-    }
-
-    private func applyTrackedDomainTombstones(_ trackedDomains: [TrackedDomain], tombstones: [SyncTombstone]) -> [TrackedDomain] {
-        let tombstonesByDomain = Dictionary(uniqueKeysWithValues: tombstones.compactMap { tombstone -> (String, SyncTombstone)? in
-            guard tombstone.entityType == .trackedDomain else { return nil }
-            return (tombstone.identifier, tombstone)
-        })
-
-        return trackedDomains.filter { trackedDomain in
-            let key = Self.normalizeDomain(trackedDomain.domain)
-            guard let tombstone = tombstonesByDomain[key] else { return true }
-            return trackedDomain.updatedAt > tombstone.deletedAt
-        }
-    }
-
-    private func applyWorkflowTombstones(_ workflows: [DomainWorkflow], tombstones: [SyncTombstone]) -> [DomainWorkflow] {
-        let tombstonesByIdentifier = Dictionary(uniqueKeysWithValues: tombstones.compactMap { tombstone -> (String, SyncTombstone)? in
-            guard tombstone.entityType == .workflow else { return nil }
-            return (tombstone.identifier, tombstone)
-        })
-
-        return workflows.filter { workflow in
-            guard let tombstone = tombstonesByIdentifier[workflow.id.uuidString] else { return true }
-            return workflow.updatedAt > tombstone.deletedAt
-        }
-    }
-
-    private func applyNotes(
-        _ notesByDomain: [String: SyncedDomainNote],
-        to trackedDomains: [TrackedDomain],
-        tombstones: [SyncTombstone]
-    ) -> [TrackedDomain] {
-        let tombstonesByDomain = Dictionary(uniqueKeysWithValues: tombstones.compactMap { tombstone -> (String, SyncTombstone)? in
-            guard tombstone.entityType == .trackedDomain else { return nil }
-            return (tombstone.identifier, tombstone)
-        })
-
-        return trackedDomains.map { trackedDomain in
-            guard trackedDomain.collaboration?.scope != .sharedDatabase else { return trackedDomain }
-            let normalized = Self.normalizeDomain(trackedDomain.domain)
-            guard let note = notesByDomain[normalized] else { return trackedDomain }
-            if let tombstone = tombstonesByDomain[normalized], tombstone.deletedAt >= note.updatedAt {
-                return trackedDomain
-            }
-
-            var updated = trackedDomain
-            updated.note = emptyToNil(note.text)
-            return updated
-        }
-    }
-
-    private func applyHistoryMetadata(
-        _ historyMetadataByDomain: [String: SyncedHistoryMetadata],
-        to trackedDomains: [TrackedDomain],
-        tombstones: [SyncTombstone]
-    ) -> [TrackedDomain] {
-        let tombstonesByDomain = Dictionary(uniqueKeysWithValues: tombstones.compactMap { tombstone -> (String, SyncTombstone)? in
-            guard tombstone.entityType == .trackedDomain else { return nil }
-            return (tombstone.identifier, tombstone)
-        })
-
-        return trackedDomains.map { trackedDomain in
-            guard trackedDomain.collaboration?.scope != .sharedDatabase else { return trackedDomain }
-            let normalized = Self.normalizeDomain(trackedDomain.domain)
-            guard let metadata = historyMetadataByDomain[normalized] else { return trackedDomain }
-            if let tombstone = tombstonesByDomain[normalized], tombstone.deletedAt >= metadata.updatedAt {
-                return trackedDomain
-            }
-
-            var updated = trackedDomain
-            updated.lastKnownAvailability = metadata.lastKnownAvailabilityRawValue.flatMap(DomainAvailabilityStatus.init(rawValue:))
-            updated.lastChangeSeverity = metadata.lastChangeSeverityRawValue.flatMap(ChangeSeverity.init(rawValue:))
-            updated.certificateWarningLevel = CertificateWarningLevel(rawValue: metadata.certificateWarningLevelRawValue) ?? .none
-            updated.certificateDaysRemaining = metadata.certificateDaysRemaining
-
-            if let message = metadata.lastChangeMessage?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
-                updated.lastChangeSummary = DomainChangeSummary(
-                    hasChanges: true,
-                    changedSections: [],
-                    message: message,
-                    severity: updated.lastChangeSeverity ?? .medium,
-                    impactClassification: .warning,
-                    generatedAt: metadata.lastObservedAt ?? metadata.updatedAt
-                )
-            }
-
-            return updated
-        }
-    }
-
-    private func latestTombstones(_ tombstones: [SyncTombstone]) -> [SyncTombstone] {
-        var latest: [String: SyncTombstone] = [:]
-
-        for tombstone in tombstones {
-            let key = "\(tombstone.entityType.rawValue):\(tombstone.identifier)"
-            if let existing = latest[key] {
-                latest[key] = existing.deletedAt >= tombstone.deletedAt ? existing : tombstone
-            } else {
-                latest[key] = tombstone
-            }
-        }
-
-        return latest.values.sorted { $0.deletedAt > $1.deletedAt }
-    }
-
     private func saveTombstone(_ tombstone: SyncTombstone) {
-        var tombstones = loadTombstones()
-        tombstones.append(tombstone)
-        saveTombstones(latestTombstones(tombstones))
+        let authority = loadRowAuthority()
+        var tombstones = loadTombstones().map { stored in
+            SyncRow(
+                value: stored,
+                orderKey: localOrderKey(
+                    authority,
+                    recordName: tombstoneRecordName(for: stored.entityType, identifier: stored.identifier),
+                    deviceDate: stored.deletedAt
+                )
+            )
+        }
+        // A deletion recorded right now has not been pushed, so it carries no
+        // server date and outranks whatever the server already holds.
+        tombstones.append(SyncRow(value: tombstone, orderKey: SyncOrderKey(serverDate: nil, deviceDate: tombstone.deletedAt)))
+        saveTombstones(tombstones)
     }
 
     private func loadTombstones() -> [SyncTombstone] {
@@ -969,10 +843,101 @@ final class CloudSyncService {
         return tombstones
     }
 
-    private func saveTombstones(_ tombstones: [SyncTombstone]) {
-        if let data = try? encoder.encode(Array(tombstones.prefix(200))) {
+    private func saveTombstones(_ tombstones: [SyncRow<SyncTombstone>]) {
+        if let data = try? encoder.encode(CloudSyncMerge.newestTombstones(tombstones).map(\.value)) {
             defaults.set(data, forKey: StorageKey.tombstones)
         }
+    }
+
+    private func loadRowAuthority() -> [String: StoredRowAuthority] {
+        guard let data = defaults.data(forKey: StorageKey.rowAuthority),
+              let values = try? decoder.decode([String: StoredRowAuthority].self, from: data) else {
+            return [:]
+        }
+        return values
+    }
+
+    /// The order key for a row read out of the local store.
+    ///
+    /// A row keeps the server date this device last saw for it, but only while
+    /// its payload date still matches the one recorded then. Any later local
+    /// edit moves that date, which marks the row as a change the server has
+    /// never seen. Both dates in that comparison were minted by this one
+    /// device, so no other device's clock enters into it.
+    private func localOrderKey(
+        _ authority: [String: StoredRowAuthority],
+        recordName: String,
+        deviceDate: Date
+    ) -> SyncOrderKey {
+        guard let stored = authority[recordName], stored.deviceDate == deviceDate else {
+            return SyncOrderKey(serverDate: nil, deviceDate: deviceDate)
+        }
+        return SyncOrderKey(serverDate: stored.serverDate, deviceDate: deviceDate)
+    }
+
+    /// Remembers the server date behind every row the sync just settled. Rows
+    /// that are no longer in the payload are dropped, so the map stays the size
+    /// of the data rather than of everything ever seen.
+    ///
+    /// The first sync after this bookkeeping arrives has no recorded dates at
+    /// all, so every local row counts as unpushed and wins that one merge.
+    private func recordRowAuthority(in payload: SyncPayload, remote: SyncPayload, pushedServerDates: [String: Date]) {
+        let remoteServerDates = Dictionary(
+            rowDates(in: remote).compactMap { entry in entry.serverDate.map { (entry.recordName, $0) } },
+            uniquingKeysWith: { max($0, $1) }
+        )
+
+        let previous = loadRowAuthority()
+        var authority: [String: StoredRowAuthority] = [:]
+        for entry in rowDates(in: payload) {
+            if let serverDate = pushedServerDates[entry.recordName] ?? remoteServerDates[entry.recordName] {
+                authority[entry.recordName] = StoredRowAuthority(serverDate: serverDate, deviceDate: entry.deviceDate)
+            } else if let carried = previous[entry.recordName], carried.deviceDate == entry.deviceDate {
+                // A fetch that resumed from a change token only returns what
+                // changed, and a read-only shared row is never pushed, so a row
+                // can appear in neither list. Keeping the date already recorded
+                // for it is what stops it from looking like a local change this
+                // device never pushed.
+                authority[entry.recordName] = carried
+            }
+        }
+
+        if let data = try? encoder.encode(authority) {
+            defaults.set(data, forKey: StorageKey.rowAuthority)
+        }
+    }
+
+    private func rowDates(in payload: SyncPayload) -> [(recordName: String, deviceDate: Date, serverDate: Date?)] {
+        var entries: [(recordName: String, deviceDate: Date, serverDate: Date?)] = [
+            (appSettingsRecordName, payload.appSettings.value.updatedAt, payload.appSettings.orderKey.serverDate),
+            (monitoringSettingsRecordName, payload.monitoringSettings.value.updatedAt, payload.monitoringSettings.orderKey.serverDate)
+        ]
+
+        for row in payload.trackedDomains {
+            entries.append((
+                trackedDomainRecordName(for: CloudSyncMerge.normalizeDomain(row.value.domain)),
+                row.value.updatedAt,
+                row.orderKey.serverDate
+            ))
+        }
+        for row in payload.workflows {
+            entries.append((workflowRecordName(for: row.value.id.uuidString), row.value.updatedAt, row.orderKey.serverDate))
+        }
+        for row in payload.notesByDomain.values {
+            entries.append((domainNoteRecordName(for: row.value.domain), row.value.updatedAt, row.orderKey.serverDate))
+        }
+        for row in payload.historyMetadataByDomain.values {
+            entries.append((historyMetadataRecordName(for: row.value.domain), row.value.updatedAt, row.orderKey.serverDate))
+        }
+        for row in payload.tombstones {
+            entries.append((
+                tombstoneRecordName(for: row.value.entityType, identifier: row.value.identifier),
+                row.value.deletedAt,
+                row.orderKey.serverDate
+            ))
+        }
+
+        return entries
     }
 
     private func loadNoteUpdatedAtByDomain() -> [String: Date] {
@@ -1048,10 +1013,12 @@ final class CloudSyncService {
     /// on a brand-new zone. The private database holds the user's own records in
     /// a single custom zone; the shared database exposes one zone per accepted
     /// share, so every shared zone is fetched.
-    private func fetchZoneRecords(in scope: SyncDatabaseScope) async throws -> [CKRecord] {
+    private func fetchZoneRecords(
+        in scope: SyncDatabaseScope
+    ) async throws -> (records: [CKRecord], changeTokens: [String: CKServerChangeToken]) {
         guard let database = cloudKitDatabase(in: scope) else {
             if scope == .sharedDatabase {
-                return []
+                return ([], [:])
             }
             throw CloudSyncRuntimeError.missingEntitlement
         }
@@ -1065,31 +1032,48 @@ final class CloudSyncService {
             zoneIDs = try await database.allRecordZones().map(\.zoneID)
         }
 
-        guard !zoneIDs.isEmpty else { return [] }
-        return try await fetchZoneChanges(in: database, zoneIDs: zoneIDs)
+        guard !zoneIDs.isEmpty else { return ([], [:]) }
+        return try await fetchZoneChanges(in: database, scope: scope, zoneIDs: zoneIDs)
     }
 
-    private func fetchZoneChanges(in database: CKDatabase, zoneIDs: [CKRecordZone.ID]) async throws -> [CKRecord] {
-        // A nil change token requests every record in the zone. The server may
-        // truncate a large response and set `moreComing`, so keep re-fetching
-        // the still-truncated zones with their latest tokens until all drain.
-        var tokensByZone: [CKRecordZone.ID: CKServerChangeToken?] = [:]
+    /// Fetches what changed in each zone since the token stored for it, and
+    /// returns the tokens the caller should store once the changes are safely
+    /// applied. A zone with no stored token is fetched in full.
+    ///
+    /// The server may truncate a large response and set `moreComing`, so keep
+    /// re-fetching the still-truncated zones with their latest tokens until all
+    /// drain. A token the server has aged out comes back as
+    /// `.changeTokenExpired`, and the only recovery is to drop it and refetch
+    /// that zone in full; that is done at most once per zone per sync, so a
+    /// token that keeps expiring cannot spin here.
+    private func fetchZoneChanges(
+        in database: CKDatabase,
+        scope: SyncDatabaseScope,
+        zoneIDs: [CKRecordZone.ID]
+    ) async throws -> (records: [CKRecord], changeTokens: [String: CKServerChangeToken]) {
+        var pendingByZone: [CKRecordZone.ID: CKServerChangeToken?] = [:]
         for zoneID in zoneIDs {
-            tokensByZone[zoneID] = .some(nil)
+            pendingByZone[zoneID] = .some(loadChangeToken(forKey: changeTokenStorageKey(scope: scope, zoneID: zoneID)))
         }
 
         var records: [CKRecord] = []
-        while !tokensByZone.isEmpty {
-            tokensByZone = try await withCheckedThrowingContinuation { continuation in
+        var tokensByZone: [CKRecordZone.ID: CKServerChangeToken] = [:]
+        var refetchedAfterExpiry: Set<CKRecordZone.ID> = []
+
+        while !pendingByZone.isEmpty {
+            let step: ZoneChangesStep = try await withCheckedThrowingContinuation { continuation in
                 var moreByZone: [CKRecordZone.ID: CKServerChangeToken?] = [:]
-                let configurations = tokensByZone.mapValues { token -> CKFetchRecordZoneChangesOperation.ZoneConfiguration in
+                var fetchedByZone: [CKRecordZone.ID: CKServerChangeToken] = [:]
+                var expiredZones: [CKRecordZone.ID] = []
+
+                let configurations = pendingByZone.mapValues { token -> CKFetchRecordZoneChangesOperation.ZoneConfiguration in
                     let configuration = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
                     configuration.previousServerChangeToken = token ?? nil
                     return configuration
                 }
 
                 let operation = CKFetchRecordZoneChangesOperation(
-                    recordZoneIDs: Array(tokensByZone.keys),
+                    recordZoneIDs: Array(pendingByZone.keys),
                     configurationsByRecordZoneID: configurations
                 )
                 operation.recordWasChangedBlock = { _, result in
@@ -1098,31 +1082,89 @@ final class CloudSyncService {
                     }
                 }
                 operation.recordZoneFetchResultBlock = { zoneID, result in
-                    if case .success(let value) = result, value.moreComing {
-                        moreByZone[zoneID] = .some(value.serverChangeToken)
+                    switch result {
+                    case .success(let value):
+                        fetchedByZone[zoneID] = value.serverChangeToken
+                        if value.moreComing {
+                            moreByZone[zoneID] = .some(value.serverChangeToken)
+                        }
+                    case .failure(let error):
+                        if (error as? CKError)?.code == .changeTokenExpired {
+                            expiredZones.append(zoneID)
+                        }
                     }
                 }
                 operation.fetchRecordZoneChangesResultBlock = { result in
                     switch result {
                     case .success:
-                        continuation.resume(returning: moreByZone)
+                        continuation.resume(
+                            returning: ZoneChangesStep(pendingByZone: moreByZone, tokensByZone: fetchedByZone, expiredZones: expiredZones)
+                        )
                     case .failure(let error):
-                        continuation.resume(throwing: error)
+                        // An expired token is reported per zone and also fails
+                        // the operation as a whole. That is the one failure the
+                        // loop can recover from, and only when a zone actually
+                        // reported it — anything else still throws.
+                        let code = (error as? CKError)?.code
+                        if !expiredZones.isEmpty, code == .partialFailure || code == .changeTokenExpired {
+                            continuation.resume(
+                                returning: ZoneChangesStep(pendingByZone: moreByZone, tokensByZone: fetchedByZone, expiredZones: expiredZones)
+                            )
+                        } else {
+                            continuation.resume(throwing: error)
+                        }
                     }
                 }
                 database.add(operation)
             }
+
+            tokensByZone.merge(step.tokensByZone) { _, fetched in fetched }
+            pendingByZone = step.pendingByZone
+
+            for zoneID in step.expiredZones where !refetchedAfterExpiry.contains(zoneID) {
+                refetchedAfterExpiry.insert(zoneID)
+                tokensByZone.removeValue(forKey: zoneID)
+                pendingByZone[zoneID] = .some(nil)
+            }
         }
 
-        return records
+        let changeTokens = tokensByZone.reduce(into: [String: CKServerChangeToken]()) { partialResult, entry in
+            partialResult[changeTokenStorageKey(scope: scope, zoneID: entry.key)] = entry.value
+        }
+        return (records, changeTokens)
     }
 
-    private func decodeRecords<T: Decodable>(_ records: [CKRecord], ofType recordType: String) -> [T] {
-        var results: [T] = []
+    private func changeTokenStorageKey(scope: SyncDatabaseScope, zoneID: CKRecordZone.ID) -> String {
+        let scopeName = scope == .privateDatabase ? "private" : "shared"
+        return "\(StorageKey.changeTokenPrefix)\(scopeName).\(zoneID.ownerName).\(zoneID.zoneName)"
+    }
+
+    private func loadChangeToken(forKey key: String) -> CKServerChangeToken? {
+        guard let data = defaults.data(forKey: key) else { return nil }
+        return try? NSKeyedUnarchiver.unarchivedObject(ofClass: CKServerChangeToken.self, from: data)
+    }
+
+    private func commitChangeTokens(_ changeTokens: [String: CKServerChangeToken]) {
+        for (key, token) in changeTokens {
+            guard let data = try? NSKeyedArchiver.archivedData(withRootObject: token, requiringSecureCoding: true) else { continue }
+            defaults.set(data, forKey: key)
+        }
+    }
+
+    /// Decodes the payload blob and pairs it with the record's server-assigned
+    /// modification date, which is what the merge orders conflicts by. The
+    /// `deviceDate` key path names the payload's own date, kept as display
+    /// metadata.
+    private func decodeRecords<T: Decodable>(
+        _ records: [CKRecord],
+        ofType recordType: String,
+        deviceDate: KeyPath<T, Date>
+    ) -> [SyncRow<T>] {
+        var results: [SyncRow<T>] = []
         for record in records where record.recordType == recordType {
             guard let payload = record[CloudRecordKey.payload] as? Data else { continue }
             if let decoded = try? decoder.decode(T.self, from: payload) {
-                results.append(decoded)
+                results.append(SyncRow(value: decoded, orderKey: Self.orderKey(for: record, deviceDate: decoded[keyPath: deviceDate])))
             } else {
                 lastErrorMessage = "Some iCloud records were skipped because they could not be decoded."
             }
@@ -1130,7 +1172,15 @@ final class CloudSyncService {
         return results
     }
 
-    private func trackedDomains(from records: [CKRecord], in scope: SyncDatabaseScope) async throws -> [TrackedDomain] {
+    /// `modificationDate` is nil only on a `CKRecord` the server has never
+    /// stored, which a fetched record never is. A nil would read as an unpushed
+    /// local change, so a record arriving without one is left to win, matching
+    /// how the rest of the merge treats an unknown server date.
+    private static func orderKey(for record: CKRecord, deviceDate: Date) -> SyncOrderKey {
+        SyncOrderKey(serverDate: record.modificationDate, deviceDate: deviceDate)
+    }
+
+    private func trackedDomains(from records: [CKRecord], in scope: SyncDatabaseScope) async throws -> [SyncRow<TrackedDomain>] {
         let matching = records.filter { $0.recordType == CloudRecordType.trackedDomain }
         let shares = try await sharesByRecordID(for: matching, in: scope)
 
@@ -1140,13 +1190,13 @@ final class CloudSyncService {
                 lastErrorMessage = "Some iCloud records were skipped because they could not be decoded."
                 return nil
             }
-            var trackedDomain = Self.payloadTrackedDomain(decoded)
+            var trackedDomain = CloudSyncMerge.payloadTrackedDomain(decoded)
             trackedDomain.collaboration = collaborationMetadata(for: record, share: shares[record.recordID], scope: scope)
-            return trackedDomain
+            return SyncRow(value: trackedDomain, orderKey: Self.orderKey(for: record, deviceDate: trackedDomain.updatedAt))
         }
     }
 
-    private func workflows(from records: [CKRecord], in scope: SyncDatabaseScope) async throws -> [DomainWorkflow] {
+    private func workflows(from records: [CKRecord], in scope: SyncDatabaseScope) async throws -> [SyncRow<DomainWorkflow>] {
         let matching = records.filter { $0.recordType == CloudRecordType.workflow }
         let shares = try await sharesByRecordID(for: matching, in: scope)
 
@@ -1156,9 +1206,9 @@ final class CloudSyncService {
                 lastErrorMessage = "Some iCloud records were skipped because they could not be decoded."
                 return nil
             }
-            var workflow = normalizedWorkflow(decoded)
+            var workflow = CloudSyncMerge.normalizedWorkflow(decoded)
             workflow.collaboration = collaborationMetadata(for: record, share: shares[record.recordID], scope: scope)
-            return workflow
+            return SyncRow(value: workflow, orderKey: Self.orderKey(for: record, deviceDate: workflow.updatedAt))
         }
     }
 
@@ -1225,9 +1275,9 @@ final class CloudSyncService {
     private func shareRecordName(for entity: ShareableEntity) async throws -> String? {
         switch entity {
         case .trackedDomain(let domain):
-            let normalized = Self.normalizeDomain(domain)
+            let normalized = CloudSyncMerge.normalizeDomain(domain)
             return DomainDataPortabilityService.loadTrackedDomains()
-                .first(where: { Self.normalizeDomain($0.domain) == normalized })?
+                .first(where: { CloudSyncMerge.normalizeDomain($0.domain) == normalized })?
                 .collaboration?.shareRecordName
         case .workflow(let identifier):
             return DomainDataPortabilityService.loadWorkflows()
@@ -1237,8 +1287,8 @@ final class CloudSyncService {
     }
 
     private func makeTrackedDomainRecord(_ trackedDomain: TrackedDomain) -> CKRecord {
-        let normalized = Self.normalizeDomain(trackedDomain.domain)
-        let sanitized = Self.payloadTrackedDomain(trackedDomain)
+        let normalized = CloudSyncMerge.normalizeDomain(trackedDomain.domain)
+        let sanitized = CloudSyncMerge.payloadTrackedDomain(trackedDomain)
         return makeRecord(
             type: CloudRecordType.trackedDomain,
             recordName: trackedDomainRecordName(for: normalized),
@@ -1251,7 +1301,7 @@ final class CloudSyncService {
     }
 
     private func makeWorkflowRecord(_ workflow: DomainWorkflow) -> CKRecord {
-        let normalized = normalizedWorkflow(workflow)
+        let normalized = CloudSyncMerge.normalizedWorkflow(workflow)
         return makeRecord(
             type: CloudRecordType.workflow,
             recordName: workflowRecordName(for: normalized.id.uuidString),
@@ -1266,7 +1316,7 @@ final class CloudSyncService {
     private func makeAppSettingsRecord(_ settings: SyncedAppSettings) -> CKRecord {
         makeRecord(
             type: CloudRecordType.appSettings,
-            recordName: "app-settings",
+            recordName: appSettingsRecordName,
             payload: settings,
             extraFields: [CloudRecordKey.updatedAt: settings.updatedAt as CKRecordValue]
         )
@@ -1275,7 +1325,7 @@ final class CloudSyncService {
     private func makeMonitoringSettingsRecord(_ settings: SyncedMonitoringSettings) -> CKRecord {
         makeRecord(
             type: CloudRecordType.monitoringSettings,
-            recordName: "monitoring-settings",
+            recordName: monitoringSettingsRecordName,
             payload: settings,
             extraFields: [CloudRecordKey.updatedAt: settings.updatedAt as CKRecordValue]
         )
@@ -1379,16 +1429,6 @@ final class CloudSyncService {
         case missingLocalItem
     }
 
-    private static func normalizeDomain(_ value: String) -> String {
-        value
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "https://", with: "")
-            .replacingOccurrences(of: "http://", with: "")
-            .components(separatedBy: "/")
-            .first?
-            .lowercased() ?? ""
-    }
-
     private func cloudKitContainer() -> CKContainer {
         if let container {
             return container
@@ -1445,156 +1485,12 @@ final class CloudSyncService {
         "This build does not have the CloudKit entitlement required for iCloud sync."
     }
 
-    private static func payloadTrackedDomain(_ trackedDomain: TrackedDomain) -> TrackedDomain {
-        TrackedDomain(
-            id: trackedDomain.id,
-            domain: normalizeDomain(trackedDomain.domain),
-            createdAt: trackedDomain.createdAt,
-            updatedAt: trackedDomain.updatedAt,
-            note: trackedDomain.note,
-            isPinned: trackedDomain.isPinned,
-            monitoringEnabled: trackedDomain.monitoringEnabled,
-            lastKnownAvailability: trackedDomain.lastKnownAvailability,
-            lastSnapshotID: nil,
-            lastChangeSummary: nil,
-            lastChangeSeverity: trackedDomain.lastChangeSeverity,
-            certificateWarningLevel: trackedDomain.certificateWarningLevel,
-            certificateDaysRemaining: trackedDomain.certificateDaysRemaining,
-            lastMonitoredAt: trackedDomain.lastMonitoredAt,
-            lastAlertAt: trackedDomain.lastAlertAt,
-            monitoringState: trackedDomain.monitoringState,
-            pendingMonitoringAlerts: trackedDomain.pendingMonitoringAlerts,
-            collaboration: trackedDomain.collaboration
-        )
+    private var appSettingsRecordName: String {
+        "app-settings"
     }
 
-    private func mergedTrackedDomain(_ lhs: TrackedDomain, _ rhs: TrackedDomain) -> TrackedDomain {
-        let winner = preferredTrackedDomain(lhs, rhs)
-
-        return TrackedDomain(
-            id: lhs.id,
-            domain: Self.normalizeDomain(lhs.domain.isEmpty ? rhs.domain : lhs.domain),
-            createdAt: min(lhs.createdAt, rhs.createdAt),
-            updatedAt: max(lhs.updatedAt, rhs.updatedAt),
-            note: winner.note ?? lhs.note ?? rhs.note,
-            isPinned: winner.isPinned,
-            monitoringEnabled: winner.monitoringEnabled,
-            lastKnownAvailability: winner.lastKnownAvailability ?? lhs.lastKnownAvailability ?? rhs.lastKnownAvailability,
-            lastSnapshotID: nil,
-            lastChangeSummary: nil,
-            lastChangeSeverity: winner.lastChangeSeverity ?? lhs.lastChangeSeverity ?? rhs.lastChangeSeverity,
-            certificateWarningLevel: higherCertificateWarningLevel(lhs.certificateWarningLevel, rhs.certificateWarningLevel),
-            certificateDaysRemaining: winner.certificateDaysRemaining ?? lhs.certificateDaysRemaining ?? rhs.certificateDaysRemaining,
-            lastMonitoredAt: [lhs.lastMonitoredAt, rhs.lastMonitoredAt].compactMap { $0 }.max(),
-            lastAlertAt: [lhs.lastAlertAt, rhs.lastAlertAt].compactMap { $0 }.max(),
-            monitoringState: preferredMonitoringState(lhs.monitoringState, rhs.monitoringState),
-            pendingMonitoringAlerts: deduplicatedPendingAlerts(lhs.pendingMonitoringAlerts + rhs.pendingMonitoringAlerts),
-            collaboration: preferredCollaboration(lhs.collaboration, rhs.collaboration)
-        )
-    }
-
-    private func normalizedWorkflow(_ workflow: DomainWorkflow) -> DomainWorkflow {
-        DomainWorkflow(
-            id: workflow.id,
-            name: workflow.name.trimmingCharacters(in: .whitespacesAndNewlines),
-            domains: deduplicated(workflow.domains.map(Self.normalizeDomain).filter { !$0.isEmpty }),
-            createdAt: workflow.createdAt,
-            updatedAt: workflow.updatedAt,
-            notes: emptyToNil(workflow.notes ?? ""),
-            collaboration: workflow.collaboration
-        )
-    }
-
-    private func preferredTrackedDomain(_ lhs: TrackedDomain, _ rhs: TrackedDomain) -> TrackedDomain {
-        let lhsRank = collaborationRank(lhs.collaboration)
-        let rhsRank = collaborationRank(rhs.collaboration)
-        if lhsRank != rhsRank {
-            return lhsRank > rhsRank ? lhs : rhs
-        }
-        return lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
-    }
-
-    private func preferredMonitoringState(_ lhs: MonitoringState, _ rhs: MonitoringState) -> MonitoringState {
-        let lhsDate = [lhs.lastCheck, lhs.lastAlertDate, lhs.lastChangeDate].compactMap { $0 }.max() ?? .distantPast
-        let rhsDate = [rhs.lastCheck, rhs.lastAlertDate, rhs.lastChangeDate].compactMap { $0 }.max() ?? .distantPast
-        return lhsDate >= rhsDate ? lhs : rhs
-    }
-
-    private func deduplicatedPendingAlerts(_ alerts: [MonitoringPendingAlert]) -> [MonitoringPendingAlert] {
-        var uniqueByHash: [String: MonitoringPendingAlert] = [:]
-        for alert in alerts {
-            if let existing = uniqueByHash[alert.changeHash] {
-                uniqueByHash[alert.changeHash] = existing.detectedAt >= alert.detectedAt ? existing : alert
-            } else {
-                uniqueByHash[alert.changeHash] = alert
-            }
-        }
-        return uniqueByHash.values.sorted { $0.detectedAt < $1.detectedAt }
-    }
-
-    private func preferredWorkflow(_ lhs: DomainWorkflow, _ rhs: DomainWorkflow) -> DomainWorkflow {
-        let lhsRank = collaborationRank(lhs.collaboration)
-        let rhsRank = collaborationRank(rhs.collaboration)
-        if lhsRank != rhsRank {
-            return lhsRank > rhsRank ? lhs : rhs
-        }
-        return lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
-    }
-
-    private func preferredCollaboration(
-        _ lhs: CollaborationMetadata?,
-        _ rhs: CollaborationMetadata?
-    ) -> CollaborationMetadata? {
-        guard let lhs else { return rhs }
-        guard let rhs else { return lhs }
-        let lhsRank = collaborationRank(lhs)
-        let rhsRank = collaborationRank(rhs)
-        if lhsRank != rhsRank {
-            return lhsRank > rhsRank ? lhs : rhs
-        }
-        if lhs.shareRecordName != nil {
-            return lhs
-        }
-        return rhs
-    }
-
-    private func collaborationRank(_ collaboration: CollaborationMetadata?) -> Int {
-        guard let collaboration else { return 0 }
-        switch collaboration.ownership {
-        case .owner:
-            return collaboration.isShared ? 3 : 2
-        case .participant:
-            return collaboration.permission == .editable ? 1 : 0
-        }
-    }
-
-    private func emptyToNil(_ value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private func sameAppSettings(_ lhs: AppSettingsSnapshot, _ rhs: AppSettingsSnapshot) -> Bool {
-        lhs.recentSearches == rhs.recentSearches
-            && lhs.savedDomains == rhs.savedDomains
-            && lhs.resolverURLString == rhs.resolverURLString
-            && lhs.appDensityRawValue == rhs.appDensityRawValue
-    }
-
-    private func deduplicated(_ values: [String]) -> [String] {
-        var seen = Set<String>()
-        return values.filter { seen.insert($0).inserted }
-    }
-
-    private func higherCertificateWarningLevel(
-        _ lhs: CertificateWarningLevel,
-        _ rhs: CertificateWarningLevel
-    ) -> CertificateWarningLevel {
-        let rank: [CertificateWarningLevel: Int] = [
-            .none: 0,
-            .warning: 1,
-            .critical: 2
-        ]
-        return (rank[lhs] ?? 0) >= (rank[rhs] ?? 0) ? lhs : rhs
+    private var monitoringSettingsRecordName: String {
+        "monitoring-settings"
     }
 
     private func trackedDomainRecordName(for normalizedDomain: String) -> String {
