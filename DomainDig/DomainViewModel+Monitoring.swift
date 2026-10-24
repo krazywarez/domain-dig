@@ -112,7 +112,7 @@ extension DomainViewModel {
         guard let index = trackedDomains.firstIndex(where: { $0.id == trackedDomain.id }) else { return }
         trackedDomains[index].monitoringEnabled.toggle()
         trackedDomains[index].updatedAt = Date()
-        MonitoringStorage.saveTrackedDomains(trackedDomains)
+        MonitoringStorage.saveTrackedDomains(trackedDomains, defaults: defaults)
         CloudSyncService.shared.scheduleSyncIfNeeded()
         sanitizeMonitoringSelection()
     }

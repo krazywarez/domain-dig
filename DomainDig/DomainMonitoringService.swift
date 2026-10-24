@@ -17,36 +17,36 @@ enum MonitoringStorage {
     static let historyKey = "lookupHistory"
     static let maxLogs = 40
 
-    static func loadSettings() -> MonitoringSettings {
-        DataMigrationService.migrateIfNeeded()
-        return DomainDataPortabilityService.loadMonitoringSettings()
+    static func loadSettings(defaults: UserDefaults = .standard) -> MonitoringSettings {
+        DataMigrationService.migrateIfNeeded(defaults: defaults)
+        return DomainDataPortabilityService.loadMonitoringSettings(defaults: defaults)
     }
 
-    static func saveSettings(_ settings: MonitoringSettings) {
-        DomainDataPortabilityService.saveMonitoringSettings(settings)
+    static func saveSettings(_ settings: MonitoringSettings, defaults: UserDefaults = .standard) {
+        DomainDataPortabilityService.saveMonitoringSettings(settings, defaults: defaults)
     }
 
-    static func loadLogs() -> [MonitoringLog] {
-        DataMigrationService.migrateIfNeeded()
-        return DomainDataPortabilityService.loadMonitoringLogs()
+    static func loadLogs(defaults: UserDefaults = .standard) -> [MonitoringLog] {
+        DataMigrationService.migrateIfNeeded(defaults: defaults)
+        return DomainDataPortabilityService.loadMonitoringLogs(defaults: defaults)
     }
 
-    static func saveLogs(_ logs: [MonitoringLog]) {
-        DomainDataPortabilityService.saveMonitoringLogs(Array(logs.prefix(maxLogs)))
+    static func saveLogs(_ logs: [MonitoringLog], defaults: UserDefaults = .standard) {
+        DomainDataPortabilityService.saveMonitoringLogs(Array(logs.prefix(maxLogs)), defaults: defaults)
     }
 
-    static func loadTrackedDomains() -> [TrackedDomain] {
-        DataMigrationService.migrateIfNeeded()
-        return DomainDataPortabilityService.loadTrackedDomains()
+    static func loadTrackedDomains(defaults: UserDefaults = .standard) -> [TrackedDomain] {
+        DataMigrationService.migrateIfNeeded(defaults: defaults)
+        return DomainDataPortabilityService.loadTrackedDomains(defaults: defaults)
     }
 
-    static func saveTrackedDomains(_ domains: [TrackedDomain]) {
-        DomainDataPortabilityService.saveTrackedDomains(domains)
+    static func saveTrackedDomains(_ domains: [TrackedDomain], defaults: UserDefaults = .standard) {
+        DomainDataPortabilityService.saveTrackedDomains(domains, defaults: defaults)
     }
 
-    static func loadHistoryEntries() -> [HistoryEntry] {
-        DataMigrationService.migrateIfNeeded()
-        return DomainDataPortabilityService.loadHistoryEntries()
+    static func loadHistoryEntries(defaults: UserDefaults = .standard) -> [HistoryEntry] {
+        DataMigrationService.migrateIfNeeded(defaults: defaults)
+        return DomainDataPortabilityService.loadHistoryEntries(defaults: defaults)
     }
 
     static func saveHistoryEntries(_ entries: [HistoryEntry]) {

@@ -107,7 +107,12 @@ final class DomainViewModelInputTests: XCTestCase {
     /// implicit main-actor-isolated deinit through the iOS 17 back-deployment
     /// shim, which aborts in the simulator. The app holds one for its whole
     /// lifetime, so nothing releases one there either.
-    private static let viewModel = DomainViewModel()
+    /// On a scratch store: `trackDomain` persists, so on `.standard` this
+    /// test wrote "localhost" into the store of whichever app shares the
+    /// simulator.
+    private static let viewModel = DomainViewModel(
+        defaults: UserDefaults(suiteName: "net.cleberg.DomainDig.tests.input") ?? .standard
+    )
 
     func testAnInvalidDomainDoesNotStartALookup() {
         let viewModel = Self.viewModel

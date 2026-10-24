@@ -59,27 +59,27 @@ extension DomainViewModel {
     }
 
     func exportFullBackupData() -> Data? {
-        try? DomainDataPortabilityService.backupData()
+        try? DomainDataPortabilityService.backupData(defaults: defaults)
     }
 
     func exportPortableTrackedDomainsJSONData() -> Data? {
-        try? DomainDataPortabilityService.trackedDomainsExportData()
+        try? DomainDataPortabilityService.trackedDomainsExportData(defaults: defaults)
     }
 
     func exportPortableTrackedDomainsCSV() -> String {
-        DomainDataPortabilityService.trackedDomainsCSV()
+        DomainDataPortabilityService.trackedDomainsCSV(defaults: defaults)
     }
 
     func exportPortableWorkflowsJSONData() -> Data? {
-        try? DomainDataPortabilityService.workflowsExportData()
+        try? DomainDataPortabilityService.workflowsExportData(defaults: defaults)
     }
 
     func exportPortableWorkflowsCSV() -> String {
-        DomainDataPortabilityService.workflowsCSV()
+        DomainDataPortabilityService.workflowsCSV(defaults: defaults)
     }
 
     func exportPortableHistoryJSONData() -> Data? {
-        try? DomainDataPortabilityService.historyExportData()
+        try? DomainDataPortabilityService.historyExportData(defaults: defaults)
     }
 
     func prepareDataImport(
@@ -87,11 +87,11 @@ extension DomainViewModel {
         fileName: String,
         mode: DataPortabilityImportMode
     ) throws -> DataImportPreview {
-        try DomainDataPortabilityService.prepareImport(data: data, fileName: fileName, mode: mode)
+        try DomainDataPortabilityService.prepareImport(data: data, fileName: fileName, mode: mode, defaults: defaults)
     }
 
     func applyDataImport(_ preview: DataImportPreview, mode: DataPortabilityImportMode) throws -> DataImportResult {
-        let result = try DomainDataPortabilityService.applyImport(preview, mode: mode)
+        let result = try DomainDataPortabilityService.applyImport(preview, mode: mode, defaults: defaults)
         refreshPersistedData()
         portabilityStatusMessage = result.summary
         CloudSyncService.shared.markAppSettingsChanged()
@@ -106,7 +106,8 @@ extension DomainViewModel {
                 recentSearches: recentSearches,
                 resolverURLString: resolverURLString,
                 appDensityRawValue: appDensityRawValue
-            )
+            ),
+            defaults: defaults
         )
         CloudSyncService.shared.markAppSettingsChanged()
         refreshDataLifecycleSummary()
