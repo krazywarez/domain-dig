@@ -242,7 +242,6 @@ final class DomainViewModel {
     var reputation: DomainReputationResult?
     var reputationLoading = false
     var reputationError: String?
-    var usageCredits: [UsageCreditFeature: UsageCreditStatus] = DomainViewModel.defaultUsageCredits()
 
     var portScanResults: [PortScanResult] = []
     var portScanLoading = false
@@ -698,18 +697,6 @@ final class DomainViewModel {
         currentReport?.web
     }
 
-    var ownershipHistoryCreditStatus: UsageCreditStatus {
-        usageCredits[.ownershipHistory] ?? Self.fallbackCreditStatus(for: .ownershipHistory)
-    }
-
-    var dnsHistoryCreditStatus: UsageCreditStatus {
-        usageCredits[.dnsHistory] ?? Self.fallbackCreditStatus(for: .dnsHistory)
-    }
-
-    var extendedSubdomainsCreditStatus: UsageCreditStatus {
-        usageCredits[.extendedSubdomains] ?? Self.fallbackCreditStatus(for: .extendedSubdomains)
-    }
-
     var combinedSubdomains: [DiscoveredSubdomain] {
         let existingHosts = Set(subdomains.map { $0.hostname.lowercased() })
         return subdomains + extendedSubdomains.filter { !existingHosts.contains($0.hostname.lowercased()) }
@@ -1090,7 +1077,6 @@ final class DomainViewModel {
         latestWorkflowRunSummary = nil
         historyAutoPruneOption = Self.loadHistoryAutoPruneOption()
         refreshDataLifecycleSummary()
-        await refreshUsageCredits()
         await refreshMonitoringAuthorizationStatus()
     }
 
@@ -1255,6 +1241,14 @@ final class DomainViewModel {
             .lowercased() ?? domain.lowercased()
         guard !normalizedDomain.isEmpty else { return nil }
 
+        // Free keeps one audit open at a time so the feature stays discoverable;
+        // finishing one frees the slot. Existing sessions are never closed off.
+        if let limit = FeatureAccessService.entitlements.activeAuditSessionLimit,
+           auditSessions.filter({ $0.status != .complete }).count >= limit {
+            upgradePrompt = FeatureAccessService.upgradePrompt(for: .auditDepth)
+            return nil
+        }
+
         let previous = historyEntries(for: normalizedDomain).first?.snapshot
         let snapshot = await inspectionService.inspectSnapshot(domain: normalizedDomain, previousSnapshot: previous)
         guard let entry = saveHistoryEntry(
@@ -1291,7 +1285,7 @@ final class DomainViewModel {
     }
 
     func loadOwnershipHistory() async {
-        await loadLookup(.ownershipHistory, into: \.ownershipHistory, loading: \.ownershipHistoryLoading, error: \.ownershipHistoryError,
+        await loadLookup(into: \.ownershipHistory, loading: \.ownershipHistoryLoading, error: \.ownershipHistoryError,
                          fallback: "Ownership history unavailable") {
             await ExternalDataService.shared.ownershipHistory(
                 domain: searchedDomain,
@@ -1302,7 +1296,7 @@ final class DomainViewModel {
     }
 
     func loadDNSHistory() async {
-        await loadLookup(.dnsHistory, into: \.dnsHistory, loading: \.dnsHistoryLoading, error: \.dnsHistoryError,
+        await loadLookup(into: \.dnsHistory, loading: \.dnsHistoryLoading, error: \.dnsHistoryError,
                          fallback: "DNS history unavailable") {
             await ExternalDataService.shared.dnsHistory(
                 domain: searchedDomain,
@@ -1322,10 +1316,11 @@ final class DomainViewModel {
         }
     }
 
-    /// Loads `capability`'s lookup for the searched domain into `items`, unless it is loaded
-    /// already, or shows the upgrade prompt when the plan doesn't include it.
+    /// Loads a lookup for the searched domain into `items`, unless it is loaded
+    /// already. With a `capability`, shows the upgrade prompt when the plan
+    /// doesn't include it; without one the lookup is open to every tier.
     private func loadLookup<Item>(
-        _ capability: DataCapability,
+        _ capability: DataCapability? = nil,
         into items: ReferenceWritableKeyPath<DomainViewModel, [Item]>,
         loading: ReferenceWritableKeyPath<DomainViewModel, Bool>,
         error: ReferenceWritableKeyPath<DomainViewModel, String?>,
@@ -1333,7 +1328,7 @@ final class DomainViewModel {
         fetch: () async -> ServiceResult<[Item]>
     ) async {
         guard !searchedDomain.isEmpty else { return }
-        guard DataAccessService.hasAccess(to: capability) else {
+        if let capability, !DataAccessService.hasAccess(to: capability) {
             upgradePrompt = FeatureAccessService.upgradePrompt(for: capability.feature)
             return
         }
@@ -1360,11 +1355,6 @@ final class DomainViewModel {
         }
     }
 
-    func refreshUsageCredits() async {
-        let statuses = await UsageCreditService.shared.allStatuses()
-        usageCredits = Dictionary(uniqueKeysWithValues: statuses.map { ($0.feature, $0) })
-    }
-
     private func performLookup(domain: String, lookupID: UUID) async -> HistoryEntry? {
         let lookupStartedAt = DomainDebugLog.signpostStart("DomainViewModel.performLookup", domain: domain)
         let previous = previousSnapshot(
@@ -1382,16 +1372,6 @@ final class DomainViewModel {
         DomainDebugLog.signpostEnd("DomainViewModel.applySnapshot", start: applyStartedAt, domain: domain)
         lastLookupDurationMs = snapshot.totalLookupDurationMs
         refreshingTrackedDomainID = nil
-
-        if DataAccessService.hasAccess(to: .domainPricing), domainPricing == nil {
-            DomainDebugLog.debug("DomainViewModel.performLookup loadingPricing domain=\(domain)")
-            await refreshDomainPricing(for: snapshot.domain, persistAfterFetch: false)
-        }
-
-        if DataAccessService.hasAccess(to: .reputation), reputation == nil {
-            DomainDebugLog.debug("DomainViewModel.performLookup loadingReputation domain=\(domain)")
-            await refreshReputation(for: snapshot.domain, persistAfterFetch: false)
-        }
 
         guard snapshot.statusMessage == nil else {
             return history.first(where: { $0.id == snapshot.historyEntryID })
@@ -3582,9 +3562,6 @@ final class DomainViewModel {
         if let ownershipError = snapshot.ownershipError, snapshot.ownership == nil {
             lines.append("  Source: \(ownershipError)")
         }
-        if !DataAccessService.hasAccess(to: .ownershipHistory) {
-            lines.append("  Ownership history (coming soon)")
-        }
         return lines
     }
 
@@ -3600,7 +3577,7 @@ final class DomainViewModel {
             }
         }
         if !DataAccessService.hasAccess(to: .extendedSubdomains) {
-            lines.append("  Extended subdomain discovery (Pro+)")
+            lines.append("  Extended subdomain discovery (Pro)")
         }
         return lines
     }
@@ -3910,46 +3887,6 @@ final class DomainViewModel {
         return formatter
     }()
 
-    private func refreshDomainPricing(for domain: String, persistAfterFetch: Bool) async {
-        domainPricingLoading = true
-        let outcome = await ExternalDataService.shared.pricing(domain: domain)
-
-        switch outcome.value {
-        case let .success(pricing):
-            domainPricing = pricing
-            domainPricingError = nil
-        case let .empty(message), let .error(message):
-            domainPricing = nil
-            domainPricingError = conciseExternalMessage(message, fallback: "External pricing unavailable")
-        }
-
-        domainPricingLoading = false
-
-        if persistAfterFetch {
-            _ = saveHistoryEntry(replaceLatest: true)
-        }
-    }
-
-    private func refreshReputation(for domain: String, persistAfterFetch: Bool) async {
-        reputationLoading = true
-        let outcome = await ExternalDataService.shared.reputation(domain: domain)
-
-        switch outcome.value {
-        case let .success(result):
-            reputation = result
-            reputationError = nil
-        case let .empty(message), let .error(message):
-            reputation = nil
-            reputationError = conciseExternalMessage(message, fallback: "Reputation check unavailable")
-        }
-
-        reputationLoading = false
-
-        if persistAfterFetch {
-            _ = saveHistoryEntry(replaceLatest: true)
-        }
-    }
-
     private func conciseExternalMessage(_ message: String, fallback: String) -> String {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
@@ -3965,21 +3902,6 @@ final class DomainViewModel {
             return "External data is offline."
         }
         return trimmed
-    }
-
-    private static func defaultUsageCredits() -> [UsageCreditFeature: UsageCreditStatus] {
-        Dictionary(uniqueKeysWithValues: UsageCreditFeature.allCases.map { feature in
-            (feature, fallbackCreditStatus(for: feature))
-        })
-    }
-
-    private static func fallbackCreditStatus(for feature: UsageCreditFeature) -> UsageCreditStatus {
-        UsageCreditStatus(
-            feature: feature,
-            remaining: feature.defaultAllowance,
-            total: feature.defaultAllowance,
-            resetContext: "Resets with app version \(AppVersion.current)"
-        )
     }
 
     private static func csvEscaped(_ value: String) -> String {

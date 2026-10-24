@@ -26,12 +26,6 @@ struct AppSettingsSnapshot: Codable {
 
 struct FeatureMetadataSnapshot: Codable {
     let cachedEntitlement: PurchaseService.CachedEntitlement?
-    let usageCredits: UsageCreditsSnapshot?
-}
-
-struct UsageCreditsSnapshot: Codable {
-    let appVersion: String
-    let remainingByFeature: [UsageCreditFeature: Int]
 }
 
 struct TrackedDomainsExport: Codable {
@@ -565,7 +559,6 @@ enum DomainDataPortabilityService {
         static let appDensity = AppDensity.userDefaultsKey
         static let resolverURL = DNSResolverOption.userDefaultsKey
         static let purchaseCache = "purchase.cachedEntitlement"
-        static let usageCredits = "usageCredits.ledger"
     }
 
     static func loadRecentSearches(defaults: UserDefaults = .standard) -> [String] {
@@ -727,25 +720,13 @@ enum DomainDataPortabilityService {
             cachedEntitlement = nil
         }
 
-        let usageCredits: UsageCreditsSnapshot?
-        if let data = defaults.data(forKey: StorageKey.usageCredits) {
-            usageCredits = try? JSONDecoder().decode(UsageCreditsSnapshot.self, from: data)
-        } else {
-            usageCredits = nil
-        }
-
-        return FeatureMetadataSnapshot(cachedEntitlement: cachedEntitlement, usageCredits: usageCredits)
+        return FeatureMetadataSnapshot(cachedEntitlement: cachedEntitlement)
     }
 
     static func saveFeatureMetadata(_ featureMetadata: FeatureMetadataSnapshot?, defaults: UserDefaults = .standard) {
         if let cachedEntitlement = featureMetadata?.cachedEntitlement,
            let data = try? JSONEncoder().encode(cachedEntitlement) {
             defaults.set(data, forKey: StorageKey.purchaseCache)
-        }
-
-        if let usageCredits = featureMetadata?.usageCredits,
-           let data = try? JSONEncoder().encode(usageCredits) {
-            defaults.set(data, forKey: StorageKey.usageCredits)
         }
     }
 
@@ -885,7 +866,6 @@ enum DomainDataPortabilityService {
         let cachedItems = appSettings.recentSearches.count
             + appSettings.savedDomains.count
             + (featureMetadata.cachedEntitlement == nil ? 0 : 1)
-            + (featureMetadata.usageCredits == nil ? 0 : 1)
 
         return DataLifecycleSummary(
             trackedDomains: loadTrackedDomains(defaults: defaults).count,
@@ -1095,7 +1075,7 @@ enum DomainDataPortabilityService {
                     historySnapshots: backup.historyEntries.count,
                     auditSessions: backup.auditSessions?.count ?? 0,
                     workflows: backup.workflows.count,
-                    cachedItems: backup.appSettings.recentSearches.count + backup.appSettings.savedDomains.count + ((backup.featureMetadata?.cachedEntitlement == nil ? 0 : 1) + (backup.featureMetadata?.usageCredits == nil ? 0 : 1)),
+                    cachedItems: backup.appSettings.recentSearches.count + backup.appSettings.savedDomains.count + (backup.featureMetadata?.cachedEntitlement == nil ? 0 : 1),
                     monitoringLogs: backup.monitoringLogs.count
                 )
             }
@@ -1297,27 +1277,8 @@ enum DomainDataPortabilityService {
     private static func mergeFeatureMetadata(existing: FeatureMetadataSnapshot, incoming: FeatureMetadataSnapshot?) -> FeatureMetadataSnapshot {
         guard let incoming else { return existing }
 
-        let mergedUsageCredits: UsageCreditsSnapshot?
-        switch (existing.usageCredits, incoming.usageCredits) {
-        case let (.some(lhs), .some(rhs)):
-            let mergedRemaining = Dictionary(uniqueKeysWithValues: UsageCreditFeature.allCases.map { feature in
-                (feature, max(lhs.remainingByFeature[feature] ?? 0, rhs.remainingByFeature[feature] ?? 0))
-            })
-            mergedUsageCredits = UsageCreditsSnapshot(
-                appVersion: rhs.appVersion,
-                remainingByFeature: mergedRemaining
-            )
-        case (.some(let lhs), nil):
-            mergedUsageCredits = lhs
-        case (nil, .some(let rhs)):
-            mergedUsageCredits = rhs
-        case (nil, nil):
-            mergedUsageCredits = nil
-        }
-
         return FeatureMetadataSnapshot(
-            cachedEntitlement: incoming.cachedEntitlement ?? existing.cachedEntitlement,
-            usageCredits: mergedUsageCredits
+            cachedEntitlement: incoming.cachedEntitlement ?? existing.cachedEntitlement
         )
     }
 

@@ -24,7 +24,6 @@ enum DataResetService {
 
         await LookupRuntime.shared.clearCache()
         await LocalNotificationService.shared.clearAllNotifications()
-        await UsageCreditService.shared.resetForCurrentVersion()
 
         await MainActor.run {
             IntegrationService.shared.resetAfterLocalWipe()

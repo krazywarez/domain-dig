@@ -668,6 +668,13 @@ struct TrackedDomainDetailView: View {
                 .disabled(!viewModel.canEdit(liveTrackedDomain))
 
                 Button {
+                    // Managing a share the user already has stays available on
+                    // any tier; only creating a new one needs Pro+.
+                    guard liveTrackedDomain.collaboration?.isShared == true
+                        || FeatureAccessService.hasAccess(to: .sharedPortfolios) else {
+                        viewModel.upgradePrompt = FeatureAccessService.upgradePrompt(for: .sharedPortfolios)
+                        return
+                    }
                     shareEntity = .trackedDomain(liveTrackedDomain.domain)
                 } label: {
                     Label(liveTrackedDomain.collaboration?.isShared == true ? "Manage Share" : "Share Domain", systemImage: "person.2")

@@ -10,7 +10,7 @@ struct PaywallView: View {
         NavigationStack {
             List {
                 Section {
-                    Text("Pro unlocks workflows, scale, monitoring automation, and exports. Pro+ adds deeper external intelligence with no additional usage limits.")
+                    Text("Pro unlocks scale, background monitoring, alerts, exports, and extended subdomain discovery. Pro+ adds shared portfolios and unlimited audits.")
                         .font(appDensity.font(.body, design: .default))
                         .foregroundStyle(Color(.appTextSecondary))
                         .fixedSize(horizontal: false, vertical: true)
@@ -23,13 +23,12 @@ struct PaywallView: View {
                     featureRow("Background monitoring")
                     featureRow("Local alerts")
                     featureRow("Advanced exports")
+                    featureRow("Extended subdomain discovery")
                 }
 
                 Section("What Pro+ Unlocks") {
-                    featureRow("Ownership history")
-                    featureRow("DNS history")
-                    featureRow("Extended subdomains")
-                    featureRow("External pricing signals")
+                    featureRow("Shared portfolios")
+                    featureRow("Unlimited audit sessions")
                 }
 
                 Section("Subscription") {

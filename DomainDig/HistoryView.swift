@@ -199,9 +199,6 @@ struct HistoryDetailView: View {
                     trackedDomain: trackedDomain,
                     workflows: viewModel.workflowsContaining(domain: entry.domain),
                     trackingLimitMessage: nil,
-                    pricingLoading: false,
-                    pricingError: snapshot.domainPricingError,
-                    showsPricingPlaceholder: !DataAccessService.hasAccess(to: .domainPricing),
                     onTrack: {
                         _ = viewModel.trackDomain(domain: entry.domain, availabilityStatus: entry.availabilityResult?.status)
                     },
@@ -221,8 +218,7 @@ struct HistoryDetailView: View {
                     loading: false,
                     error: snapshot.ownershipError,
                     provenance: snapshot.provenanceBySection[.ownership],
-                    confidence: snapshot.ownershipConfidence,
-                    showsHistoryPlaceholder: !DataAccessService.hasAccess(to: .ownershipHistory)
+                    confidence: snapshot.ownershipConfidence
                 )
                 .padding(.top, appDensity.metrics.sectionSpacing)
                 SubdomainsSectionView(
