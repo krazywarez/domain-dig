@@ -214,6 +214,7 @@ struct ContentView: View {
             focusedInputField = newValue == .single ? .singleDomain : .bulkDomains
         }
         .onChange(of: viewModel.domain) { _, newValue in
+            viewModel.domainInputError = nil
             guard inputMode == .single else { return }
             let normalized = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
             guard normalized != viewModel.searchedDomain else { return }
@@ -317,6 +318,13 @@ struct ContentView: View {
                         focusedInputField = nil
                         viewModel.run()
                     }
+
+                if let domainInputError = viewModel.domainInputError {
+                    Text(domainInputError)
+                        .font(appDensity.font(.caption))
+                        .foregroundStyle(Color(.statusCritical))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
 
                 Button {
                     focusedInputField = nil
