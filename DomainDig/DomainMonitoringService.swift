@@ -151,7 +151,7 @@ final class DomainMonitoringScheduler {
         #endif
     }
 
-    private static func nextScheduleInterval(
+    static func nextScheduleInterval(
         settings: MonitoringSettings,
         trackedDomains: [TrackedDomain],
         now: Date = Date()
@@ -170,6 +170,51 @@ final class DomainMonitoringScheduler {
                 return max(0, lastCheck.addingTimeInterval(state.currentInterval).timeIntervalSince(now))
             }
             .min() ?? settings.config.sanitizedBaseInterval
+    }
+
+    /// Whether a domain is due for a background check.
+    static func isDue(
+        trackedDomain: TrackedDomain,
+        settings: MonitoringSettings,
+        now: Date
+    ) -> Bool {
+        guard let lastCheck = trackedDomain.monitoringState.lastCheck else { return true }
+        let state = normalizedMonitoringState(for: trackedDomain, settings: settings)
+        return lastCheck.addingTimeInterval(state.currentInterval) <= now
+    }
+
+    /// How the interval and the stable-check counter move after one check, and
+    /// whether this is a change not seen before.
+    ///
+    /// Separated from the alerting it used to sit inside, because a mistake
+    /// here is silent in both directions: an interval that grows without bound
+    /// stops monitoring, and one that never backs off hammers every domain on
+    /// every wake. Note the middle case — an alert whose hash is unchanged
+    /// moves neither the interval nor the counter.
+    static func adapted(
+        _ state: MonitoringState,
+        changeHash: String?,
+        settings: MonitoringSettings,
+        now: Date
+    ) -> (state: MonitoringState, isNewChange: Bool) {
+        var state = state
+        let baseInterval = settings.config.sanitizedBaseInterval
+
+        guard let changeHash else {
+            state.consecutiveStableChecks += 1
+            state.currentInterval = settings.adaptiveEnabled
+                ? max(baseInterval, min(settings.config.maxInterval, state.currentInterval * settings.sensitivity.intervalMultiplier))
+                : baseInterval
+            return (state, false)
+        }
+
+        guard state.lastChangeHash != changeHash else { return (state, false) }
+
+        state.lastChangeHash = changeHash
+        state.lastChangeDate = now
+        state.consecutiveStableChecks = 0
+        state.currentInterval = settings.adaptiveEnabled ? settings.sensitivity.minimumInterval : baseInterval
+        return (state, true)
     }
 
     static func normalizedMonitoringState(
@@ -566,9 +611,7 @@ final class DomainMonitoringService {
         settings: MonitoringSettings
     ) -> Bool {
         guard trigger == .background else { return true }
-        guard let lastCheck = trackedDomain.monitoringState.lastCheck else { return true }
-        let state = DomainMonitoringScheduler.normalizedMonitoringState(for: trackedDomain, settings: settings)
-        return lastCheck.addingTimeInterval(state.currentInterval) <= Date()
+        return DomainMonitoringScheduler.isDue(trackedDomain: trackedDomain, settings: settings, now: Date())
     }
 
     private func processAdaptiveMonitoringState(
@@ -581,41 +624,28 @@ final class DomainMonitoringService {
         now: Date
     ) async -> (trackedDomain: TrackedDomain, alertsTriggered: Int) {
         var updated = trackedDomain
-        var state = DomainMonitoringScheduler.normalizedMonitoringState(for: trackedDomain, settings: settings)
-        let baseInterval = settings.config.sanitizedBaseInterval
-        let minInterval = settings.sensitivity.minimumInterval
-        let maxInterval = settings.config.maxInterval
         let isQuiet = settings.quietHours?.contains(now, calendar: calendar) == true
         var alertsTriggered = 0
 
-        if let alertDescriptor {
-            if state.lastChangeHash != alertDescriptor.changeHash {
-                state.lastChangeHash = alertDescriptor.changeHash
-                state.lastChangeDate = now
-                state.consecutiveStableChecks = 0
-                state.currentInterval = settings.adaptiveEnabled ? minInterval : baseInterval
+        let (adaptedState, isNewChange) = DomainMonitoringScheduler.adapted(
+            DomainMonitoringScheduler.normalizedMonitoringState(for: trackedDomain, settings: settings),
+            changeHash: alertDescriptor?.changeHash,
+            settings: settings,
+            now: now
+        )
+        var state = adaptedState
 
-                if settings.alertsEnabled,
-                   alertDescriptor.severity >= settings.alertFilter.minimumSeverity {
-                    alertsTriggered += await raiseAlert(
-                        alertDescriptor,
-                        for: &updated,
-                        state: &state,
-                        deferred: isQuiet || !notificationsAuthorized,
-                        now: now
-                    )
-                }
-            }
-        } else {
-            state.consecutiveStableChecks += 1
-            if settings.adaptiveEnabled {
-                state.currentInterval = max(
-                    baseInterval,
-                    min(maxInterval, state.currentInterval * settings.sensitivity.intervalMultiplier)
-                )
-            } else {
-                state.currentInterval = baseInterval
-            }
+        if isNewChange,
+           let alertDescriptor,
+           settings.alertsEnabled,
+           alertDescriptor.severity >= settings.alertFilter.minimumSeverity {
+            alertsTriggered += await raiseAlert(
+                alertDescriptor,
+                for: &updated,
+                state: &state,
+                deferred: isQuiet || !notificationsAuthorized,
+                now: now
+            )
         }
 
         if !isQuiet,
