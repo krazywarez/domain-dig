@@ -23,14 +23,8 @@ actor ExternalDataService {
         }
     }
 
-    private enum CachedPayload {
-        case ownershipHistory(ServiceResult<[DomainOwnershipHistoryEvent]>)
-        case dnsHistory(ServiceResult<[DNSHistoryEvent]>)
-        case extendedSubdomains(ServiceResult<[DiscoveredSubdomain]>)
-    }
-
     private struct CacheEntry {
-        let payload: CachedPayload
+        let value: any Sendable
         let expiresAt: Date
     }
 
@@ -43,7 +37,7 @@ actor ExternalDataService {
     private let ttl: TimeInterval = 900
     private let session: URLSession = .shared
     private var cache: [RequestKey: CacheEntry] = [:]
-    private var inFlight: [RequestKey: Task<CachedPayload, Never>] = [:]
+    private var inFlight: [RequestKey: Task<any Sendable, Never>] = [:]
     private var nextAllowedAt: [RateLimitBucket: Date] = [:]
 
     func clearCache() {
@@ -62,10 +56,6 @@ actor ExternalDataService {
         return await execute(
             key: .ownershipHistory(normalizedDomain),
             rateLimitBucket: .history,
-            extract: { payload in
-                guard case let .ownershipHistory(result) = payload else { return nil }
-                return result
-            },
             operation: { [configuration = configuration()] in
                 let localEvents = Self.localOwnershipHistory(
                     domain: normalizedDomain,
@@ -73,7 +63,7 @@ actor ExternalDataService {
                     historyEntries: historyEntries
                 )
                 let externalEvents = await self.fetchOwnershipHistory(domain: normalizedDomain, configuration: configuration)
-                return .ownershipHistory(Self.mergeOwnershipHistory(localEvents: localEvents, externalEvents: externalEvents))
+                return Self.mergeOwnershipHistory(localEvents: localEvents, externalEvents: externalEvents)
             }
         )
     }
@@ -87,10 +77,6 @@ actor ExternalDataService {
         return await execute(
             key: .dnsHistory(normalizedDomain),
             rateLimitBucket: .history,
-            extract: { payload in
-                guard case let .dnsHistory(result) = payload else { return nil }
-                return result
-            },
             operation: { [configuration = configuration()] in
                 let localEvents = Self.localDNSHistory(
                     domain: normalizedDomain,
@@ -98,7 +84,7 @@ actor ExternalDataService {
                     historyEntries: historyEntries
                 )
                 let externalEvents = await self.fetchDNSHistory(domain: normalizedDomain, configuration: configuration)
-                return .dnsHistory(Self.mergeDNSHistory(localEvents: localEvents, externalEvents: externalEvents))
+                return Self.mergeDNSHistory(localEvents: localEvents, externalEvents: externalEvents)
             }
         )
     }
@@ -111,10 +97,6 @@ actor ExternalDataService {
         return await execute(
             key: .extendedSubdomains(normalizedDomain),
             rateLimitBucket: .subdomains,
-            extract: { payload in
-                guard case let .extendedSubdomains(result) = payload else { return nil }
-                return result
-            },
             operation: { [configuration = configuration()] in
                 var merged = existing
                 switch await SubdomainDiscoveryService.discover(for: normalizedDomain, limit: 100) {
@@ -131,42 +113,43 @@ actor ExternalDataService {
                 }
 
                 if merged.count <= existing.count {
-                    return .extendedSubdomains(.empty("No extended subdomains available"))
+                    return .empty("No extended subdomains available")
                 }
 
                 let onlyExtended = merged.filter(\.isExtended)
-                return .extendedSubdomains(.success(onlyExtended.sorted { $0.hostname < $1.hostname }))
+                return .success(onlyExtended.sorted { $0.hostname < $1.hostname })
             }
         )
     }
 
-    private func execute<T>(
+    /// Generic over the value rather than over an enum of every payload kind.
+    /// The previous shape stored that enum and handed each caller a closure to
+    /// pull its own case back out, which trapped when the two disagreed; the
+    /// live path here has no cast at all, so the mismatch cannot arise. A
+    /// cached or in-flight value of the wrong type falls through to a fetch
+    /// instead of ending the process.
+    private func execute<T: Sendable>(
         key: RequestKey,
         rateLimitBucket: RateLimitBucket,
-        extract: @escaping (CachedPayload) -> T?,
-        operation: @escaping @Sendable () async -> CachedPayload
+        operation: @escaping @Sendable () async -> T
     ) async -> CachedLookupResult<T> {
-        if let cachedEntry = cache[key], cachedEntry.expiresAt > Date(), let value = extract(cachedEntry.payload) {
+        if let cachedEntry = cache[key], cachedEntry.expiresAt > Date(), let value = cachedEntry.value as? T {
             return CachedLookupResult(value: value, source: .cached)
         }
 
-        if let task = inFlight[key], let value = extract(await task.value) {
+        if let task = inFlight[key], let value = await task.value as? T {
             return CachedLookupResult(value: value, source: .mixed)
         }
 
-        let task = Task<CachedPayload, Never> {
+        let task = Task<T, Never> {
             await self.enforceRateLimit(for: rateLimitBucket)
             return await operation()
         }
-        inFlight[key] = task
+        inFlight[key] = Task { await task.value as any Sendable }
 
-        let payload = await task.value
-        cache[key] = CacheEntry(payload: payload, expiresAt: Date().addingTimeInterval(ttl))
+        let value = await task.value
+        cache[key] = CacheEntry(value: value, expiresAt: Date().addingTimeInterval(ttl))
         inFlight[key] = nil
-
-        guard let value = extract(payload) else {
-            fatalError("ExternalDataService payload extraction mismatch")
-        }
 
         return CachedLookupResult(value: value, source: .live)
     }
