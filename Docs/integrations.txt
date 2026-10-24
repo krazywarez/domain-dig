@@ -23,5 +23,6 @@ Why STARTTLS is not implemented:
   run-loop thread. A correct implementation must discard any bytes buffered
   before the upgrade; otherwise it is open to the STARTTLS plaintext-injection
   attack (CVE-2011-0411).
-- RFC 8314 section 3.3 recommends implicit TLS on port 465 over STARTTLS on
-  port 587 for mail submission.
+- RFC 8314 prefers implicit TLS over STARTTLS for mail submission. It also
+  asks that both be offered during the transition, so supporting 465 alone is
+  narrower than the RFC wants; the transport constraints above are the reason.
