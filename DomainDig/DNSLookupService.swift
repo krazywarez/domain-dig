@@ -56,6 +56,12 @@ enum DNSResolverOption: String, CaseIterable, Identifiable {
     }
 }
 
+/// A single record lookup, injectable so callers that branch on its result can
+/// be exercised without network.
+protocol DNSLookup {
+    func lookup(domain: String, recordType: DNSRecordType) async throws -> [DNSRecord]
+}
+
 struct DNSLookupService {
     private static let internetClass = 1
 
@@ -529,6 +535,12 @@ struct DNSLookupService {
         let third = UInt32(data[offset + 2]) << 8
         let fourth = UInt32(data[offset + 3])
         return first | second | third | fourth
+    }
+}
+
+extension DNSLookupService: DNSLookup {
+    func lookup(domain: String, recordType: DNSRecordType) async throws -> [DNSRecord] {
+        try await Self.lookup(domain: domain, recordType: recordType)
     }
 }
 

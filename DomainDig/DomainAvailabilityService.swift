@@ -3,14 +3,18 @@ import Foundation
 struct DomainAvailabilityService {
     private static let suggestionTLDs = ["net", "io", "dev", "app", "co", "org"]
 
-    static func check(domain: String) async -> DomainAvailabilityResult {
+    static func check(
+        domain: String,
+        rdapTransport: RDAPTransport = URLSessionRDAPTransport(),
+        dns: DNSLookup = DNSLookupService()
+    ) async -> DomainAvailabilityResult {
         let normalizedDomain = normalize(domain)
         guard !normalizedDomain.isEmpty else {
             return DomainAvailabilityResult(domain: domain, status: .unknown)
         }
 
         // RDAP is the registry's own record, so it settles both directions.
-        if let registryStatus = await checkViaRDAP(domain: normalizedDomain) {
+        if let registryStatus = await checkViaRDAP(domain: normalizedDomain, transport: rdapTransport) {
             return DomainAvailabilityResult(domain: normalizedDomain, status: registryStatus)
         }
 
@@ -18,11 +22,16 @@ struct DomainAvailabilityService {
         // resolves is registered. Absence of records is not evidence of
         // availability, because the DoH layer drops the response code, so
         // NXDOMAIN and a resolver failure arrive here identically.
-        let fallbackStatus = await checkViaDNSFallback(domain: normalizedDomain)
+        let fallbackStatus = await checkViaDNSFallback(domain: normalizedDomain, dns: dns)
         return DomainAvailabilityResult(domain: normalizedDomain, status: fallbackStatus)
     }
 
-    static func suggestions(for domain: String, limit: Int = 6) async -> [DomainSuggestionResult] {
+    static func suggestions(
+        for domain: String,
+        limit: Int = 6,
+        rdapTransport: RDAPTransport = URLSessionRDAPTransport(),
+        dns: DNSLookup = DNSLookupService()
+    ) async -> [DomainSuggestionResult] {
         let normalizedDomain = normalize(domain)
         let candidates = suggestionCandidates(for: normalizedDomain, limit: limit)
         guard !candidates.isEmpty else { return [] }
@@ -30,20 +39,20 @@ struct DomainAvailabilityService {
         var results: [DomainSuggestionResult] = []
         for candidate in candidates {
             if Task.isCancelled { break }
-            let result = await check(domain: candidate)
+            let result = await check(domain: candidate, rdapTransport: rdapTransport, dns: dns)
             results.append(DomainSuggestionResult(domain: result.domain, status: result.status))
         }
         return results
     }
 
-    private static func checkViaRDAP(domain: String) async -> DomainAvailabilityStatus? {
-        let status = await RDAPService.registrationStatus(for: domain)
+    private static func checkViaRDAP(domain: String, transport: RDAPTransport) async -> DomainAvailabilityStatus? {
+        let status = await RDAPService.registrationStatus(for: domain, transport: transport)
         return status
     }
 
-    private static func checkViaDNSFallback(domain: String) async -> DomainAvailabilityStatus {
+    private static func checkViaDNSFallback(domain: String, dns: DNSLookup) async -> DomainAvailabilityStatus {
         do {
-            let aRecords = try await DNSLookupService.lookup(domain: domain, recordType: .A)
+            let aRecords = try await dns.lookup(domain: domain, recordType: .A)
             if !aRecords.isEmpty {
                 return .registered
             }
@@ -52,7 +61,7 @@ struct DomainAvailabilityService {
         }
 
         do {
-            let nsRecords = try await DNSLookupService.lookup(domain: domain, recordType: .NS)
+            let nsRecords = try await dns.lookup(domain: domain, recordType: .NS)
             if !nsRecords.isEmpty {
                 return .registered
             }
