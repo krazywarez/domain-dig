@@ -666,6 +666,27 @@ private enum IntegrationSecretStore {
     }
 }
 
+/// Message construction rules the SMTP wire format imposes. Internal so the
+/// tests can reach them; `SMTPClient` itself is file-private.
+enum SMTPMessage {
+    /// `nil` when a value cannot appear in a header. A bare CR or LF ends the
+    /// header line, and whatever follows is read as further headers — so a
+    /// domain or address carrying one could add a Bcc the user never wrote.
+    static func validatedHeaderValue(_ value: String) -> String? {
+        value.rangeOfCharacter(from: .newlines) == nil ? value : nil
+    }
+
+    /// RFC 5321 section 4.5.2. A body line of "." alone ends the DATA command,
+    /// after which the rest of the message is read as SMTP commands, so every
+    /// line beginning with "." is sent doubled.
+    static func dotStuffed(_ body: String) -> String {
+        body
+            .components(separatedBy: "\r\n")
+            .map { $0.hasPrefix(".") ? "." + $0 : $0 }
+            .joined(separator: "\r\n")
+    }
+}
+
 private enum SMTPClient {
     static func send(
         event: MonitoringEvent,
@@ -717,10 +738,18 @@ private enum SMTPClient {
             .sorted { $0.key < $1.key }
             .map { "\($0.key): \($0.value)" }
             .joined(separator: "\r\n")
+        let recipientList = configuration.recipientAddresses.joined(separator: ", ")
+        let subject = "[DomainDig] \(event.severity.title) \(event.domain) \(event.type.title)"
+        guard SMTPMessage.validatedHeaderValue(configuration.senderAddress) != nil,
+              SMTPMessage.validatedHeaderValue(recipientList) != nil,
+              SMTPMessage.validatedHeaderValue(subject) != nil else {
+            throw IntegrationError.smtp("The message could not be built: an address or the domain contains a line break.")
+        }
+
         let body = [
             "From: DomainDig <\(configuration.senderAddress)>",
-            "To: \(configuration.recipientAddresses.joined(separator: ", "))",
-            "Subject: [DomainDig] \(event.severity.title) \(event.domain) \(event.type.title)",
+            "To: \(recipientList)",
+            "Subject: \(subject)",
             "Date: \(DateFormatter.rfc2822.string(from: Date()))",
             "",
             event.summary,
@@ -733,7 +762,7 @@ private enum SMTPClient {
         ]
         .joined(separator: "\r\n")
 
-        try await channel.sendRaw(body + "\r\n.\r\n")
+        try await channel.sendRaw(SMTPMessage.dotStuffed(body) + "\r\n.\r\n")
         _ = try await channel.readResponse(expecting: [250])
         _ = try await channel.sendCommand("QUIT", expecting: [221])
         await channel.cancel()

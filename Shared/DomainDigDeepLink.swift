@@ -59,7 +59,11 @@ enum DomainDigDeepLink {
             .first { $0.name == "domain" }?
             .value?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !domain.isEmpty else { return nil }
+        // A control character inside the value is not a domain, and it travels
+        // on into stored rows and, from there, into mail headers. Refuse the
+        // whole link rather than carry it.
+        guard !domain.isEmpty,
+              domain.rangeOfCharacter(from: .controlCharacters) == nil else { return nil }
 
         switch url.host() {
         case "inspect": return .inspect(domain)

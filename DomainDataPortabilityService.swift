@@ -522,6 +522,7 @@ enum DataValidationService {
     private nonisolated static func normalizeDomain(_ value: String) -> String {
         value
             .trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .controlCharacters).joined()
             .replacingOccurrences(of: "https://", with: "")
             .replacingOccurrences(of: "http://", with: "")
             .components(separatedBy: "/")
@@ -1332,6 +1333,7 @@ enum DomainDataPortabilityService {
     private nonisolated static func normalizeDomain(_ value: String) -> String {
         value
             .trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .controlCharacters).joined()
             .replacingOccurrences(of: "https://", with: "")
             .replacingOccurrences(of: "http://", with: "")
             .components(separatedBy: "/")
