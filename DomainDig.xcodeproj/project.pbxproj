@@ -29,6 +29,7 @@
 		A1B2C3D40000000000000202 /* InspectionInputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000201 /* InspectionInputTests.swift */; };
 		A1B2C3D40000000000000302 /* AvailabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000301 /* AvailabilityTests.swift */; };
 		A1B2C3D40000000000000402 /* CloudSyncMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000401 /* CloudSyncMergeTests.swift */; };
+		A1B2C3D40000000000000502 /* DomainNameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000501 /* DomainNameTests.swift */; };
 		EA12012CDB4C21ABB4217D86 /* LocalAPIContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D85A44C5F315A1644AC9073 /* LocalAPIContractTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -102,6 +103,7 @@
 		A1B2C3D40000000000000201 /* InspectionInputTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InspectionInputTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000301 /* AvailabilityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AvailabilityTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000401 /* CloudSyncMergeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CloudSyncMergeTests.swift; sourceTree = "<group>"; };
+		A1B2C3D40000000000000501 /* DomainNameTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DomainNameTests.swift; sourceTree = "<group>"; };
 		A77F7ED29E7C6669F5E61C04 /* DomainDigTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DomainDigTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CC948A02EC0184228BC4630E /* DomainDataPortabilityServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DomainDataPortabilityServiceTests.swift; sourceTree = "<group>"; };
 		DE8B269A01CC5E593DA3DFC2 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
@@ -242,6 +244,7 @@
 				A1B2C3D40000000000000201 /* InspectionInputTests.swift */,
 				A1B2C3D40000000000000301 /* AvailabilityTests.swift */,
 				A1B2C3D40000000000000401 /* CloudSyncMergeTests.swift */,
+				A1B2C3D40000000000000501 /* DomainNameTests.swift */,
 			);
 			path = DomainDigTests;
 			sourceTree = "<group>";
@@ -505,6 +508,7 @@
 				A1B2C3D40000000000000202 /* InspectionInputTests.swift in Sources */,
 				A1B2C3D40000000000000302 /* AvailabilityTests.swift in Sources */,
 				A1B2C3D40000000000000402 /* CloudSyncMergeTests.swift in Sources */,
+				A1B2C3D40000000000000502 /* DomainNameTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
