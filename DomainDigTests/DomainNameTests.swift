@@ -65,11 +65,16 @@ final class DomainNameTests: XCTestCase {
         XCTAssertEqual(DomainName.validate(host), .failure(.tooLong))
     }
 
-    /// 40 CJK characters are 40 typed characters but over 63 bytes once IDNA
-    /// encodes them, and the registry limit applies to the encoded form.
+    /// The limit applies to the IDNA-encoded label, so it turns on the encoded
+    /// size rather than the typed one: these 40 distinct CJK characters encode
+    /// to 83 bytes, while 40 repeats of one character encode to 46 and pass.
     func testMeasuresLengthOnPunycode() {
-        let label = String(repeating: "域", count: 40)
+        let label = String((0..<40).compactMap { UnicodeScalar(UInt32(0x4E00 + $0 * 7)).map(Character.init) })
         XCTAssertEqual(DomainName.validate("\(label).com"), .failure(.labelTooLong))
+        XCTAssertEqual(
+            DomainName.validate("\(String(repeating: "域", count: 40)).com"),
+            .success("\(String(repeating: "域", count: 40)).com")
+        )
     }
 
     func testAcceptsAUnicodeHost() {
