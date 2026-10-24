@@ -187,16 +187,11 @@ final class DomainMonitoringScheduler {
     private func handleAppRefresh(task: BGAppRefreshTask) {
         _ = syncSchedule()
 
-        let worker = Task {
-            let outcome = await DomainMonitoringService.shared.performMonitoring(
+        task.run {
+            await DomainMonitoringService.shared.performMonitoring(
                 trigger: .background,
                 requireEnabledSetting: true
-            )
-            task.setTaskCompleted(success: outcome.success)
-        }
-
-        task.expirationHandler = {
-            worker.cancel()
+            ).success
         }
     }
 #endif
@@ -290,11 +285,11 @@ final class DomainMonitoringService {
                 domain: trackedDomain.domain,
                 previousSnapshot: previousSnapshot
             )
-            let snapshot = Self.resolvedSnapshotAfterFallback(inspectedSnapshot, previousSnapshot: previousSnapshot)
+            let snapshot = inspectedSnapshot.resolvedAfterFallback(to: previousSnapshot)
             // When the fallback fires, `snapshot` *is* `previousSnapshot`, so
             // every comparison below is old-against-old and would otherwise
             // report "No meaningful changes" for a domain we never reached.
-            let unreachableReason = (previousSnapshot != nil && Self.shouldFallbackToSnapshot(inspectedSnapshot))
+            let unreachableReason = (previousSnapshot != nil && inspectedSnapshot.needsFallback)
                 ? Self.firstErrorMessage(in: inspectedSnapshot)
                 : nil
             let savedEntry: HistoryEntry?
@@ -602,38 +597,13 @@ final class DomainMonitoringService {
 
                 if settings.alertsEnabled,
                    alertDescriptor.severity >= settings.alertFilter.minimumSeverity {
-                    let pendingAlert = MonitoringPendingAlert(
-                        detectedAt: now,
-                        message: alertDescriptor.message,
-                        severity: alertDescriptor.severity,
-                        changeHash: alertDescriptor.changeHash
+                    alertsTriggered += await raiseAlert(
+                        alertDescriptor,
+                        for: &updated,
+                        state: &state,
+                        deferred: isQuiet || !notificationsAuthorized,
+                        now: now
                     )
-
-                    if isQuiet || !notificationsAuthorized {
-                        updated.pendingMonitoringAlerts = deduplicatedPendingAlerts(
-                            updated.pendingMonitoringAlerts + [pendingAlert]
-                        )
-                    } else {
-                        let pendingAlerts = deduplicatedPendingAlerts(
-                            updated.pendingMonitoringAlerts + [pendingAlert]
-                        )
-                        if pendingAlerts.count > 1 {
-                            await LocalNotificationService.shared.notifyMonitoringSummary(
-                                domain: trackedDomain.domain,
-                                alerts: pendingAlerts
-                            )
-                        } else {
-                            await LocalNotificationService.shared.notifyMonitoringAlert(
-                                domain: trackedDomain.domain,
-                                message: alertDescriptor.message,
-                                severity: alertDescriptor.severity
-                            )
-                        }
-                        alertsTriggered += 1
-                        updated.pendingMonitoringAlerts = []
-                        updated.lastAlertAt = now
-                        state.lastAlertDate = now
-                    }
                 }
             }
         } else {
@@ -666,6 +636,45 @@ final class DomainMonitoringService {
         state.lastCheck = now
         updated.monitoringState = state
         return (updated, alertsTriggered)
+    }
+
+    /// Queues the alert while notifications are deferred; otherwise notifies, folding in
+    /// any queued alerts, and returns the number of notifications sent.
+    private func raiseAlert(
+        _ alertDescriptor: MonitoringAlertDescriptor,
+        for updated: inout TrackedDomain,
+        state: inout MonitoringState,
+        deferred: Bool,
+        now: Date
+    ) async -> Int {
+        let pendingAlert = MonitoringPendingAlert(
+            detectedAt: now,
+            message: alertDescriptor.message,
+            severity: alertDescriptor.severity,
+            changeHash: alertDescriptor.changeHash
+        )
+        let pendingAlerts = deduplicatedPendingAlerts(updated.pendingMonitoringAlerts + [pendingAlert])
+        if deferred {
+            updated.pendingMonitoringAlerts = pendingAlerts
+            return 0
+        }
+
+        if pendingAlerts.count > 1 {
+            await LocalNotificationService.shared.notifyMonitoringSummary(
+                domain: updated.domain,
+                alerts: pendingAlerts
+            )
+        } else {
+            await LocalNotificationService.shared.notifyMonitoringAlert(
+                domain: updated.domain,
+                message: alertDescriptor.message,
+                severity: alertDescriptor.severity
+            )
+        }
+        updated.pendingMonitoringAlerts = []
+        updated.lastAlertAt = now
+        state.lastAlertDate = now
+        return 1
     }
 
     private func deduplicatedPendingAlerts(_ alerts: [MonitoringPendingAlert]) -> [MonitoringPendingAlert] {
@@ -844,95 +853,8 @@ final class DomainMonitoringService {
             }
     }
 
-    private static func resolvedSnapshotAfterFallback(
-        _ snapshot: LookupSnapshot,
-        previousSnapshot: LookupSnapshot?
-    ) -> LookupSnapshot {
-        guard shouldFallbackToSnapshot(snapshot), let previousSnapshot else {
-            return snapshot
-        }
-
-        return LookupSnapshot(
-            historyEntryID: previousSnapshot.historyEntryID,
-            domain: previousSnapshot.domain,
-            timestamp: previousSnapshot.timestamp,
-            trackedDomainID: previousSnapshot.trackedDomainID,
-            note: previousSnapshot.note,
-            appVersion: previousSnapshot.appVersion,
-            resolverDisplayName: previousSnapshot.resolverDisplayName,
-            resolverURLString: previousSnapshot.resolverURLString,
-            dataSources: previousSnapshot.dataSources,
-            provenanceBySection: previousSnapshot.provenanceBySection,
-            availabilityConfidence: previousSnapshot.availabilityConfidence,
-            ownershipConfidence: previousSnapshot.ownershipConfidence,
-            subdomainConfidence: previousSnapshot.subdomainConfidence,
-            emailSecurityConfidence: previousSnapshot.emailSecurityConfidence,
-            geolocationConfidence: previousSnapshot.geolocationConfidence,
-            errorDetails: previousSnapshot.errorDetails,
-            isPartialSnapshot: previousSnapshot.isPartialSnapshot,
-            validationIssues: previousSnapshot.validationIssues,
-            totalLookupDurationMs: previousSnapshot.totalLookupDurationMs,
-            snapshotIndex: previousSnapshot.snapshotIndex,
-            previousSnapshotID: previousSnapshot.previousSnapshotID,
-            changeCount: previousSnapshot.changeCount,
-            severitySummary: previousSnapshot.severitySummary,
-            dnsSections: previousSnapshot.dnsSections,
-            dnsError: previousSnapshot.dnsError,
-            availabilityResult: previousSnapshot.availabilityResult,
-            suggestions: previousSnapshot.suggestions,
-            sslInfo: previousSnapshot.sslInfo,
-            sslError: previousSnapshot.sslError,
-            hstsPreloaded: previousSnapshot.hstsPreloaded,
-            httpHeaders: previousSnapshot.httpHeaders,
-            httpSecurityGrade: previousSnapshot.httpSecurityGrade,
-            httpStatusCode: previousSnapshot.httpStatusCode,
-            httpResponseTimeMs: previousSnapshot.httpResponseTimeMs,
-            httpProtocol: previousSnapshot.httpProtocol,
-            http3Advertised: previousSnapshot.http3Advertised,
-            httpHeadersError: previousSnapshot.httpHeadersError,
-            reachabilityResults: previousSnapshot.reachabilityResults,
-            reachabilityError: previousSnapshot.reachabilityError,
-            ipGeolocation: previousSnapshot.ipGeolocation,
-            ipGeolocationError: previousSnapshot.ipGeolocationError,
-            emailSecurity: previousSnapshot.emailSecurity,
-            emailSecurityError: previousSnapshot.emailSecurityError,
-            ownership: previousSnapshot.ownership,
-            ownershipError: previousSnapshot.ownershipError,
-            ownershipHistory: previousSnapshot.ownershipHistory,
-            ownershipHistoryError: previousSnapshot.ownershipHistoryError,
-            inferredProvider: previousSnapshot.inferredProvider,
-            priorProviders: previousSnapshot.priorProviders,
-            domainClassification: previousSnapshot.domainClassification,
-            ownershipTransitions: previousSnapshot.ownershipTransitions,
-            hostingTransitions: previousSnapshot.hostingTransitions,
-            subdomainHistory: previousSnapshot.subdomainHistory,
-            riskSignals: previousSnapshot.riskSignals,
-            intelligenceTimeline: previousSnapshot.intelligenceTimeline,
-            ptrRecord: previousSnapshot.ptrRecord,
-            ptrError: previousSnapshot.ptrError,
-            redirectChain: previousSnapshot.redirectChain,
-            redirectChainError: previousSnapshot.redirectChainError,
-            subdomains: previousSnapshot.subdomains,
-            subdomainsError: previousSnapshot.subdomainsError,
-            extendedSubdomains: previousSnapshot.extendedSubdomains,
-            extendedSubdomainsError: previousSnapshot.extendedSubdomainsError,
-            dnsHistory: previousSnapshot.dnsHistory,
-            dnsHistoryError: previousSnapshot.dnsHistoryError,
-            domainPricing: previousSnapshot.domainPricing,
-            domainPricingError: previousSnapshot.domainPricingError,
-            reputation: previousSnapshot.reputation,
-            reputationError: previousSnapshot.reputationError,
-            portScanResults: previousSnapshot.portScanResults,
-            portScanError: previousSnapshot.portScanError,
-            changeSummary: previousSnapshot.changeSummary,
-            resultSource: .snapshot,
-            cachedSections: [],
-            statusMessage: "Last known result • \(previousSnapshot.timestamp.formatted(date: .abbreviated, time: .shortened))"
-        )
-    }
-
     /// First reported error on a snapshot, used to explain a fallback. Mirrors
-    /// the ordering `shouldFallbackToSnapshot` inspects.
+    /// the ordering `LookupSnapshot.needsFallback` inspects.
     private static func firstErrorMessage(in snapshot: LookupSnapshot) -> String {
         [
             snapshot.dnsError,
@@ -945,34 +867,6 @@ final class DomainMonitoringService {
         ]
         .compactMap { $0 }
         .first ?? "The lookup could not reach the domain."
-    }
-
-    private static func shouldFallbackToSnapshot(_ snapshot: LookupSnapshot) -> Bool {
-        let candidateMessages = [
-            snapshot.dnsError,
-            snapshot.httpHeadersError,
-            snapshot.sslError,
-            snapshot.ownershipError,
-            snapshot.subdomainsError,
-            snapshot.redirectChainError,
-            snapshot.ipGeolocationError
-        ]
-        .compactMap { $0?.lowercased() }
-
-        guard !candidateMessages.isEmpty else { return false }
-        let connectivityFailure = candidateMessages.allSatisfy { message in
-            message.hasPrefix("network error:")
-                || message.hasPrefix("timeout:")
-                || message.hasPrefix("rate limit:")
-        }
-
-        let hasMaterialData = !snapshot.dnsSections.isEmpty
-            || !snapshot.httpHeaders.isEmpty
-            || snapshot.sslInfo != nil
-            || snapshot.ownership != nil
-            || !snapshot.subdomains.isEmpty
-
-        return connectivityFailure && !hasMaterialData
     }
 
     private static func primaryIPAddress(from snapshot: LookupSnapshot) -> String? {
@@ -1004,3 +898,19 @@ final class DomainMonitoringService {
         return snapshot.emailSecurityError
     }
 }
+
+#if canImport(BackgroundTasks)
+extension BGAppRefreshTask {
+    /// Runs `work` for this refresh, completing the task with whether it succeeded, and cancels it
+    /// when the system ends the task early.
+    @MainActor
+    func run(_ work: @escaping @MainActor () async -> Bool) {
+        let worker = Task {
+            setTaskCompleted(success: await work())
+        }
+        expirationHandler = {
+            worker.cancel()
+        }
+    }
+}
+#endif

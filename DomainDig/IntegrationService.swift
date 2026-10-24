@@ -646,47 +646,20 @@ private enum HTTPIntegrationClient {
 
 private enum IntegrationSecretStore {
     static func save(secret: String, reference: String) throws {
-        let data = Data(secret.utf8)
-        try? delete(reference: reference)
-
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: reference,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-        ]
-
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else {
+        guard GenericPasswordKeychain.save(secret, reference: reference) else {
             throw IntegrationError.smtp("Could not save integration secret.")
         }
     }
 
     static func secret(reference: String) throws -> String {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: reference,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let secret = String(data: data, encoding: .utf8) else {
+        guard let secret = GenericPasswordKeychain.secret(reference: reference) else {
             throw IntegrationError.missingSecret
         }
-
         return secret
     }
 
     static func delete(reference: String) throws {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: reference
-        ]
-        SecItemDelete(query as CFDictionary)
+        GenericPasswordKeychain.delete(reference: reference)
     }
 }
 
@@ -778,29 +751,33 @@ private actor SMTPChannel {
             // from the connection's queue.
             let hasResumed = OSAllocatedUnfairLock(initialState: false)
             connection.stateUpdateHandler = { state in
-                let isFirst: () -> Bool = {
-                    hasResumed.withLock { resumed in
-                        if resumed { return false }
-                        resumed = true
-                        return true
-                    }
+                guard let outcome = Self.startOutcome(for: state) else { return }
+                let isFirst = hasResumed.withLock { resumed in
+                    defer { resumed = true }
+                    return !resumed
                 }
-                switch state {
-                case .ready:
-                    if isFirst() { continuation.resume() }
-                case .failed(let error):
-                    if isFirst() { continuation.resume(throwing: error) }
-                case .cancelled:
-                    if isFirst() { continuation.resume(throwing: IntegrationError.streamClosed) }
-                default:
-                    break
-                }
+                if isFirst { continuation.resume(with: outcome) }
             }
             connection.start(queue: .global(qos: .utility))
         }
         // Started from the actor once the connection is ready, replacing the old
         // dispatch-queue hop. TCP buffers anything that arrives in the gap.
         startReceiveLoop()
+    }
+
+    /// How a connection state settles `start()`: ready succeeds, failure or
+    /// cancellation throws, and anything else is still in progress.
+    private static func startOutcome(for state: NWConnection.State) -> Result<Void, Error>? {
+        switch state {
+        case .ready:
+            return .success(())
+        case .failed(let error):
+            return .failure(error)
+        case .cancelled:
+            return .failure(IntegrationError.streamClosed)
+        default:
+            return nil
+        }
     }
 
     func cancel() {

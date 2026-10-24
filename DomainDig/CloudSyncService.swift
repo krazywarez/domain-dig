@@ -782,34 +782,34 @@ final class CloudSyncService {
         _ lhs: [String: SyncedDomainNote],
         _ rhs: [String: SyncedDomainNote]
     ) -> (notesByDomain: [String: SyncedDomainNote], hadConflict: Bool) {
-        var merged = lhs
-        var hadConflict = false
-
-        for (domain, remoteNote) in rhs {
-            if let localNote = merged[domain], localNote != remoteNote {
-                hadConflict = true
-                merged[domain] = localNote.updatedAt >= remoteNote.updatedAt ? localNote : remoteNote
-            } else {
-                merged[domain] = remoteNote
-            }
-        }
-
-        return (merged, hadConflict)
+        let result = mergeLatest(lhs, rhs, updatedAt: \.updatedAt)
+        return (result.merged, result.hadConflict)
     }
 
     private func mergeHistoryMetadata(
         _ lhs: [String: SyncedHistoryMetadata],
         _ rhs: [String: SyncedHistoryMetadata]
     ) -> (historyMetadataByDomain: [String: SyncedHistoryMetadata], hadConflict: Bool) {
+        let result = mergeLatest(lhs, rhs, updatedAt: \.updatedAt)
+        return (result.merged, result.hadConflict)
+    }
+
+    /// `rhs` merged over `lhs` by domain; where both differ, the newer wins
+    /// (the local one on a tie) and the merge reports a conflict.
+    private func mergeLatest<Value: Equatable>(
+        _ lhs: [String: Value],
+        _ rhs: [String: Value],
+        updatedAt: KeyPath<Value, Date>
+    ) -> (merged: [String: Value], hadConflict: Bool) {
         var merged = lhs
         var hadConflict = false
 
-        for (domain, remoteMetadata) in rhs {
-            if let localMetadata = merged[domain], localMetadata != remoteMetadata {
+        for (domain, remote) in rhs {
+            if let local = merged[domain], local != remote {
                 hadConflict = true
-                merged[domain] = localMetadata.updatedAt >= remoteMetadata.updatedAt ? localMetadata : remoteMetadata
+                merged[domain] = local[keyPath: updatedAt] >= remote[keyPath: updatedAt] ? local : remote
             } else {
-                merged[domain] = remoteMetadata
+                merged[domain] = remote
             }
         }
 

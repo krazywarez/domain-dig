@@ -84,13 +84,8 @@ struct DashboardView: View {
                         dashboardEmptyRow("No recent portfolio changes")
                     } else {
                         ForEach(viewModel.filteredPortfolioRecentActivity.prefix(8)) { item in
-                            if let trackedDomain = viewModel.trackedDomain(withID: item.trackedDomainID) {
-                                NavigationLink {
-                                    TrackedDomainDetailView(viewModel: viewModel, trackedDomain: trackedDomain)
-                                } label: {
-                                    PortfolioActivityRow(item: item)
-                                }
-                                .buttonStyle(.plain)
+                            trackedDomainLink(item.trackedDomainID) {
+                                PortfolioActivityRow(item: item)
                             }
                         }
                     }
@@ -102,13 +97,8 @@ struct DashboardView: View {
                         dashboardEmptyRow("Nothing urgent right now")
                     } else {
                         ForEach(viewModel.filteredPortfolioAttentionRequired.prefix(8)) { item in
-                            if let trackedDomain = viewModel.trackedDomain(withID: item.trackedDomainID) {
-                                NavigationLink {
-                                    TrackedDomainDetailView(viewModel: viewModel, trackedDomain: trackedDomain)
-                                } label: {
-                                    PortfolioAttentionRow(item: item)
-                                }
-                                .buttonStyle(.plain)
+                            trackedDomainLink(item.trackedDomainID) {
+                                PortfolioAttentionRow(item: item)
                             }
                         }
                     }
@@ -269,6 +259,19 @@ struct DashboardView: View {
             )
         }
         return AnyShapeStyle(Color(.appSurfaceElevated))
+    }
+
+    /// `label`, opening the tracked domain's detail; nothing for a domain no longer tracked.
+    @ViewBuilder
+    private func trackedDomainLink<Label: View>(_ id: UUID, @ViewBuilder label: () -> Label) -> some View {
+        if let trackedDomain = viewModel.trackedDomain(withID: id) {
+            NavigationLink {
+                TrackedDomainDetailView(viewModel: viewModel, trackedDomain: trackedDomain)
+            } label: {
+                label()
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private func dashboardEmptyRow(_ message: String) -> some View {

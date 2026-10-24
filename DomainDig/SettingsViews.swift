@@ -483,41 +483,14 @@ private struct MonitoringSettingsView: View {
                 )
 
                 if viewModel.monitoringSettings.quietHours != nil {
-                    Picker(
-                        "Quiet Starts",
-                        selection: Binding(
-                            get: { quietHoursStart },
-                            set: { startHour in
-                                viewModel.setMonitoringQuietHours(
-                                    startHour: startHour,
-                                    endHour: quietHoursEnd,
-                                    isEnabled: true
-                                )
-                            }
-                        )
-                    ) {
-                        ForEach(0..<24, id: \.self) { hour in
-                            Text(Self.monitoringHourLabel(for: hour)).tag(hour)
-                        }
-                    }
-
-                    Picker(
-                        "Quiet Ends",
-                        selection: Binding(
-                            get: { quietHoursEnd },
-                            set: { endHour in
-                                viewModel.setMonitoringQuietHours(
-                                    startHour: quietHoursStart,
-                                    endHour: endHour,
-                                    isEnabled: true
-                                )
-                            }
-                        )
-                    ) {
-                        ForEach(0..<24, id: \.self) { hour in
-                            Text(Self.monitoringHourLabel(for: hour)).tag(hour)
-                        }
-                    }
+                    hourPicker("Quiet Starts", selection: Binding(
+                        get: { quietHoursStart },
+                        set: { viewModel.setMonitoringQuietHours(startHour: $0, endHour: quietHoursEnd, isEnabled: true) }
+                    ))
+                    hourPicker("Quiet Ends", selection: Binding(
+                        get: { quietHoursEnd },
+                        set: { viewModel.setMonitoringQuietHours(startHour: quietHoursStart, endHour: $0, isEnabled: true) }
+                    ))
                 }
 
                 Picker(
@@ -593,6 +566,14 @@ private struct MonitoringSettingsView: View {
             viewModel.refreshMonitoringState()
             Task {
                 await viewModel.refreshMonitoringAuthorizationStatus()
+            }
+        }
+    }
+
+    private func hourPicker(_ title: String, selection: Binding<Int>) -> some View {
+        Picker(title, selection: selection) {
+            ForEach(0..<24, id: \.self) { hour in
+                Text(Self.monitoringHourLabel(for: hour)).tag(hour)
             }
         }
     }

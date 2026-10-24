@@ -237,32 +237,7 @@ struct WorkflowDetailView: View {
                         if latestSummary != nil {
                             Toggle("Export all domains", isOn: $includeAllExports)
                             Menu {
-                                Button("Export TXT") {
-                                    shareWorkflowResults(format: .text)
-                                }
-                                if FeatureAccessService.hasAccess(to: .advancedExports) {
-                                    Button("Export CSV") {
-                                        shareWorkflowResults(format: .csv)
-                                    }
-                                    Button("Export JSON") {
-                                        shareWorkflowResults(format: .json)
-                                    }
-                                    Button("Export Markdown") {
-                                        shareWorkflowResults(format: .markdown)
-                                    }
-                                    Button("Export PDF") {
-                                        shareWorkflowResults(format: .pdf)
-                                    }
-                                } else {
-                                    Button("CSV Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                        .disabled(true)
-                                    Button("JSON Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                        .disabled(true)
-                                    Button("Markdown Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                        .disabled(true)
-                                    Button("PDF Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                        .disabled(true)
-                                }
+                                ExportFormatButtons(share: shareWorkflowResults)
                             } label: {
                                 Label("Export Results", systemImage: "square.and.arrow.up")
                             }
@@ -512,56 +487,18 @@ struct WorkflowRunSummaryView: View {
                     }
                 }
 
-                Section(visibleResults.isEmpty ? "Meaningful Changes" : "Results") {
-                    if visibleResults.isEmpty {
-                        Text("No domains with meaningful changes or warnings")
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(Color(.appTextSecondary))
-                    } else {
-                        ForEach(visibleResults) { result in
-                            if let entry = viewModel.historyEntry(for: result) {
-                                NavigationLink {
-                                    HistoryDetailView(viewModel: viewModel, entry: entry)
-                                } label: {
-                                    BatchResultRowView(result: result)
-                                }
-                            } else {
-                                BatchResultRowView(result: result)
-                            }
-                        }
-                    }
-                }
+                BatchResultsSection(
+                    viewModel: viewModel,
+                    results: visibleResults,
+                    emptyTitle: "Meaningful Changes",
+                    emptyText: "No domains with meaningful changes or warnings"
+                )
             }
             .navigationTitle("Workflow Summary")
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Menu {
-                        Button("Export TXT") {
-                            share(format: .text)
-                        }
-                        if FeatureAccessService.hasAccess(to: .advancedExports) {
-                            Button("Export CSV") {
-                                share(format: .csv)
-                            }
-                            Button("Export JSON") {
-                                share(format: .json)
-                            }
-                            Button("Export Markdown") {
-                                share(format: .markdown)
-                            }
-                            Button("Export PDF") {
-                                share(format: .pdf)
-                            }
-                        } else {
-                            Button("CSV Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                .disabled(true)
-                            Button("JSON Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                .disabled(true)
-                            Button("Markdown Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                .disabled(true)
-                            Button("PDF Export • Available in Pro") { /* Inert: disabled Pro upsell affordance. */ }
-                                .disabled(true)
-                        }
+                        ExportFormatButtons(share: share)
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }

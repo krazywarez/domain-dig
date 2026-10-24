@@ -176,147 +176,25 @@ enum DomainInsightEngine {
         tlsAssessment: TLSSummaryAssessment,
         subdomainGroups: [SubdomainGroup]
     ) -> DomainRiskAssessment {
-        var score = 18
-        var factors: [RiskFactor] = []
-
-        switch snapshot.availabilityResult?.status ?? .unknown {
-        case .available:
-            score -= 12
-            factors.append(.init(description: "Domain appears available rather than actively deployed", impact: .positive))
-        case .unknown:
-            score += 8
-            factors.append(.init(description: "Ownership and availability could not be confirmed", impact: .negative))
-        case .registered:
-            if !snapshot.dnsSections.isEmpty || snapshot.sslInfo != nil || !snapshot.redirectChain.isEmpty {
-                score += 6
-                factors.append(.init(description: "Registered domain exposes active infrastructure", impact: .negative))
-            } else {
-                factors.append(.init(description: "Registered domain with limited active surface detected", impact: .neutral))
-            }
-        }
-
-        let recordTypes = snapshot.dnsSections.filter { !$0.records.isEmpty || !$0.wildcardRecords.isEmpty }.count
-        if recordTypes >= 5 {
-            score += 8
-            factors.append(.init(description: "DNS configuration is broad across multiple record types", impact: .negative))
-        }
-        if dnsPatterns.wildcardDetected {
-            score += 12
-            factors.append(.init(description: "Wildcard DNS is enabled", impact: .negative))
-        }
-        if let firstPattern = dnsPatterns.patterns.first {
-            factors.append(.init(description: firstPattern, impact: .neutral))
-        }
-
-        switch tlsAssessment.grade {
-        case .a:
-            score -= 8
-            factors.append(.init(description: "TLS configuration looks current and stable", impact: .positive))
-        case .b:
-            score -= 3
-            factors.append(.init(description: "TLS is valid with minor concerns", impact: .positive))
-        case .c:
-            score += 10
-            factors.append(.init(description: "TLS configuration has visible weaknesses", impact: .negative))
-        case .f:
-            score += 22
-            factors.append(.init(description: "TLS is missing, invalid, or near failure", impact: .negative))
-        }
-
-        if let daysUntilExpiry = snapshot.sslInfo?.daysUntilExpiry, daysUntilExpiry <= 14 {
-            score += 10
-            factors.append(.init(description: "Certificate expires within 14 days", impact: .negative))
-        }
-
-        if snapshot.redirectChain.count >= 3 {
-            score += 8
-            factors.append(.init(description: "Redirect chain is longer than expected", impact: .negative))
-        }
-
-        if redirectLooksSensitive(snapshot.redirectChain.last?.url) {
-            score += 6
-            factors.append(.init(description: "Redirect target looks like an auth or account gateway", impact: .negative))
-        }
-
-        if let emailAssessment {
-            switch emailAssessment.grade {
-            case .a:
-                score -= 10
-                factors.append(.init(description: "Email protections are strong and aligned", impact: .positive))
-            case .b:
-                score -= 4
-                factors.append(.init(description: "Email protections are present with minor gaps", impact: .positive))
-            case .c:
-                score += 8
-                factors.append(.init(description: "Email protections are partial", impact: .negative))
-            case .f:
-                score += 18
-                factors.append(.init(description: "Email security protections are weak or absent", impact: .negative))
-            }
-        } else if hasMXRecords(snapshot) {
-            score += 14
-            factors.append(.init(description: "Mail is configured without enough email security evidence", impact: .negative))
-        }
-
-        let openPorts = snapshot.portScanResults.filter(\.open).map(\.port)
-        let sensitivePorts: Set<UInt16> = [21, 22, 23, 25, 3389, 5900]
-        let exposedSensitivePorts = openPorts.filter { sensitivePorts.contains($0) }
-        if !exposedSensitivePorts.isEmpty {
-            score += min(18, exposedSensitivePorts.count * 6)
-            factors.append(.init(description: "Sensitive management or mail ports are exposed", impact: .negative))
-        } else if Set(openPorts) == Set([80, 443]) {
-            factors.append(.init(description: "Exposure is limited to standard web ports", impact: .positive))
-        } else if openPorts.count >= 3 {
-            score += 8
-            factors.append(.init(description: "Multiple open services expand the attack surface", impact: .negative))
-        }
-
-        if !subdomainGroups.isEmpty {
-            let labels = Set(subdomainGroups.map(\.label))
-            if labels.contains("dev") || labels.contains("staging") {
-                score += 8
-                factors.append(.init(description: "Development or staging subdomains are discoverable", impact: .negative))
-            }
-            if labels.contains("admin") {
-                score += 10
-                factors.append(.init(description: "Administrative subdomains are discoverable", impact: .negative))
-            }
-            if snapshot.subdomains.count >= 8 {
-                score += 6
-                factors.append(.init(description: "Large passive subdomain footprint detected", impact: .negative))
-            }
-        }
-
-        if snapshot.ipGeolocation == nil,
-           snapshot.availabilityResult?.status == .registered,
-           snapshot.dnsSections.contains(where: { $0.recordType == .A && !$0.records.isEmpty }) {
-            score += 4
-            factors.append(.init(description: "Active host could not be geolocated", impact: .neutral))
-        }
-
+        var tally = RiskTally()
+        scoreAvailability(snapshot, into: &tally)
+        scoreDNS(snapshot, patterns: dnsPatterns, into: &tally)
+        scoreTLS(snapshot, assessment: tlsAssessment, into: &tally)
+        scoreRedirects(snapshot, into: &tally)
+        scoreEmail(snapshot, assessment: emailAssessment, into: &tally)
+        scorePorts(snapshot, into: &tally)
+        scoreSubdomains(snapshot, groups: subdomainGroups, into: &tally)
+        scoreGeolocation(snapshot, into: &tally)
+        // Compares against the score so far, so it runs after the snapshot's own factors.
         if let previousSnapshot {
-            let previousAnalysis = analyze(snapshot: previousSnapshot)
-            let delta = score - previousAnalysis.riskAssessment.score
+            let delta = tally.score - analyze(snapshot: previousSnapshot).riskAssessment.score
             if delta >= 15 {
-                score += 4
-                factors.append(.init(description: "Observed risk has increased materially since the previous snapshot", impact: .negative))
+                tally.add(4, "Observed risk has increased materially since the previous snapshot", .negative)
             }
         }
+        scoreReputation(snapshot, into: &tally)
 
-        if let reputation = snapshot.reputation {
-            switch reputation.status {
-            case .listed:
-                score += 25
-                let sourceList = reputation.listedSources.isEmpty ? "" : " (\(reputation.listedSources.joined(separator: ", ")))"
-                factors.append(.init(description: "Domain is flagged by a configured reputation source\(sourceList)", impact: .negative))
-            case .clean:
-                factors.append(.init(description: "Domain is clean against the configured reputation source", impact: .positive))
-            case .unknown:
-                break
-            }
-        }
-
-        let clampedScore = min(max(score, 0), 100)
+        let clampedScore = min(max(tally.score, 0), 100)
         let level: RiskLevel
         switch clampedScore {
         case 0..<35:
@@ -327,7 +205,142 @@ enum DomainInsightEngine {
             level = .high
         }
 
-        return DomainRiskAssessment(score: clampedScore, level: level, factors: factors)
+        return DomainRiskAssessment(score: clampedScore, level: level, factors: tally.factors)
+    }
+
+    /// A risk score in progress, from a baseline of 18, and the factors behind it.
+    private struct RiskTally {
+        var score = 18
+        var factors: [RiskFactor] = []
+
+        mutating func add(_ points: Int, _ description: String, _ impact: RiskImpact) {
+            score += points
+            factors.append(RiskFactor(description: description, impact: impact))
+        }
+    }
+
+    private static func scoreAvailability(_ snapshot: LookupSnapshot, into tally: inout RiskTally) {
+        switch snapshot.availabilityResult?.status ?? .unknown {
+        case .available:
+            tally.add(-12, "Domain appears available rather than actively deployed", .positive)
+        case .unknown:
+            tally.add(8, "Ownership and availability could not be confirmed", .negative)
+        case .registered:
+            if !snapshot.dnsSections.isEmpty || snapshot.sslInfo != nil || !snapshot.redirectChain.isEmpty {
+                tally.add(6, "Registered domain exposes active infrastructure", .negative)
+            } else {
+                tally.add(0, "Registered domain with limited active surface detected", .neutral)
+            }
+        }
+    }
+
+    private static func scoreDNS(_ snapshot: LookupSnapshot, patterns: DNSPatternSummary, into tally: inout RiskTally) {
+        let recordTypes = snapshot.dnsSections.filter { !$0.records.isEmpty || !$0.wildcardRecords.isEmpty }.count
+        if recordTypes >= 5 {
+            tally.add(8, "DNS configuration is broad across multiple record types", .negative)
+        }
+        if patterns.wildcardDetected {
+            tally.add(12, "Wildcard DNS is enabled", .negative)
+        }
+        if let firstPattern = patterns.patterns.first {
+            tally.add(0, firstPattern, .neutral)
+        }
+    }
+
+    private static func scoreTLS(_ snapshot: LookupSnapshot, assessment: TLSSummaryAssessment, into tally: inout RiskTally) {
+        switch assessment.grade {
+        case .a:
+            tally.add(-8, "TLS configuration looks current and stable", .positive)
+        case .b:
+            tally.add(-3, "TLS is valid with minor concerns", .positive)
+        case .c:
+            tally.add(10, "TLS configuration has visible weaknesses", .negative)
+        case .f:
+            tally.add(22, "TLS is missing, invalid, or near failure", .negative)
+        }
+        if let daysUntilExpiry = snapshot.sslInfo?.daysUntilExpiry, daysUntilExpiry <= 14 {
+            tally.add(10, "Certificate expires within 14 days", .negative)
+        }
+    }
+
+    private static func scoreRedirects(_ snapshot: LookupSnapshot, into tally: inout RiskTally) {
+        if snapshot.redirectChain.count >= 3 {
+            tally.add(8, "Redirect chain is longer than expected", .negative)
+        }
+        if redirectLooksSensitive(snapshot.redirectChain.last?.url) {
+            tally.add(6, "Redirect target looks like an auth or account gateway", .negative)
+        }
+    }
+
+    private static func scoreEmail(
+        _ snapshot: LookupSnapshot,
+        assessment: EmailSecurityAssessment?,
+        into tally: inout RiskTally
+    ) {
+        guard let assessment else {
+            if hasMXRecords(snapshot) {
+                tally.add(14, "Mail is configured without enough email security evidence", .negative)
+            }
+            return
+        }
+        switch assessment.grade {
+        case .a:
+            tally.add(-10, "Email protections are strong and aligned", .positive)
+        case .b:
+            tally.add(-4, "Email protections are present with minor gaps", .positive)
+        case .c:
+            tally.add(8, "Email protections are partial", .negative)
+        case .f:
+            tally.add(18, "Email security protections are weak or absent", .negative)
+        }
+    }
+
+    private static func scorePorts(_ snapshot: LookupSnapshot, into tally: inout RiskTally) {
+        let openPorts = snapshot.portScanResults.filter(\.open).map(\.port)
+        let sensitivePorts: Set<UInt16> = [21, 22, 23, 25, 3389, 5900]
+        let exposedSensitivePorts = openPorts.filter { sensitivePorts.contains($0) }
+        if !exposedSensitivePorts.isEmpty {
+            tally.add(min(18, exposedSensitivePorts.count * 6), "Sensitive management or mail ports are exposed", .negative)
+        } else if Set(openPorts) == Set([80, 443]) {
+            tally.add(0, "Exposure is limited to standard web ports", .positive)
+        } else if openPorts.count >= 3 {
+            tally.add(8, "Multiple open services expand the attack surface", .negative)
+        }
+    }
+
+    private static func scoreSubdomains(_ snapshot: LookupSnapshot, groups: [SubdomainGroup], into tally: inout RiskTally) {
+        guard !groups.isEmpty else { return }
+        let labels = Set(groups.map(\.label))
+        if labels.contains("dev") || labels.contains("staging") {
+            tally.add(8, "Development or staging subdomains are discoverable", .negative)
+        }
+        if labels.contains("admin") {
+            tally.add(10, "Administrative subdomains are discoverable", .negative)
+        }
+        if snapshot.subdomains.count >= 8 {
+            tally.add(6, "Large passive subdomain footprint detected", .negative)
+        }
+    }
+
+    private static func scoreGeolocation(_ snapshot: LookupSnapshot, into tally: inout RiskTally) {
+        if snapshot.ipGeolocation == nil,
+           snapshot.availabilityResult?.status == .registered,
+           snapshot.dnsSections.contains(where: { $0.recordType == .A && !$0.records.isEmpty }) {
+            tally.add(4, "Active host could not be geolocated", .neutral)
+        }
+    }
+
+    private static func scoreReputation(_ snapshot: LookupSnapshot, into tally: inout RiskTally) {
+        guard let reputation = snapshot.reputation else { return }
+        switch reputation.status {
+        case .listed:
+            let sourceList = reputation.listedSources.isEmpty ? "" : " (\(reputation.listedSources.joined(separator: ", ")))"
+            tally.add(25, "Domain is flagged by a configured reputation source\(sourceList)", .negative)
+        case .clean:
+            tally.add(0, "Domain is clean against the configured reputation source", .positive)
+        case .unknown:
+            break
+        }
     }
 
     private static func insights(

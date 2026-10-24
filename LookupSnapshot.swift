@@ -163,3 +163,122 @@ extension HistoryEntry {
         )
     }
 }
+
+extension LookupSnapshot {
+    /// Whether every section that failed did so for want of a connection (a
+    /// network error, a timeout, a rate limit) and nothing worth showing came
+    /// back, so the last snapshot should stand in for this one.
+    var needsFallback: Bool {
+        let candidateMessages = [
+            dnsError,
+            httpHeadersError,
+            sslError,
+            ownershipError,
+            subdomainsError,
+            redirectChainError,
+            ipGeolocationError
+        ]
+        .compactMap { $0?.lowercased() }
+
+        guard !candidateMessages.isEmpty else { return false }
+        let connectivityFailure = candidateMessages.allSatisfy { message in
+            message.hasPrefix("network error:")
+                || message.hasPrefix("timeout:")
+                || message.hasPrefix("rate limit:")
+        }
+
+        let hasMaterialData = !dnsSections.isEmpty
+            || !httpHeaders.isEmpty
+            || sslInfo != nil
+            || ownership != nil
+            || !subdomains.isEmpty
+
+        return connectivityFailure && !hasMaterialData
+    }
+
+    /// `previous`, marked as the last known result, when this lookup
+    /// ``needsFallback``; otherwise this lookup.
+    func resolvedAfterFallback(to previous: LookupSnapshot?) -> LookupSnapshot {
+        guard needsFallback, let previous else {
+            return self
+        }
+
+        return LookupSnapshot(
+            historyEntryID: previous.historyEntryID,
+            domain: previous.domain,
+            timestamp: previous.timestamp,
+            trackedDomainID: previous.trackedDomainID,
+            note: previous.note,
+            appVersion: previous.appVersion,
+            resolverDisplayName: previous.resolverDisplayName,
+            resolverURLString: previous.resolverURLString,
+            dataSources: previous.dataSources,
+            provenanceBySection: previous.provenanceBySection,
+            availabilityConfidence: previous.availabilityConfidence,
+            ownershipConfidence: previous.ownershipConfidence,
+            subdomainConfidence: previous.subdomainConfidence,
+            emailSecurityConfidence: previous.emailSecurityConfidence,
+            geolocationConfidence: previous.geolocationConfidence,
+            errorDetails: previous.errorDetails,
+            isPartialSnapshot: previous.isPartialSnapshot,
+            validationIssues: previous.validationIssues,
+            totalLookupDurationMs: previous.totalLookupDurationMs,
+            snapshotIndex: previous.snapshotIndex,
+            previousSnapshotID: previous.previousSnapshotID,
+            changeCount: previous.changeCount,
+            severitySummary: previous.severitySummary,
+            dnsSections: previous.dnsSections,
+            dnsError: previous.dnsError,
+            availabilityResult: previous.availabilityResult,
+            suggestions: previous.suggestions,
+            sslInfo: previous.sslInfo,
+            sslError: previous.sslError,
+            hstsPreloaded: previous.hstsPreloaded,
+            httpHeaders: previous.httpHeaders,
+            httpSecurityGrade: previous.httpSecurityGrade,
+            httpStatusCode: previous.httpStatusCode,
+            httpResponseTimeMs: previous.httpResponseTimeMs,
+            httpProtocol: previous.httpProtocol,
+            http3Advertised: previous.http3Advertised,
+            httpHeadersError: previous.httpHeadersError,
+            reachabilityResults: previous.reachabilityResults,
+            reachabilityError: previous.reachabilityError,
+            ipGeolocation: previous.ipGeolocation,
+            ipGeolocationError: previous.ipGeolocationError,
+            emailSecurity: previous.emailSecurity,
+            emailSecurityError: previous.emailSecurityError,
+            ownership: previous.ownership,
+            ownershipError: previous.ownershipError,
+            ownershipHistory: previous.ownershipHistory,
+            ownershipHistoryError: previous.ownershipHistoryError,
+            inferredProvider: previous.inferredProvider,
+            priorProviders: previous.priorProviders,
+            domainClassification: previous.domainClassification,
+            ownershipTransitions: previous.ownershipTransitions,
+            hostingTransitions: previous.hostingTransitions,
+            subdomainHistory: previous.subdomainHistory,
+            riskSignals: previous.riskSignals,
+            intelligenceTimeline: previous.intelligenceTimeline,
+            ptrRecord: previous.ptrRecord,
+            ptrError: previous.ptrError,
+            redirectChain: previous.redirectChain,
+            redirectChainError: previous.redirectChainError,
+            subdomains: previous.subdomains,
+            subdomainsError: previous.subdomainsError,
+            extendedSubdomains: previous.extendedSubdomains,
+            extendedSubdomainsError: previous.extendedSubdomainsError,
+            dnsHistory: previous.dnsHistory,
+            dnsHistoryError: previous.dnsHistoryError,
+            domainPricing: previous.domainPricing,
+            domainPricingError: previous.domainPricingError,
+            reputation: previous.reputation,
+            reputationError: previous.reputationError,
+            portScanResults: previous.portScanResults,
+            portScanError: previous.portScanError,
+            changeSummary: previous.changeSummary,
+            resultSource: .snapshot,
+            cachedSections: [],
+            statusMessage: "Last known result • \(previous.timestamp.formatted(date: .abbreviated, time: .shortened))"
+        )
+    }
+}

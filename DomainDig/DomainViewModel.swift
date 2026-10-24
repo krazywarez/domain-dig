@@ -1282,101 +1282,73 @@ final class DomainViewModel {
     }
 
     func loadOwnershipHistory() async {
-        guard !searchedDomain.isEmpty else { return }
-        guard DataAccessService.hasAccess(to: .ownershipHistory) else {
-            upgradePrompt = FeatureAccessService.upgradePrompt(for: .ownershipHistory)
-            return
+        await loadLookup(.ownershipHistory, into: \.ownershipHistory, loading: \.ownershipHistoryLoading, error: \.ownershipHistoryError,
+                         fallback: "Ownership history unavailable") {
+            await ExternalDataService.shared.ownershipHistory(
+                domain: searchedDomain,
+                currentOwnership: ownershipResult,
+                historyEntries: history
+            ).value
         }
-        guard ownershipHistory.isEmpty else { return }
-
-        ownershipHistoryLoading = true
-        ownershipHistoryError = nil
-
-        let outcome = await ExternalDataService.shared.ownershipHistory(
-            domain: searchedDomain,
-            currentOwnership: ownershipResult,
-            historyEntries: history
-        )
-
-        switch outcome.value {
-        case let .success(events):
-            ownershipHistory = events
-            ownershipHistoryError = nil
-        case let .empty(message):
-            ownershipHistory = []
-            ownershipHistoryError = message
-        case let .error(message):
-            ownershipHistory = []
-            ownershipHistoryError = conciseExternalMessage(message, fallback: "Ownership history unavailable")
-        }
-
-        ownershipHistoryLoading = false
-        _ = saveHistoryEntry(replaceLatest: true)
     }
 
     func loadDNSHistory() async {
-        guard !searchedDomain.isEmpty else { return }
-        guard DataAccessService.hasAccess(to: .dnsHistory) else {
-            upgradePrompt = FeatureAccessService.upgradePrompt(for: .dnsHistory)
-            return
+        await loadLookup(.dnsHistory, into: \.dnsHistory, loading: \.dnsHistoryLoading, error: \.dnsHistoryError,
+                         fallback: "DNS history unavailable") {
+            await ExternalDataService.shared.dnsHistory(
+                domain: searchedDomain,
+                dnsSections: dnsSections,
+                historyEntries: history
+            ).value
         }
-        guard dnsHistory.isEmpty else { return }
-
-        dnsHistoryLoading = true
-        dnsHistoryError = nil
-
-        let outcome = await ExternalDataService.shared.dnsHistory(
-            domain: searchedDomain,
-            dnsSections: dnsSections,
-            historyEntries: history
-        )
-
-        switch outcome.value {
-        case let .success(events):
-            dnsHistory = events
-            dnsHistoryError = nil
-        case let .empty(message):
-            dnsHistory = []
-            dnsHistoryError = message
-        case let .error(message):
-            dnsHistory = []
-            dnsHistoryError = conciseExternalMessage(message, fallback: "DNS history unavailable")
-        }
-
-        dnsHistoryLoading = false
-        _ = saveHistoryEntry(replaceLatest: true)
     }
 
     func loadExtendedSubdomains() async {
+        await loadLookup(.extendedSubdomains, into: \.extendedSubdomains, loading: \.extendedSubdomainsLoading, error: \.extendedSubdomainsError,
+                         fallback: "Extended subdomains unavailable") {
+            await ExternalDataService.shared.extendedSubdomains(
+                domain: searchedDomain,
+                existing: subdomains
+            ).value
+        }
+    }
+
+    /// Loads `capability`'s lookup for the searched domain into `items`, unless it is loaded
+    /// already, or shows the upgrade prompt when the plan doesn't include it.
+    private func loadLookup<Item>(
+        _ capability: DataCapability,
+        into items: ReferenceWritableKeyPath<DomainViewModel, [Item]>,
+        loading: ReferenceWritableKeyPath<DomainViewModel, Bool>,
+        error: ReferenceWritableKeyPath<DomainViewModel, String?>,
+        fallback: String,
+        fetch: () async -> ServiceResult<[Item]>
+    ) async {
         guard !searchedDomain.isEmpty else { return }
-        guard DataAccessService.hasAccess(to: .extendedSubdomains) else {
-            upgradePrompt = FeatureAccessService.upgradePrompt(for: .extendedSubdomains)
+        guard DataAccessService.hasAccess(to: capability) else {
+            upgradePrompt = FeatureAccessService.upgradePrompt(for: capability.feature)
             return
         }
-        guard extendedSubdomains.isEmpty else { return }
+        guard self[keyPath: items].isEmpty else { return }
 
-        extendedSubdomainsLoading = true
-        extendedSubdomainsError = nil
+        self[keyPath: loading] = true
+        self[keyPath: error] = nil
 
-        let outcome = await ExternalDataService.shared.extendedSubdomains(
-            domain: searchedDomain,
-            existing: subdomains
-        )
+        (self[keyPath: items], self[keyPath: error]) = found(await fetch(), fallback: fallback)
 
-        switch outcome.value {
-        case let .success(results):
-            extendedSubdomains = results
-            extendedSubdomainsError = nil
-        case let .empty(message):
-            extendedSubdomains = []
-            extendedSubdomainsError = message
-        case let .error(message):
-            extendedSubdomains = []
-            extendedSubdomainsError = conciseExternalMessage(message, fallback: "Extended subdomains unavailable")
-        }
-
-        extendedSubdomainsLoading = false
+        self[keyPath: loading] = false
         _ = saveHistoryEntry(replaceLatest: true)
+    }
+
+    /// What a lookup found, and the message to show when it found nothing or failed.
+    private func found<Item>(_ result: ServiceResult<[Item]>, fallback: String) -> ([Item], String?) {
+        switch result {
+        case let .success(items):
+            return (items, nil)
+        case let .empty(message):
+            return ([], message)
+        case let .error(message):
+            return ([], conciseExternalMessage(message, fallback: fallback))
+        }
     }
 
     func refreshUsageCredits() async {
@@ -1395,7 +1367,7 @@ final class DomainViewModel {
         DomainDebugLog.debug("DomainViewModel.performLookup inspectionReturned domain=\(domain)")
         guard !Task.isCancelled, isCurrentLookup(lookupID) else { return nil }
 
-        let snapshot = Self.resolvedSnapshotAfterFallback(inspectedSnapshot, previousSnapshot: previous)
+        let snapshot = inspectedSnapshot.resolvedAfterFallback(to: previous)
         let applyStartedAt = DomainDebugLog.signpostStart("DomainViewModel.applySnapshot", domain: domain)
         applySnapshot(snapshot)
         DomainDebugLog.signpostEnd("DomainViewModel.applySnapshot", start: applyStartedAt, domain: domain)
@@ -1504,119 +1476,6 @@ final class DomainViewModel {
         domainPricingLoading = false
         portScanLoading = false
         customPortScanLoading = false
-    }
-
-    private static func resolvedSnapshotAfterFallback(
-        _ snapshot: LookupSnapshot,
-        previousSnapshot: LookupSnapshot?
-    ) -> LookupSnapshot {
-        guard shouldFallbackToSnapshot(snapshot), let previousSnapshot else {
-            return snapshot
-        }
-
-        return LookupSnapshot(
-            historyEntryID: previousSnapshot.historyEntryID,
-            domain: previousSnapshot.domain,
-            timestamp: previousSnapshot.timestamp,
-            trackedDomainID: previousSnapshot.trackedDomainID,
-            note: previousSnapshot.note,
-            appVersion: previousSnapshot.appVersion,
-            resolverDisplayName: previousSnapshot.resolverDisplayName,
-            resolverURLString: previousSnapshot.resolverURLString,
-            dataSources: previousSnapshot.dataSources,
-            provenanceBySection: previousSnapshot.provenanceBySection,
-            availabilityConfidence: previousSnapshot.availabilityConfidence,
-            ownershipConfidence: previousSnapshot.ownershipConfidence,
-            subdomainConfidence: previousSnapshot.subdomainConfidence,
-            emailSecurityConfidence: previousSnapshot.emailSecurityConfidence,
-            geolocationConfidence: previousSnapshot.geolocationConfidence,
-            errorDetails: previousSnapshot.errorDetails,
-            isPartialSnapshot: previousSnapshot.isPartialSnapshot,
-            validationIssues: previousSnapshot.validationIssues,
-            totalLookupDurationMs: previousSnapshot.totalLookupDurationMs,
-            snapshotIndex: previousSnapshot.snapshotIndex,
-            previousSnapshotID: previousSnapshot.previousSnapshotID,
-            changeCount: previousSnapshot.changeCount,
-            severitySummary: previousSnapshot.severitySummary,
-            dnsSections: previousSnapshot.dnsSections,
-            dnsError: previousSnapshot.dnsError,
-            availabilityResult: previousSnapshot.availabilityResult,
-            suggestions: previousSnapshot.suggestions,
-            sslInfo: previousSnapshot.sslInfo,
-            sslError: previousSnapshot.sslError,
-            hstsPreloaded: previousSnapshot.hstsPreloaded,
-            httpHeaders: previousSnapshot.httpHeaders,
-            httpSecurityGrade: previousSnapshot.httpSecurityGrade,
-            httpStatusCode: previousSnapshot.httpStatusCode,
-            httpResponseTimeMs: previousSnapshot.httpResponseTimeMs,
-            httpProtocol: previousSnapshot.httpProtocol,
-            http3Advertised: previousSnapshot.http3Advertised,
-            httpHeadersError: previousSnapshot.httpHeadersError,
-            reachabilityResults: previousSnapshot.reachabilityResults,
-            reachabilityError: previousSnapshot.reachabilityError,
-            ipGeolocation: previousSnapshot.ipGeolocation,
-            ipGeolocationError: previousSnapshot.ipGeolocationError,
-            emailSecurity: previousSnapshot.emailSecurity,
-            emailSecurityError: previousSnapshot.emailSecurityError,
-            ownership: previousSnapshot.ownership,
-            ownershipError: previousSnapshot.ownershipError,
-            ownershipHistory: previousSnapshot.ownershipHistory,
-            ownershipHistoryError: previousSnapshot.ownershipHistoryError,
-            inferredProvider: previousSnapshot.inferredProvider,
-            priorProviders: previousSnapshot.priorProviders,
-            domainClassification: previousSnapshot.domainClassification,
-            ownershipTransitions: previousSnapshot.ownershipTransitions,
-            hostingTransitions: previousSnapshot.hostingTransitions,
-            subdomainHistory: previousSnapshot.subdomainHistory,
-            riskSignals: previousSnapshot.riskSignals,
-            intelligenceTimeline: previousSnapshot.intelligenceTimeline,
-            ptrRecord: previousSnapshot.ptrRecord,
-            ptrError: previousSnapshot.ptrError,
-            redirectChain: previousSnapshot.redirectChain,
-            redirectChainError: previousSnapshot.redirectChainError,
-            subdomains: previousSnapshot.subdomains,
-            subdomainsError: previousSnapshot.subdomainsError,
-            extendedSubdomains: previousSnapshot.extendedSubdomains,
-            extendedSubdomainsError: previousSnapshot.extendedSubdomainsError,
-            dnsHistory: previousSnapshot.dnsHistory,
-            dnsHistoryError: previousSnapshot.dnsHistoryError,
-            domainPricing: previousSnapshot.domainPricing,
-            domainPricingError: previousSnapshot.domainPricingError,
-            reputation: previousSnapshot.reputation,
-            reputationError: previousSnapshot.reputationError,
-            portScanResults: previousSnapshot.portScanResults,
-            portScanError: previousSnapshot.portScanError,
-            changeSummary: previousSnapshot.changeSummary,
-            resultSource: .snapshot,
-            cachedSections: [],
-            statusMessage: "Last known result • \(previousSnapshot.timestamp.formatted(date: .abbreviated, time: .shortened))"
-        )
-    }
-
-    private static func shouldFallbackToSnapshot(_ snapshot: LookupSnapshot) -> Bool {
-        let candidateMessages = [
-            snapshot.dnsError,
-            snapshot.httpHeadersError,
-            snapshot.sslError,
-            snapshot.ownershipError,
-            snapshot.subdomainsError,
-            snapshot.redirectChainError,
-            snapshot.ipGeolocationError
-        ]
-        .compactMap { $0?.lowercased() }
-
-        guard !candidateMessages.isEmpty else { return false }
-        let failedDueToConnectivity = candidateMessages.allSatisfy { message in
-            message.hasPrefix("network error:") || message.hasPrefix("timeout:") || message.hasPrefix("rate limit:")
-        }
-
-        let hasMaterialData = !snapshot.dnsSections.isEmpty
-            || !snapshot.httpHeaders.isEmpty
-            || snapshot.sslInfo != nil
-            || snapshot.ownership != nil
-            || !snapshot.subdomains.isEmpty
-
-        return failedDueToConnectivity && !hasMaterialData
     }
 
     private func runDNS(domain: String, lookupID: UUID) async {
@@ -1774,7 +1633,7 @@ final class DomainViewModel {
         let result = await PortScanService.scanAll(domain: domain)
         switch result {
         case let .success(results):
-            let enrichedResults = await enrichOpenPortBanners(in: results, domain: domain)
+            let enrichedResults = await PortScanService.withBanners(results, host: domain)
             guard !Task.isCancelled, isCurrentLookup(lookupID) else { return }
             portScanResults = enrichedResults
             portScanError = nil
@@ -1833,36 +1692,7 @@ final class DomainViewModel {
         let inspectionService = DomainInspectionService()
         let snapshot = await inspectionService.inspectSnapshot(domain: domain, previousSnapshot: previousSnapshot)
         guard !Task.isCancelled else { return nil }
-        return BatchLookupPayload(snapshot: resolvedSnapshotAfterFallback(snapshot, previousSnapshot: previousSnapshot))
-    }
-
-    private static func enrichOpenPortBanners(_ results: [PortScanResult], domain: String) async -> [PortScanResult] {
-        let banners = await withTaskGroup(of: (UInt16, String?).self, returning: [UInt16: String].self) { group in
-            for result in results where result.open {
-                group.addTask {
-                    let banner = await PortScanService.grabBanner(host: domain, port: result.port)
-                    return (result.port, banner)
-                }
-            }
-
-            var collected: [UInt16: String] = [:]
-            for await (port, banner) in group {
-                if let banner {
-                    collected[port] = banner
-                }
-            }
-            return collected
-        }
-
-        return results.map { result in
-            var updated = result
-            updated.banner = banners[result.port]
-            return updated
-        }
-    }
-
-    private func enrichOpenPortBanners(in results: [PortScanResult], domain: String) async -> [PortScanResult] {
-        await Self.enrichOpenPortBanners(results, domain: domain)
+        return BatchLookupPayload(snapshot: snapshot.resolvedAfterFallback(to: previousSnapshot))
     }
 
     @discardableResult
@@ -2840,32 +2670,7 @@ final class DomainViewModel {
     private func buildAttentionQueue(from domainStates: [PortfolioDomainStatus]) -> [PortfolioAttentionItem] {
         domainStates.compactMap { state in
             guard state.health != .healthy else { return nil }
-            let reason: String
-            let timestamp: Date
-
-            if state.isUnreachable {
-                reason = "Endpoint is unreachable"
-                timestamp = state.lastMonitoringFailure ?? state.trackedDomain.updatedAt
-            } else if state.certificateExpiryState == .critical {
-                reason = "Certificate is expiring in under 14 days"
-                timestamp = state.lastChangeDate ?? state.trackedDomain.updatedAt
-            } else if state.certificateExpiryState == .warning {
-                reason = "Certificate expires within 30 days"
-                timestamp = state.lastChangeDate ?? state.trackedDomain.updatedAt
-            } else if state.recentFailureCount >= 2 || state.instabilityScore >= 70 {
-                reason = "Repeated instability detected"
-                timestamp = state.lastMonitoringFailure ?? state.trackedDomain.updatedAt
-            } else if state.recentDNSChange {
-                reason = "DNS changed recently"
-                timestamp = state.lastChangeDate ?? state.trackedDomain.updatedAt
-            } else if state.recentCriticalChange {
-                reason = "Recent critical change detected"
-                timestamp = state.lastChangeDate ?? state.trackedDomain.updatedAt
-            } else {
-                reason = "Needs attention"
-                timestamp = state.trackedDomain.updatedAt
-            }
-
+            let (reason, timestamp) = Self.attentionReason(for: state)
             return PortfolioAttentionItem(
                 id: "\(state.trackedDomain.id.uuidString)|\(reason)",
                 trackedDomainID: state.trackedDomain.id,
@@ -2881,6 +2686,32 @@ final class DomainViewModel {
             }
             return lhs.timestamp > rhs.timestamp
         }
+    }
+
+    /// Why an unhealthy domain needs attention, most urgent cause first, and
+    /// when that cause was last seen.
+    private static func attentionReason(for state: PortfolioDomainStatus) -> (reason: String, timestamp: Date) {
+        let changedAt = state.lastChangeDate ?? state.trackedDomain.updatedAt
+        let failedAt = state.lastMonitoringFailure ?? state.trackedDomain.updatedAt
+        if state.isUnreachable {
+            return ("Endpoint is unreachable", failedAt)
+        }
+        if state.certificateExpiryState == .critical {
+            return ("Certificate is expiring in under 14 days", changedAt)
+        }
+        if state.certificateExpiryState == .warning {
+            return ("Certificate expires within 30 days", changedAt)
+        }
+        if state.recentFailureCount >= 2 || state.instabilityScore >= 70 {
+            return ("Repeated instability detected", failedAt)
+        }
+        if state.recentDNSChange {
+            return ("DNS changed recently", changedAt)
+        }
+        if state.recentCriticalChange {
+            return ("Recent critical change detected", changedAt)
+        }
+        return ("Needs attention", state.trackedDomain.updatedAt)
     }
 
     private func buildPortfolioGroups(from domainStates: [PortfolioDomainStatus]) -> [PortfolioGroup] {
@@ -3329,40 +3160,10 @@ final class DomainViewModel {
             )
         }
         if let pricing = snapshot.domainPricing {
-            rows.append(
-                InfoRowViewData(
-                    label: "External Price",
-                    value: pricing.estimatedPrice ?? "Unavailable",
-                    tone: .secondary
-                )
-            )
-            if let premiumIndicator = pricing.premiumIndicator {
-                rows.append(
-                    InfoRowViewData(
-                        label: "Premium",
-                        value: premiumIndicator ? "Yes" : "No",
-                        tone: premiumIndicator ? .warning : .secondary
-                    )
-                )
-            }
-            if let resaleSignal = pricing.resaleSignal {
-                rows.append(InfoRowViewData(label: "Resale", value: resaleSignal, tone: .secondary))
-            }
-            if let auctionSignal = pricing.auctionSignal {
-                rows.append(InfoRowViewData(label: "Auction", value: auctionSignal, tone: .secondary))
-            }
+            rows += pricingRows(pricing)
         }
         if let reputation = snapshot.reputation {
-            let tone: ResultTone
-            switch reputation.status {
-            case .clean: tone = .success
-            case .listed: tone = .failure
-            case .unknown: tone = .secondary
-            }
-            let value = reputation.status == .listed && !reputation.listedSources.isEmpty
-                ? "\(reputation.status.title) (\(reputation.listedSources.joined(separator: ", ")))"
-                : reputation.status.title
-            rows.append(InfoRowViewData(label: "Reputation", value: value, tone: tone))
+            rows.append(reputationRow(reputation))
         }
         if let certificateStatus = certificateBadgeLabel(from: snapshot) {
             rows.insert(
@@ -3375,6 +3176,39 @@ final class DomainViewModel {
             )
         }
         return rows
+    }
+
+    private static func pricingRows(_ pricing: DomainPricingInsight) -> [InfoRowViewData] {
+        var rows = [InfoRowViewData(label: "External Price", value: pricing.estimatedPrice ?? "Unavailable", tone: .secondary)]
+        if let premiumIndicator = pricing.premiumIndicator {
+            rows.append(
+                InfoRowViewData(
+                    label: "Premium",
+                    value: premiumIndicator ? "Yes" : "No",
+                    tone: premiumIndicator ? .warning : .secondary
+                )
+            )
+        }
+        if let resaleSignal = pricing.resaleSignal {
+            rows.append(InfoRowViewData(label: "Resale", value: resaleSignal, tone: .secondary))
+        }
+        if let auctionSignal = pricing.auctionSignal {
+            rows.append(InfoRowViewData(label: "Auction", value: auctionSignal, tone: .secondary))
+        }
+        return rows
+    }
+
+    private static func reputationRow(_ reputation: DomainReputationResult) -> InfoRowViewData {
+        let tone: ResultTone
+        switch reputation.status {
+        case .clean: tone = .success
+        case .listed: tone = .failure
+        case .unknown: tone = .secondary
+        }
+        let value = reputation.status == .listed && !reputation.listedSources.isEmpty
+            ? "\(reputation.status.title) (\(reputation.listedSources.joined(separator: ", ")))"
+            : reputation.status.title
+        return InfoRowViewData(label: "Reputation", value: value, tone: tone)
     }
 
     static func suggestionRows(from snapshot: LookupSnapshot) -> [DomainSuggestionViewData] {
@@ -3647,229 +3481,261 @@ final class DomainViewModel {
             lines.append("Tracking Note: \(note)")
         }
 
-        func appendSection(_ title: String, body: () -> Void) {
+        func appendSection(_ title: String, _ body: [String]) {
             lines.append("")
             lines.append(title)
             lines.append(String(repeating: "-", count: title.count))
-            body()
+            lines += body
         }
 
-        appendSection("Summary") {
-            for item in summaryFields(from: snapshot) {
-                lines.append("  \(item.label): \(item.value)")
-            }
-            if let changeSummary {
-                lines.append("  Change Summary: \(changeSummary.message)")
-                lines.append("  Severity: \(changeSummary.severity.title)")
-                lines.append("  Changed Sections: \(changeSummary.changedSections.isEmpty ? "None" : changeSummary.changedSections.joined(separator: ", "))")
-                lines.append("  Compared At: \(exportDateFormatter.string(from: changeSummary.generatedAt))")
-            }
-        }
-
-        appendSection("Tracking") {
-            if let trackedDomain {
-                lines.append("  Pinned: \(trackedDomain.isPinned ? "Yes" : "No")")
-                lines.append("  Last Refresh: \(exportDateFormatter.string(from: trackedDomain.updatedAt))")
-                lines.append("  Last Known Availability: \(availabilityLabel(trackedDomain.lastKnownAvailability))")
-                if let note = trackedDomain.note?.nilIfEmpty {
-                    lines.append("  Note: \(note)")
-                }
-            } else {
-                lines.append("  This domain is not currently tracked.")
-            }
-        }
-
-        appendSection("Diff Summary") {
-            if diffSections.isEmpty {
-                lines.append("  No comparison available")
-            } else {
-                for section in diffSections where section.items.contains(where: { $0.changeType != .unchanged }) {
-                    lines.append("  \(section.title)")
-                    for item in section.items where item.changeType != .unchanged {
-                        lines.append("    [\(item.changeType.rawValue.capitalized)] \(item.label): \(item.oldValue ?? "None") -> \(item.newValue ?? "None")")
-                    }
-                }
-            }
-        }
-
-        appendSection("Domain") {
-            for row in domainRows(from: snapshot) {
-                lines.append("  \(row.label): \(row.value)")
-            }
-            if snapshot.suggestions.isEmpty {
-                lines.append("  Suggestions: None")
-            } else {
-                lines.append("  Suggestions:")
-                for suggestion in snapshot.suggestions {
-                    lines.append("    \(suggestion.domain): \(availabilityLabel(suggestion.status))")
-                }
-            }
-        }
-
-        appendSection("Ownership") {
-            for row in ownershipRows(from: snapshot) {
-                lines.append("  \(row.label): \(row.value)")
-            }
-            if let ownershipError = snapshot.ownershipError, snapshot.ownership == nil {
-                lines.append("  Source: \(ownershipError)")
-            }
-            if !DataAccessService.hasAccess(to: .ownershipHistory) {
-                lines.append("  Ownership history (coming soon)")
-            }
-        }
-
-        appendSection("Subdomains") {
-            lines.append("  Count: \(snapshot.subdomains.count)")
-            if snapshot.subdomains.isEmpty {
-                lines.append("  \(snapshot.subdomainsError ?? "No passive subdomains found")")
-            } else {
-                for subdomain in subdomainRows(from: snapshot) {
-                    let marker = subdomain.isInteresting ? " [interesting]" : ""
-                    lines.append("  \(subdomain.hostname)\(marker)")
-                }
-            }
-            if !DataAccessService.hasAccess(to: .extendedSubdomains) {
-                lines.append("  Extended subdomain discovery (Pro+)")
-            }
-        }
-
-        appendSection("DNS") {
-            if let dnsError = snapshot.dnsError {
-                lines.append("  Error: \(dnsError)")
-            }
-            if let dnssecLabel = dnssecLabel(from: snapshot) {
-                lines.append("  \(dnssecLabel)")
-            }
-            for section in dnsRows(from: snapshot) {
-                lines.append("  \(section.title)")
-                if let message = section.message {
-                    lines.append("    \(message.isError ? "Error" : "Info"): \(message.text)")
-                }
-                for row in section.rows {
-                    lines.append("    \(row.value) (\(row.label))")
-                }
-                if let wildcardTitle = section.wildcardTitle {
-                    lines.append("    \(wildcardTitle)")
-                    for row in section.wildcardRows {
-                        lines.append("      \(row.value) (\(row.label))")
-                    }
-                }
-            }
-            if let ptrRecord = snapshot.ptrRecord {
-                lines.append("  PTR: \(ptrRecord)")
-            } else if let ptrError = snapshot.ptrError {
-                lines.append("  PTR Error: \(ptrError)")
-            }
-        }
-
-        appendSection("Web") {
-            if let sslError = snapshot.sslError {
-                lines.append("  TLS Error: \(sslError)")
-            } else {
-                for row in webCertificateRows(from: snapshot) {
-                    lines.append("  \(row.label): \(row.value)")
-                }
-            }
-
-            if let httpHeadersError = snapshot.httpHeadersError {
-                lines.append("  Headers Error: \(httpHeadersError)")
-            } else {
-                for row in webResponseRows(from: snapshot) {
-                    lines.append("  \(row.label): \(row.value)")
-                }
-                if snapshot.httpHeaders.isEmpty {
-                    lines.append("  Headers: No headers returned")
-                } else {
-                    lines.append("  Headers:")
-                    for header in snapshot.httpHeaders {
-                        lines.append("    \(header.name): \(header.value)")
-                    }
-                }
-            }
-
-            if let redirectChainError = snapshot.redirectChainError {
-                lines.append("  Redirect Error: \(redirectChainError)")
-            } else if snapshot.redirectChain.isEmpty {
-                lines.append("  Redirects: No redirect data available")
-            } else {
-                lines.append("  Redirects:")
-                for hop in redirectRows(from: snapshot) {
-                    lines.append("    \(hop.stepLabel). \(hop.statusCode) \(hop.url)\(hop.isFinal ? " (final)" : "")")
-                }
-            }
-        }
-
-        appendSection("Email") {
-            if let emailSecurityError = snapshot.emailSecurityError {
-                lines.append("  Error: \(emailSecurityError)")
-            } else if emailRows(from: snapshot).isEmpty {
-                lines.append("  No email security records found")
-            } else {
-                for row in emailRows(from: snapshot) {
-                    lines.append("  \(row.label): \(row.status)")
-                    lines.append("    \(row.detail)")
-                    if let auxiliaryDetail = row.auxiliaryDetail {
-                        lines.append("    \(auxiliaryDetail)")
-                    }
-                }
-            }
-        }
-
-        appendSection("Network") {
-            if let reachabilityError = snapshot.reachabilityError {
-                lines.append("  Reachability Error: \(reachabilityError)")
-            } else if reachabilityRows(from: snapshot).isEmpty {
-                lines.append("  Reachability: No results")
-            } else {
-                lines.append("  Reachability:")
-                for row in reachabilityRows(from: snapshot) {
-                    lines.append("    \(row.portLabel): \(row.statusLabel) \(row.latencyLabel)")
-                }
-            }
-
-            if let ipGeolocationError = snapshot.ipGeolocationError, snapshot.ipGeolocation == nil {
-                lines.append("  Location Error: \(ipGeolocationError)")
-            } else if locationRows(from: snapshot).isEmpty {
-                lines.append("  Location: No data")
-            } else {
-                lines.append("  Location:")
-                for row in locationRows(from: snapshot) {
-                    lines.append("    \(row.label): \(row.value)")
-                }
-            }
-
-            if let portScanError = snapshot.portScanError, snapshot.portScanResults.isEmpty {
-                lines.append("  Port Scan Error: \(portScanError)")
-            }
-
-            lines.append("  Standard Ports:")
-            let standardRows = portRows(from: snapshot, kind: .standard)
-            if standardRows.isEmpty {
-                lines.append("    No results")
-            } else {
-                for row in standardRows {
-                    lines.append("    \(row.portLabel) \(row.service): \(row.statusLabel)\(row.durationLabel.map { " \($0)" } ?? "")")
-                    if let banner = row.banner {
-                        lines.append("      Banner: \(banner)")
-                    }
-                }
-            }
-
-            lines.append("  Custom Ports:")
-            let customRows = portRows(from: snapshot, kind: .custom)
-            if customRows.isEmpty {
-                lines.append("    No results")
-            } else {
-                for row in customRows {
-                    lines.append("    \(row.portLabel) \(row.service): \(row.statusLabel)\(row.durationLabel.map { " \($0)" } ?? "")")
-                    if let banner = row.banner {
-                        lines.append("      Banner: \(banner)")
-                    }
-                }
-            }
-        }
+        appendSection("Summary", exportSummaryLines(snapshot, changeSummary: changeSummary, exportDateFormatter: exportDateFormatter))
+        appendSection("Tracking", exportTrackingLines(trackedDomain, exportDateFormatter: exportDateFormatter))
+        appendSection("Diff Summary", exportDiffSummaryLines(diffSections))
+        appendSection("Domain", exportDomainLines(snapshot))
+        appendSection("Ownership", exportOwnershipLines(snapshot))
+        appendSection("Subdomains", exportSubdomainsLines(snapshot))
+        appendSection("DNS", exportDnsLines(snapshot))
+        appendSection("Web", exportWebLines(snapshot))
+        appendSection("Email", exportEmailLines(snapshot))
+        appendSection("Network", exportNetworkLines(snapshot))
 
         return lines.joined(separator: "\n")
+    }
+
+    private static func exportSummaryLines(
+        _ snapshot: LookupSnapshot,
+        changeSummary: DomainChangeSummary?,
+        exportDateFormatter: DateFormatter
+    ) -> [String] {
+        var lines: [String] = []
+        for item in summaryFields(from: snapshot) {
+            lines.append("  \(item.label): \(item.value)")
+        }
+        if let changeSummary {
+            lines.append("  Change Summary: \(changeSummary.message)")
+            lines.append("  Severity: \(changeSummary.severity.title)")
+            lines.append("  Changed Sections: \(changeSummary.changedSections.isEmpty ? "None" : changeSummary.changedSections.joined(separator: ", "))")
+            lines.append("  Compared At: \(exportDateFormatter.string(from: changeSummary.generatedAt))")
+        }
+        return lines
+    }
+
+    private static func exportTrackingLines(_ trackedDomain: TrackedDomain?, exportDateFormatter: DateFormatter) -> [String] {
+        var lines: [String] = []
+        if let trackedDomain {
+            lines.append("  Pinned: \(trackedDomain.isPinned ? "Yes" : "No")")
+            lines.append("  Last Refresh: \(exportDateFormatter.string(from: trackedDomain.updatedAt))")
+            lines.append("  Last Known Availability: \(availabilityLabel(trackedDomain.lastKnownAvailability))")
+            if let note = trackedDomain.note?.nilIfEmpty {
+                lines.append("  Note: \(note)")
+            }
+        } else {
+            lines.append("  This domain is not currently tracked.")
+        }
+        return lines
+    }
+
+    private static func exportDiffSummaryLines(_ diffSections: [DomainDiffSection]) -> [String] {
+        var lines: [String] = []
+        if diffSections.isEmpty {
+            lines.append("  No comparison available")
+        } else {
+            for section in diffSections where section.items.contains(where: { $0.changeType != .unchanged }) {
+                lines.append("  \(section.title)")
+                for item in section.items where item.changeType != .unchanged {
+                    lines.append("    [\(item.changeType.rawValue.capitalized)] \(item.label): \(item.oldValue ?? "None") -> \(item.newValue ?? "None")")
+                }
+            }
+        }
+        return lines
+    }
+
+    private static func exportDomainLines(_ snapshot: LookupSnapshot) -> [String] {
+        var lines: [String] = []
+        for row in domainRows(from: snapshot) {
+            lines.append("  \(row.label): \(row.value)")
+        }
+        if snapshot.suggestions.isEmpty {
+            lines.append("  Suggestions: None")
+        } else {
+            lines.append("  Suggestions:")
+            for suggestion in snapshot.suggestions {
+                lines.append("    \(suggestion.domain): \(availabilityLabel(suggestion.status))")
+            }
+        }
+        return lines
+    }
+
+    private static func exportOwnershipLines(_ snapshot: LookupSnapshot) -> [String] {
+        var lines: [String] = []
+        for row in ownershipRows(from: snapshot) {
+            lines.append("  \(row.label): \(row.value)")
+        }
+        if let ownershipError = snapshot.ownershipError, snapshot.ownership == nil {
+            lines.append("  Source: \(ownershipError)")
+        }
+        if !DataAccessService.hasAccess(to: .ownershipHistory) {
+            lines.append("  Ownership history (coming soon)")
+        }
+        return lines
+    }
+
+    private static func exportSubdomainsLines(_ snapshot: LookupSnapshot) -> [String] {
+        var lines: [String] = []
+        lines.append("  Count: \(snapshot.subdomains.count)")
+        if snapshot.subdomains.isEmpty {
+            lines.append("  \(snapshot.subdomainsError ?? "No passive subdomains found")")
+        } else {
+            for subdomain in subdomainRows(from: snapshot) {
+                let marker = subdomain.isInteresting ? " [interesting]" : ""
+                lines.append("  \(subdomain.hostname)\(marker)")
+            }
+        }
+        if !DataAccessService.hasAccess(to: .extendedSubdomains) {
+            lines.append("  Extended subdomain discovery (Pro+)")
+        }
+        return lines
+    }
+
+    private static func exportDnsLines(_ snapshot: LookupSnapshot) -> [String] {
+        var lines: [String] = []
+        if let dnsError = snapshot.dnsError {
+            lines.append("  Error: \(dnsError)")
+        }
+        if let dnssecLabel = dnssecLabel(from: snapshot) {
+            lines.append("  \(dnssecLabel)")
+        }
+        for section in dnsRows(from: snapshot) {
+            lines += exportDNSSectionLines(section)
+        }
+        if let ptrRecord = snapshot.ptrRecord {
+            lines.append("  PTR: \(ptrRecord)")
+        } else if let ptrError = snapshot.ptrError {
+            lines.append("  PTR Error: \(ptrError)")
+        }
+        return lines
+    }
+
+    private static func exportDNSSectionLines(_ section: DNSRecordSectionViewData) -> [String] {
+        var lines = ["  \(section.title)"]
+        if let message = section.message {
+            lines.append("    \(message.isError ? "Error" : "Info"): \(message.text)")
+        }
+        for row in section.rows {
+            lines.append("    \(row.value) (\(row.label))")
+        }
+        if let wildcardTitle = section.wildcardTitle {
+            lines.append("    \(wildcardTitle)")
+            for row in section.wildcardRows {
+                lines.append("      \(row.value) (\(row.label))")
+            }
+        }
+        return lines
+    }
+
+    private static func exportResponseLines(_ snapshot: LookupSnapshot) -> [String] {
+        if let httpHeadersError = snapshot.httpHeadersError {
+            return ["  Headers Error: \(httpHeadersError)"]
+        }
+        var lines = webResponseRows(from: snapshot).map { "  \($0.label): \($0.value)" }
+        if snapshot.httpHeaders.isEmpty {
+            lines.append("  Headers: No headers returned")
+        } else {
+            lines.append("  Headers:")
+            for header in snapshot.httpHeaders {
+                lines.append("    \(header.name): \(header.value)")
+            }
+        }
+        return lines
+    }
+
+    private static func exportWebLines(_ snapshot: LookupSnapshot) -> [String] {
+        var lines: [String] = []
+        if let sslError = snapshot.sslError {
+            lines.append("  TLS Error: \(sslError)")
+        } else {
+            for row in webCertificateRows(from: snapshot) {
+                lines.append("  \(row.label): \(row.value)")
+            }
+        }
+        lines += exportResponseLines(snapshot)
+
+        if let redirectChainError = snapshot.redirectChainError {
+            lines.append("  Redirect Error: \(redirectChainError)")
+        } else if snapshot.redirectChain.isEmpty {
+            lines.append("  Redirects: No redirect data available")
+        } else {
+            lines.append("  Redirects:")
+            for hop in redirectRows(from: snapshot) {
+                lines.append("    \(hop.stepLabel). \(hop.statusCode) \(hop.url)\(hop.isFinal ? " (final)" : "")")
+            }
+        }
+        return lines
+    }
+
+    private static func exportEmailLines(_ snapshot: LookupSnapshot) -> [String] {
+        var lines: [String] = []
+        if let emailSecurityError = snapshot.emailSecurityError {
+            lines.append("  Error: \(emailSecurityError)")
+        } else if emailRows(from: snapshot).isEmpty {
+            lines.append("  No email security records found")
+        } else {
+            for row in emailRows(from: snapshot) {
+                lines.append("  \(row.label): \(row.status)")
+                lines.append("    \(row.detail)")
+                if let auxiliaryDetail = row.auxiliaryDetail {
+                    lines.append("    \(auxiliaryDetail)")
+                }
+            }
+        }
+        return lines
+    }
+
+    private static func exportPortLines(_ rows: [PortScanRowViewData]) -> [String] {
+        guard !rows.isEmpty else { return ["    No results"] }
+        var lines: [String] = []
+        for row in rows {
+            lines.append("    \(row.portLabel) \(row.service): \(row.statusLabel)\(row.durationLabel.map { " \($0)" } ?? "")")
+            if let banner = row.banner {
+                lines.append("      Banner: \(banner)")
+            }
+        }
+        return lines
+    }
+
+    private static func exportNetworkLines(_ snapshot: LookupSnapshot) -> [String] {
+        var lines: [String] = []
+        if let reachabilityError = snapshot.reachabilityError {
+            lines.append("  Reachability Error: \(reachabilityError)")
+        } else if reachabilityRows(from: snapshot).isEmpty {
+            lines.append("  Reachability: No results")
+        } else {
+            lines.append("  Reachability:")
+            for row in reachabilityRows(from: snapshot) {
+                lines.append("    \(row.portLabel): \(row.statusLabel) \(row.latencyLabel)")
+            }
+        }
+
+        if let ipGeolocationError = snapshot.ipGeolocationError, snapshot.ipGeolocation == nil {
+            lines.append("  Location Error: \(ipGeolocationError)")
+        } else if locationRows(from: snapshot).isEmpty {
+            lines.append("  Location: No data")
+        } else {
+            lines.append("  Location:")
+            for row in locationRows(from: snapshot) {
+                lines.append("    \(row.label): \(row.value)")
+            }
+        }
+
+        if let portScanError = snapshot.portScanError, snapshot.portScanResults.isEmpty {
+            lines.append("  Port Scan Error: \(portScanError)")
+        }
+
+        lines.append("  Standard Ports:")
+        lines += exportPortLines(portRows(from: snapshot, kind: .standard))
+        lines.append("  Custom Ports:")
+        lines += exportPortLines(portRows(from: snapshot, kind: .custom))
+        return lines
     }
 
     private static func primaryIPAddress(from snapshot: LookupSnapshot) -> String? {

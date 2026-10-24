@@ -521,7 +521,8 @@ enum DomainIntelligenceService {
     }
 
     private static func inferProvider(from snapshot: LookupSnapshot) -> InferredProviderFingerprint? {
-        let headerMap = Dictionary(uniqueKeysWithValues: snapshot.httpHeaders.map { ($0.name.lowercased(), $0.value.lowercased()) })
+        // A stored or imported snapshot can repeat a header name in another case.
+        let headerMap = Dictionary(snapshot.httpHeaders.map { ($0.name.lowercased(), $0.value.lowercased()) }) { first, _ in first }
         let dnsProviders = dnsValues(for: .NS, in: snapshot.dnsSections) + dnsValues(for: .CNAME, in: snapshot.dnsSections)
         let issuer = snapshot.sslInfo?.issuer.lowercased() ?? ""
         let org = snapshot.ipGeolocation?.org?.lowercased() ?? ""
@@ -626,59 +627,63 @@ enum DomainIntelligenceService {
     }
 
     private static func buildSubdomainHistory(from snapshots: [LookupSnapshot]) -> [SubdomainHistoryEntry] {
-        struct WorkingState {
-            var firstSeen: Date
-            var lastSeen: Date
-            var recurrenceCount: Int
-            var statusChangeCount: Int
-            var lastSeenInPreviousSnapshot: Bool
-        }
-
-        var states: [String: WorkingState] = [:]
+        var states: [String: SubdomainPresence] = [:]
         for snapshot in snapshots {
             let currentHosts = Set((snapshot.subdomains + snapshot.extendedSubdomains).map { $0.hostname.lowercased() })
             let knownHosts = Set(states.keys).union(currentHosts)
             for host in knownHosts {
                 let isPresent = currentHosts.contains(host)
-                if var state = states[host] {
-                    if isPresent {
-                        state.lastSeen = snapshot.timestamp
-                        state.recurrenceCount += 1
-                    }
-                    if state.lastSeenInPreviousSnapshot != isPresent {
-                        state.statusChangeCount += 1
-                    }
-                    state.lastSeenInPreviousSnapshot = isPresent
-                    states[host] = state
+                if states[host] != nil {
+                    states[host]?.observe(isPresent: isPresent, at: snapshot.timestamp)
                 } else if isPresent {
-                    states[host] = WorkingState(
-                        firstSeen: snapshot.timestamp,
-                        lastSeen: snapshot.timestamp,
-                        recurrenceCount: 1,
-                        statusChangeCount: 0,
-                        lastSeenInPreviousSnapshot: true
-                    )
+                    states[host] = SubdomainPresence(firstSeen: snapshot.timestamp)
                 }
             }
         }
 
-        return states.map { host, state in
-            let isEphemeral = state.recurrenceCount <= 2 || state.statusChangeCount >= 2
-            return SubdomainHistoryEntry(
-                hostname: host,
-                firstSeen: state.firstSeen,
-                lastSeen: state.lastSeen,
-                recurrenceCount: state.recurrenceCount,
-                statusChangeCount: state.statusChangeCount,
-                lastKnownStatus: state.lastSeenInPreviousSnapshot ? "Active" : "Inactive",
-                isEphemeral: isEphemeral
-            )
-        }
-        .sorted { lhs, rhs in
-            if lhs.isEphemeral != rhs.isEphemeral {
-                return lhs.isEphemeral && !rhs.isEphemeral
+        return states.map { host, state in state.entry(hostname: host) }
+            .sorted { lhs, rhs in
+                if lhs.isEphemeral != rhs.isEphemeral {
+                    return lhs.isEphemeral && !rhs.isEphemeral
+                }
+                return lhs.hostname < rhs.hostname
             }
-            return lhs.hostname < rhs.hostname
+    }
+
+    /// One subdomain's presence across a run of snapshots, from the first that saw it.
+    private struct SubdomainPresence {
+        var firstSeen: Date
+        var lastSeen: Date
+        var recurrenceCount = 1
+        var statusChangeCount = 0
+        var lastSeenInPreviousSnapshot = true
+
+        init(firstSeen: Date) {
+            self.firstSeen = firstSeen
+            lastSeen = firstSeen
+        }
+
+        mutating func observe(isPresent: Bool, at timestamp: Date) {
+            if isPresent {
+                lastSeen = timestamp
+                recurrenceCount += 1
+            }
+            if lastSeenInPreviousSnapshot != isPresent {
+                statusChangeCount += 1
+            }
+            lastSeenInPreviousSnapshot = isPresent
+        }
+
+        func entry(hostname: String) -> SubdomainHistoryEntry {
+            SubdomainHistoryEntry(
+                hostname: hostname,
+                firstSeen: firstSeen,
+                lastSeen: lastSeen,
+                recurrenceCount: recurrenceCount,
+                statusChangeCount: statusChangeCount,
+                lastKnownStatus: lastSeenInPreviousSnapshot ? "Active" : "Inactive",
+                isEphemeral: recurrenceCount <= 2 || statusChangeCount >= 2
+            )
         }
     }
 
