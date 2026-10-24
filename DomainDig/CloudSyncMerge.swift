@@ -417,7 +417,8 @@ enum CloudSyncMerge {
             lastAlertAt: trackedDomain.lastAlertAt,
             monitoringState: trackedDomain.monitoringState,
             pendingMonitoringAlerts: trackedDomain.pendingMonitoringAlerts,
-            collaboration: trackedDomain.collaboration
+            collaboration: trackedDomain.collaboration,
+            tags: trackedDomain.tags
         )
     }
 
@@ -475,7 +476,8 @@ enum CloudSyncMerge {
                 lastAlertAt: [lhs.value.lastAlertAt, rhs.value.lastAlertAt].compactMap { $0 }.max(),
                 monitoringState: preferredMonitoringState(lhs.value.monitoringState, rhs.value.monitoringState),
                 pendingMonitoringAlerts: deduplicatedPendingAlerts(lhs.value.pendingMonitoringAlerts + rhs.value.pendingMonitoringAlerts),
-                collaboration: preferredCollaboration(lhs.value.collaboration, rhs.value.collaboration)
+                collaboration: preferredCollaboration(lhs.value.collaboration, rhs.value.collaboration),
+                tags: firstNonEmpty(winner.tags, lhs.value.tags, rhs.value.tags)
             ),
             orderKey: mergedOrderKey(lhs.orderKey, rhs.orderKey)
         )
@@ -486,6 +488,13 @@ enum CloudSyncMerge {
     /// which side's scalar fields won.
     static func mergedOrderKey(_ lhs: SyncOrderKey, _ rhs: SyncOrderKey) -> SyncOrderKey {
         SyncOrderKey.isAtLeastAsRecent(lhs, rhs) ? lhs : rhs
+    }
+
+    /// Records written before tags were carried decode with none at all, so an
+    /// empty list means "this side has nothing to say" rather than "cleared".
+    /// Without the fallback the first sync after the fix would still drop them.
+    private static func firstNonEmpty(_ candidates: [String]...) -> [String] {
+        candidates.first { !$0.isEmpty } ?? []
     }
 
     private static func preferredTrackedDomain(
