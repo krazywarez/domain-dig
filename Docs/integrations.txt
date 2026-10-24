@@ -1,0 +1,27 @@
+# DomainDig Integrations
+
+## SMTP submission
+
+Email integrations support implicit TLS ("Direct TLS") on port 465. STARTTLS
+on port 587 is not supported.
+
+`SMTPSecurityMode` has two cases: `.plain` and `.directTLS`. Sending with a
+username configured and `.plain` selected throws
+`IntegrationError.insecureCredentials`, and the integration editor refuses to
+save that combination.
+
+Why STARTTLS is not implemented:
+
+- `NWConnection` cannot add TLS to an established connection. The protocol
+  stack is fixed when `NWParameters` is constructed, so the plaintext SMTP
+  greeting and the `STARTTLS` exchange cannot be followed by a TLS handshake
+  on the same connection.
+- The alternative is CFStream, which can negotiate TLS in place through
+  `kCFStreamPropertySSLSettings`. `CFStreamCreatePairWithSocketToHost` is
+  deprecated in favour of Network.framework, which is the API that cannot do
+  this. CFStream also has no handshake-completion callback and needs its own
+  run-loop thread. A correct implementation must discard any bytes buffered
+  before the upgrade; otherwise it is open to the STARTTLS plaintext-injection
+  attack (CVE-2011-0411).
+- RFC 8314 section 3.3 recommends implicit TLS on port 465 over STARTTLS on
+  port 587 for mail submission.
