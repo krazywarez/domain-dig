@@ -478,7 +478,49 @@ private final class LocalAPIServer: @unchecked Sendable {
     }
 }
 
-private struct LocalAPIRequestHandler {
+/// The `v1` routes. Matching is separated from execution so the table can be
+/// exercised without reading the store or reaching the network, and so adding a
+/// route cannot silently shadow an existing one.
+enum LocalAPIRoute: Equatable {
+    case portfolio
+    case domains
+    case domainDetails(String)
+    case domainHistory(String)
+    case events
+    case monitoring
+    case inspectFromBody
+    case inspect(String)
+    case setMonitoring(domain: String, enabled: Bool)
+
+    static func match(method: String, pathComponents: [String]) -> LocalAPIRoute? {
+        switch (method, pathComponents.first, pathComponents.count) {
+        case ("GET", "portfolio", 1):
+            return .portfolio
+        case ("GET", "domains", 1):
+            return .domains
+        case ("GET", "domains", 2):
+            return .domainDetails(pathComponents[1])
+        case ("GET", "domains", 3) where pathComponents[2] == "history":
+            return .domainHistory(pathComponents[1])
+        case ("GET", "events", 1):
+            return .events
+        case ("GET", "monitoring", 1):
+            return .monitoring
+        case ("POST", "inspect", 1):
+            return .inspectFromBody
+        case ("POST", "inspect", 2):
+            return .inspect(pathComponents[1])
+        case ("POST", "monitoring", 3) where pathComponents[2] == "enable":
+            return .setMonitoring(domain: pathComponents[1], enabled: true)
+        case ("POST", "monitoring", 3) where pathComponents[2] == "disable":
+            return .setMonitoring(domain: pathComponents[1], enabled: false)
+        default:
+            return nil
+        }
+    }
+}
+
+struct LocalAPIRequestHandler {
     private let encoder = LocalAPIContract.makeEncoder()
 
     private let decoder: JSONDecoder = {
@@ -491,72 +533,37 @@ private struct LocalAPIRequestHandler {
     private let reportBuilder = DomainReportBuilder()
 
     func handle(request: LocalAPIHTTPRequest, expectedToken: String) async -> LocalAPIHTTPResponse {
-        guard isAuthorized(request: request, expectedToken: expectedToken) else {
+        guard Self.isAuthorized(request: request, expectedToken: expectedToken) else {
             return .error(statusCode: 401, code: "unauthorized", message: "A valid local API token is required.")
         }
 
-        if request.method == "GET", request.pathComponents == ["portfolio"] {
+        guard let route = LocalAPIRoute.match(method: request.method, pathComponents: request.pathComponents) else {
+            return .error(statusCode: 404, code: "not_found", message: "The requested Local API route does not exist.")
+        }
+
+        switch route {
+        case .portfolio:
             return successResponse(PortfolioPayload(summary: buildPortfolioSummary()))
-        }
-
-        if request.method == "GET", request.pathComponents == ["domains"] {
+        case .domains:
             return successResponse(DomainListPayload(domains: DomainDataPortabilityService.loadTrackedDomains()))
-        }
-
-        if request.method == "GET",
-           request.pathComponents.count == 2,
-           request.pathComponents.first == "domains" {
-            let domain = request.pathComponents[1]
+        case let .domainDetails(domain):
             return domainDetailsResponse(for: domain)
-        }
-
-        if request.method == "GET",
-           request.pathComponents.count == 3,
-           request.pathComponents.first == "domains",
-           request.pathComponents.last == "history" {
-            let domain = request.pathComponents[1]
+        case let .domainHistory(domain):
             return successResponse(DomainHistoryPayload(domain: normalizedDomain(domain), history: historyEntries(for: domain)))
-        }
-
-        if request.method == "GET", request.pathComponents == ["events"] {
+        case .events:
             return successResponse(RecentEventsPayload(events: recentEvents()))
-        }
-
-        if request.method == "GET", request.pathComponents == ["monitoring"] {
+        case .monitoring:
             return successResponse(monitoringPayload())
-        }
-
-        if request.method == "POST", request.pathComponents == ["inspect"] {
+        case .inspectFromBody:
             return await inspectBodyResponse(request.body)
-        }
-
-        if request.method == "POST",
-           request.pathComponents.count == 2,
-           request.pathComponents.first == "inspect" {
-            let domain = request.pathComponents[1]
+        case let .inspect(domain):
             return await inspectResponse(for: domain)
+        case let .setMonitoring(domain, enabled):
+            return await setMonitoring(enabled: enabled, for: domain)
         }
-
-        if request.method == "POST",
-           request.pathComponents.count == 3,
-           request.pathComponents.first == "monitoring",
-           request.pathComponents.last == "enable" {
-            let domain = request.pathComponents[1]
-            return await setMonitoring(enabled: true, for: domain)
-        }
-
-        if request.method == "POST",
-           request.pathComponents.count == 3,
-           request.pathComponents.first == "monitoring",
-           request.pathComponents.last == "disable" {
-            let domain = request.pathComponents[1]
-            return await setMonitoring(enabled: false, for: domain)
-        }
-
-        return .error(statusCode: 404, code: "not_found", message: "The requested Local API route does not exist.")
     }
 
-    private func isAuthorized(request: LocalAPIHTTPRequest, expectedToken: String) -> Bool {
+    static func isAuthorized(request: LocalAPIHTTPRequest, expectedToken: String) -> Bool {
         guard !expectedToken.isEmpty else { return false }
 
         if request.headers["x-api-token"] == expectedToken {
@@ -766,7 +773,7 @@ private struct LocalAPIRequestHandler {
     }
 }
 
-private struct LocalAPIHTTPRequest {
+struct LocalAPIHTTPRequest {
     let method: String
     let path: String
     let queryItems: [URLQueryItem]
@@ -788,7 +795,7 @@ private struct LocalAPIHTTPRequest {
     }
 }
 
-private struct LocalAPIHTTPResponse {
+struct LocalAPIHTTPResponse {
     let statusCode: Int
     let body: Data
 
