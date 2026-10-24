@@ -229,7 +229,7 @@ struct HistoryDetailView: View {
                     error: snapshot.subdomainsError,
                     provenance: snapshot.provenanceBySection[.subdomains],
                     confidence: snapshot.subdomainConfidence,
-                    showsExtendedPlaceholder: !DataAccessService.hasAccess(to: .extendedSubdomains)
+                    showsExtendedPlaceholder: !FeatureAccessService.hasAccess(to: .extendedSubdomains)
                 )
                 .padding(.top, appDensity.metrics.sectionSpacing)
                 if let comparisonSnapshot = viewModel.comparisonSnapshot(for: entry) {

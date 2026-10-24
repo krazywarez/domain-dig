@@ -395,10 +395,6 @@ struct WorkflowRunSummary: Identifiable, Equatable {
 /// Data that a tier gates. Ownership and DNS history derive from the user's own
 /// stored snapshots and are not gated at all; pricing and reputation were
 /// removed, having no local derivation and no configured provider.
-enum DataCapability: String, Codable {
-    case extendedSubdomains
-}
-
 struct DomainOwnershipHistoryEvent: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     let date: Date
@@ -976,14 +972,6 @@ extension DomainHealth {
             + (hasRecentDNSChange ? 14 : 0)
         return min(rawScore, 100)
     }
-}
-
-enum PremiumCapability: String, Codable {
-    case unlimitedTrackedDomains
-    case automatedMonitoring
-    case pushAlerts
-    case batchTracking
-    case advancedExports
 }
 
 enum CollaborationPermission: String, Codable, Equatable {
