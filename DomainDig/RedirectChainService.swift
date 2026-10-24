@@ -2,12 +2,20 @@ import Foundation
 
 struct RedirectChainService {
     static func trace(domain: String) async -> ServiceResult<[RedirectHop]> {
+        guard let httpsURL = DomainHostURL.https(domain) else {
+            return .error("Not a valid domain name")
+        }
+
         do {
-            let hops = try await followChain(startingURL: URL(string: "https://\(domain)")!)
+            let hops = try await followChain(startingURL: httpsURL)
             return hops.isEmpty ? .empty("No redirect data available") : .success(hops)
         } catch {
+            guard let httpURL = DomainHostURL.http(domain) else {
+                return .error(error.localizedDescription)
+            }
+
             do {
-                let hops = try await followChain(startingURL: URL(string: "http://\(domain)")!)
+                let hops = try await followChain(startingURL: httpURL)
                 return hops.isEmpty ? .empty("No redirect data available") : .success(hops)
             } catch {
                 return .error(error.localizedDescription)

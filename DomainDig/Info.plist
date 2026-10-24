@@ -2,10 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>Allow ​Arbitrary ​Loads (or NSAllows​Arbitrary​Loads) </key>
-	<true/>
-	<key>App ​Transport ​Security ​Settings (or NSApp​Transport​Security)</key>
-	<dict/>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>net.cleberg.DomainDig.monitor.refresh</string>
@@ -24,6 +20,14 @@
 	</array>
 	<key>CKSharingSupported</key>
 	<true/>
+	<!-- The app inspects hosts the user names, including tracing the
+	     http -> https redirect that is the point of the redirect check, so
+	     requests cannot be restricted to TLS. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>

@@ -468,6 +468,10 @@ private struct IntegrationEditorView: View {
                     validationMessage = "SMTP password is required."
                     return
                 }
+                if smtpSecurity != .directTLS, !emailUsername.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    validationMessage = "A username needs Direct TLS, usually on port 465. Without it the password would be sent in cleartext."
+                    return
+                }
 
                 let target = IntegrationTarget(
                     id: targetID,

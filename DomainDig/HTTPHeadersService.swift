@@ -36,7 +36,10 @@ struct HTTPHeadersResult {
 
 struct HTTPHeadersService {
     static func fetch(domain: String) async -> ServiceResult<HTTPHeadersResult> {
-        let url = URL(string: "https://\(domain)")!
+        guard let url = DomainHostURL.https(domain) else {
+            return .error("Not a valid domain name")
+        }
+
         var request = URLRequest(url: url, timeoutInterval: 10)
         request.httpMethod = "HEAD"
         let metricsDelegate = TaskMetricsDelegate()

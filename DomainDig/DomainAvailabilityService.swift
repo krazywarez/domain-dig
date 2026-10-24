@@ -9,15 +9,16 @@ struct DomainAvailabilityService {
             return DomainAvailabilityResult(domain: domain, status: .unknown)
         }
 
-        if await checkViaRDAP(domain: normalizedDomain) == .registered {
-            return DomainAvailabilityResult(domain: normalizedDomain, status: .registered)
+        // RDAP is the registry's own record, so it settles both directions.
+        if let registryStatus = await checkViaRDAP(domain: normalizedDomain) {
+            return DomainAvailabilityResult(domain: normalizedDomain, status: registryStatus)
         }
 
+        // Without a registry answer only "registered" is decidable: a name that
+        // resolves is registered. Absence of records is not evidence of
+        // availability, because the DoH layer drops the response code, so
+        // NXDOMAIN and a resolver failure arrive here identically.
         let fallbackStatus = await checkViaDNSFallback(domain: normalizedDomain)
-        if fallbackStatus == .registered {
-            return DomainAvailabilityResult(domain: normalizedDomain, status: .unknown)
-        }
-
         return DomainAvailabilityResult(domain: normalizedDomain, status: fallbackStatus)
     }
 

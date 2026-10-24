@@ -586,6 +586,7 @@ private enum IntegrationError: LocalizedError {
     case missingSecret
     case invalidResponse(Int)
     case invalidSMTPPort
+    case insecureCredentials
     case smtp(String)
     case streamClosed
 
@@ -601,6 +602,8 @@ private enum IntegrationError: LocalizedError {
             return "The remote endpoint returned \(statusCode)."
         case .invalidSMTPPort:
             return "The SMTP port is invalid."
+        case .insecureCredentials:
+            return "SMTP credentials cannot be sent over an unencrypted connection. Use Direct TLS, usually on port 465."
         case .smtp(let message):
             return message
         case .streamClosed:
@@ -669,8 +672,18 @@ private enum SMTPClient {
         configuration: EmailIntegrationConfiguration,
         password: String
     ) async throws {
-        guard let port = NWEndpoint.Port(rawValue: UInt16(configuration.port)) else {
+        // `UInt16(_:)` traps above 65535, which the editor's port field allows.
+        guard let portNumber = UInt16(exactly: configuration.port),
+              let port = NWEndpoint.Port(rawValue: portNumber) else {
             throw IntegrationError.invalidSMTPPort
+        }
+
+        // AUTH LOGIN sends the username and password base64-encoded, which is
+        // not encryption. Without TLS from the first byte they would go out in
+        // the clear, so refuse before the connection opens. STARTTLS is not an
+        // option here: NWConnection cannot upgrade an established connection.
+        guard configuration.username.isEmpty || configuration.securityMode == .directTLS else {
+            throw IntegrationError.insecureCredentials
         }
 
         let parameters: NWParameters = {
