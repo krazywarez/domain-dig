@@ -11,7 +11,6 @@ struct SettingsView: View {
     @State private var purchaseService = PurchaseService.shared
 
     var body: some View {
-        let _ = purchaseService.currentTier
 
         List {
             Section("Tier") {

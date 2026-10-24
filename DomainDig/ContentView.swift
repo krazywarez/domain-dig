@@ -32,7 +32,6 @@ private struct WorkflowNavigationTarget: Hashable {
 struct ContentView: View {
     @Environment(\.appDensity) private var appDensity
     @Bindable var viewModel: DomainViewModel
-    @State private var purchaseService = PurchaseService.shared
     @State private var navigationPath = NavigationPath()
     @FocusState private var focusedInputField: LookupInputField?
     @State private var customPortInput = ""
@@ -48,8 +47,6 @@ struct ContentView: View {
     @State private var auditStartInFlight = false
 
     var body: some View {
-        let _ = purchaseService.currentTier
-
         NavigationStack(path: $navigationPath) {
             ScrollView(.vertical) {
                 VStack(spacing: 0) {

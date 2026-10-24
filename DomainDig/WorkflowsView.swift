@@ -10,12 +10,10 @@ private enum WorkflowDestinationMode: String, CaseIterable, Identifiable {
 struct WorkflowsView: View {
     @Environment(\.appDensity) private var appDensity
     @Bindable var viewModel: DomainViewModel
-    @State private var purchaseService = PurchaseService.shared
 
     @State private var showingCreateWorkflow = false
 
     var body: some View {
-        let _ = purchaseService.currentTier
 
         List {
             if let limitMessage = FeatureAccessService.workflowAllowanceSummary(currentCount: viewModel.workflows.count) {

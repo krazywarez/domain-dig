@@ -34,21 +34,7 @@ struct DomainDigApp: App {
                     #if DEBUG
                     viewModel.seedAuditFixturesIfRequested()
                     #endif
-                    let _ = purchaseService.currentTier
-                    let _ = cloudSyncService.status
-                    let _ = localAPIService.isRunning
-                    let _ = IntegrationService.shared.targets.count
-                    await purchaseService.refreshEntitlements()
-                    viewModel.refreshMonitoringState()
-                    await viewModel.refreshMonitoringAuthorizationStatus()
-                    await cloudSyncService.refreshAvailability()
-                    localAPIService.refresh()
-                    cloudSyncService.scheduleSyncIfNeeded(trigger: .launch)
-                    viewModel.monitoringStatusMessage = DomainMonitoringScheduler.shared.syncSchedule()
-                    ScheduledReportScheduler.shared.syncSchedule()
-                    IntegrationService.shared.processQueueNow()
-                    viewModel.refreshWidgetData()
-                    consumeShareInbox()
+                    await refreshAfterBecomingActive()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .cloudSyncDidApplyChanges)) { _ in
                     viewModel.refreshPersistedData()
@@ -58,19 +44,28 @@ struct DomainDigApp: App {
         }
         .onChange(of: scenePhase) { _, newValue in
             guard newValue == .active else { return }
-            viewModel.refreshMonitoringState()
-            Task {
-                await viewModel.refreshMonitoringAuthorizationStatus()
-                await cloudSyncService.refreshAvailability()
-            }
-            localAPIService.refresh()
-            cloudSyncService.scheduleSyncIfNeeded(trigger: .launch)
-            viewModel.monitoringStatusMessage = DomainMonitoringScheduler.shared.syncSchedule()
-            ScheduledReportScheduler.shared.syncSchedule()
-            IntegrationService.shared.processQueueNow()
-            viewModel.refreshWidgetData()
-            consumeShareInbox()
+            Task { await refreshAfterBecomingActive() }
         }
+    }
+
+    /// Everything that must re-run whenever the app becomes active.
+    ///
+    /// Launch and foreground carried near-duplicates of this, and the
+    /// foreground copy left out `refreshEntitlements()` — so a purchase or
+    /// cancellation made outside the app was not picked up until the next cold
+    /// launch.
+    private func refreshAfterBecomingActive() async {
+        await purchaseService.refreshEntitlements()
+        viewModel.refreshMonitoringState()
+        await viewModel.refreshMonitoringAuthorizationStatus()
+        await cloudSyncService.refreshAvailability()
+        localAPIService.refresh()
+        cloudSyncService.scheduleSyncIfNeeded(trigger: .launch)
+        viewModel.monitoringStatusMessage = DomainMonitoringScheduler.shared.syncSchedule()
+        ScheduledReportScheduler.shared.syncSchedule()
+        IntegrationService.shared.processQueueNow()
+        viewModel.refreshWidgetData()
+        consumeShareInbox()
     }
 
     /// Picks up a domain shared via the share extension and routes it into an

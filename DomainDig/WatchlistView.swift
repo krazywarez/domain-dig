@@ -5,7 +5,6 @@ struct WatchlistView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var viewModel: DomainViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var purchaseService = PurchaseService.shared
     @State private var showWorkflowAddSheet = false
     @State private var showAddDomainSheet = false
     @State private var newTrackedDomain = ""
@@ -24,7 +23,6 @@ struct WatchlistView: View {
     }
 
     var body: some View {
-        let _ = purchaseService.currentTier
 
         List {
             if !viewModel.allWatchlistTags.isEmpty {

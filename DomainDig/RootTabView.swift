@@ -37,8 +37,6 @@ struct RootTabView: View {
     @State private var selectedTab: RootTab = FeatureAccessService.currentTier == .free ? .inspect : .dashboard
 
     var body: some View {
-        let _ = purchaseService.currentTier
-
         Group {
             if horizontalSizeClass == .regular {
                 splitLayout
