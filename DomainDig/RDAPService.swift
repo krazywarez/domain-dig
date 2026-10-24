@@ -1,18 +1,32 @@
 import Foundation
 
 enum RDAPService {
+    /// The registry's answer about `domain`, or nil when the registry did not
+    /// give one.
     static func registrationStatus(for domain: String) async -> DomainAvailabilityStatus? {
         let normalizedDomain = normalize(domain)
         guard !normalizedDomain.isEmpty else { return nil }
 
         switch await fetchRDAPResponse(for: normalizedDomain) {
-        case let .success(response):
-            return response.isDomainRecord ? .registered : nil
-        case .empty:
-            return nil
-        case .error:
+        case .found:
+            return .registered
+        case .notRegistered:
+            return .available
+        case .empty, .failed:
             return nil
         }
+    }
+
+    /// Whether an RDAP response came from a registry's own server rather than
+    /// from the `rdap.org` bootstrap redirector.
+    ///
+    /// `rdap.org` answers 404 both for a domain its registry does not hold and
+    /// for a TLD it knows no RDAP server for; only the first says anything about
+    /// registration. `URLSession` follows the bootstrap redirect, so a response
+    /// URL on another host is the registry's own answer.
+    static func answeredByRegistry(responseURL: URL?) -> Bool {
+        guard let host = responseURL?.host?.lowercased() else { return false }
+        return host != bootstrapHost && !host.hasSuffix(".\(bootstrapHost)")
     }
 
     static func ownership(for domain: String) async -> ServiceResult<DomainOwnership> {
@@ -22,7 +36,7 @@ enum RDAPService {
         }
 
         switch await fetchRDAPResponse(for: normalizedDomain) {
-        case let .success(response):
+        case let .found(response):
             let ownership = DomainOwnership(
                 registrar: response.registrarName,
                 registrant: response.registrantName,
@@ -33,9 +47,11 @@ enum RDAPService {
                 abuseEmail: response.abuseEmail
             )
             return .success(ownership)
+        case .notRegistered:
+            return .empty("Unavailable")
         case let .empty(message):
             return .empty(message)
-        case let .error(message):
+        case let .failed(message):
             return .error(message)
         }
     }
@@ -47,10 +63,24 @@ enum RDAPService {
     }
 }
 
-private func fetchRDAPResponse(for domain: String) async -> ServiceResult<RDAPDomainResponse> {
+private let bootstrapHost = "rdap.org"
+
+/// What a single RDAP fetch established.
+private enum RDAPFetchOutcome {
+    /// A domain record, from whichever server answered.
+    case found(RDAPDomainResponse)
+    /// The registry's own RDAP server reported no such domain.
+    case notRegistered
+    /// An answer that settles nothing: a non-domain record, or a 404 from the
+    /// bootstrap redirector rather than from a registry.
+    case empty(String)
+    case failed(String)
+}
+
+private func fetchRDAPResponse(for domain: String) async -> RDAPFetchOutcome {
     let startedAt = DomainDebugLog.signpostStart("RDAP.fetch", domain: domain)
-    guard let url = URL(string: "https://rdap.org/domain/\(domain)") else {
-        return .error("Unavailable")
+    guard let url = URL(string: "https://\(bootstrapHost)/domain/\(domain)") else {
+        return .failed("Unavailable")
     }
 
     do {
@@ -61,7 +91,7 @@ private func fetchRDAPResponse(for domain: String) async -> ServiceResult<RDAPDo
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             DomainDebugLog.error("RDAP.badResponse domain=\(domain) response=nil")
-            return .error(URLError(.badServerResponse).localizedDescription)
+            return .failed(URLError(.badServerResponse).localizedDescription)
         }
 
         switch httpResponse.statusCode {
@@ -73,19 +103,20 @@ private func fetchRDAPResponse(for domain: String) async -> ServiceResult<RDAPDo
                 return .empty("Unavailable")
             }
             DomainDebugLog.signpostEnd("RDAP.fetch", start: startedAt, domain: domain, extra: "status=200 bytes=\(data.count)")
-            return .success(rdapResponse)
+            return .found(rdapResponse)
         case 404:
-            DomainDebugLog.signpostEnd("RDAP.fetch", start: startedAt, domain: domain, extra: "status=404")
-            return .empty("Unavailable")
+            let fromRegistry = RDAPService.answeredByRegistry(responseURL: httpResponse.url)
+            DomainDebugLog.signpostEnd("RDAP.fetch", start: startedAt, domain: domain, extra: "status=404 registry=\(fromRegistry)")
+            return fromRegistry ? .notRegistered : .empty("Unavailable")
         default:
             DomainDebugLog.error("RDAP.httpError domain=\(domain) status=\(httpResponse.statusCode)")
             DomainDebugLog.signpostEnd("RDAP.fetch", start: startedAt, domain: domain, extra: "status=\(httpResponse.statusCode)")
-            return .error("Unavailable")
+            return .failed("Unavailable")
         }
     } catch {
         DomainDebugLog.error("RDAP.error domain=\(domain) error=\(error.localizedDescription)")
         DomainDebugLog.signpostEnd("RDAP.fetch", start: startedAt, domain: domain, extra: "error")
-        return .error(error.localizedDescription)
+        return .failed(error.localizedDescription)
     }
 }
 
