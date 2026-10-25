@@ -1676,8 +1676,16 @@ enum MonitoringEventType: String, Codable, CaseIterable, Identifiable, Sendable 
     case monitoringFailure
     case changeDetected
     case test
+    case reportExported
 
     var id: String { rawValue }
+
+    /// Types a user can filter an integration on. `test` and `reportExported`
+    /// are not alerts — one is a probe, the other is the carrier for an upload
+    /// that bypasses filters — so neither belongs in the filter list.
+    static var filterable: [MonitoringEventType] {
+        allCases.filter { $0 != .test && $0 != .reportExported }
+    }
 
     var title: String {
         switch self {
@@ -1699,6 +1707,8 @@ enum MonitoringEventType: String, Codable, CaseIterable, Identifiable, Sendable 
             return "Change Detected"
         case .test:
             return "Test Event"
+        case .reportExported:
+            return "Report Exported"
         }
     }
 }
@@ -1820,6 +1830,59 @@ struct EmailIntegrationConfiguration: Codable, Equatable, Sendable {
     }
 }
 
+/// When a completed run uploads.
+///
+/// Scheduled, monitoring and batch runs upload by default. An interactive Run
+/// does not, because every tap would otherwise ship an object (D1).
+enum S3ExportTrigger: String, Codable, CaseIterable, Identifiable, Sendable {
+    case scheduled
+    case monitoring
+    case batch
+    case interactiveRun
+
+    var id: String { rawValue }
+
+    /// The triggers a new target starts with.
+    static let defaults: Set<S3ExportTrigger> = [.scheduled, .monitoring, .batch]
+
+    var title: String {
+        switch self {
+        case .scheduled:
+            return "Scheduled reports"
+        case .monitoring:
+            return "Monitoring runs"
+        case .batch:
+            return "Batch lookups"
+        case .interactiveRun:
+            return "Every lookup you run"
+        }
+    }
+
+    var detail: String? {
+        switch self {
+        case .interactiveRun:
+            return "Off by default: every tap would upload an object."
+        case .scheduled, .monitoring, .batch:
+            return nil
+        }
+    }
+}
+
+/// One object to upload: which format, and what asked for it.
+///
+/// The report itself is not here. It is re-rendered from local history when the
+/// upload runs, because the queue persists to UserDefaults and has to stay
+/// small enough to survive a refresh being cut off.
+struct ExportDelivery: Codable, Equatable, Sendable {
+    var format: DomainExportFormat
+    var trigger: S3ExportTrigger
+
+    init(format: DomainExportFormat, trigger: S3ExportTrigger) {
+        self.format = format
+        self.trigger = trigger
+    }
+}
+
 /// An S3-compatible bucket the user owns: S3 itself, R2, B2, MinIO, Wasabi or
 /// Spaces.
 ///
@@ -1840,6 +1903,10 @@ struct S3IntegrationConfiguration: Codable, Equatable, Sendable {
     var usesPathStyle: Bool
     var accessKeyID: String
     var credentialReference: String?
+    /// Which completed runs upload.
+    var triggers: Set<S3ExportTrigger>
+    /// Formats beyond JSON. JSON always uploads, so it is not listed here.
+    var extraFormats: Set<DomainExportFormat>
 
     init(
         endpoint: String = "",
@@ -1848,7 +1915,9 @@ struct S3IntegrationConfiguration: Codable, Equatable, Sendable {
         keyPrefix: String = "domaindig",
         usesPathStyle: Bool = false,
         accessKeyID: String = "",
-        credentialReference: String? = nil
+        credentialReference: String? = nil,
+        triggers: Set<S3ExportTrigger> = S3ExportTrigger.defaults,
+        extraFormats: Set<DomainExportFormat> = []
     ) {
         self.endpoint = endpoint
         self.region = region
@@ -1857,6 +1926,20 @@ struct S3IntegrationConfiguration: Codable, Equatable, Sendable {
         self.usesPathStyle = usesPathStyle
         self.accessKeyID = accessKeyID
         self.credentialReference = credentialReference
+        self.triggers = triggers
+        self.extraFormats = extraFormats
+    }
+
+    /// Every format this target uploads, JSON first.
+    ///
+    /// JSON is not optional: it is the only format that round-trips, and the
+    /// others are renderings of it.
+    var formats: [DomainExportFormat] {
+        [.json] + extraFormats.filter { $0 != .json }.sorted { $0.rawValue < $1.rawValue }
+    }
+
+    func uploads(on trigger: S3ExportTrigger) -> Bool {
+        triggers.contains(trigger)
     }
 }
 
@@ -1928,7 +2011,7 @@ struct IntegrationFilterSet: Codable, Equatable, Sendable {
 
     init(
         minimumSeverity: EventSeverity = .warning,
-        eventTypes: Set<MonitoringEventType> = Set(MonitoringEventType.allCases.filter { $0 != .test }),
+        eventTypes: Set<MonitoringEventType> = Set(MonitoringEventType.filterable),
         domains: [String] = []
     ) {
         self.minimumSeverity = minimumSeverity
@@ -2033,6 +2116,9 @@ struct QueuedDelivery: Codable, Identifiable, Equatable, Sendable {
     var nextAttemptAt: Date
     var lastError: String?
     var expiresAt: Date
+    /// Set when this entry is an export upload rather than an event delivery.
+    /// Optional so queue entries written before exports existed still decode.
+    var export: ExportDelivery?
 
     init(
         id: UUID = UUID(),
@@ -2042,7 +2128,8 @@ struct QueuedDelivery: Codable, Identifiable, Equatable, Sendable {
         attemptCount: Int = 0,
         nextAttemptAt: Date = Date(),
         lastError: String? = nil,
-        expiresAt: Date = Date().addingTimeInterval(3 * 24 * 60 * 60)
+        expiresAt: Date = Date().addingTimeInterval(3 * 24 * 60 * 60),
+        export: ExportDelivery? = nil
     ) {
         self.id = id
         self.integrationID = integrationID
@@ -2052,6 +2139,7 @@ struct QueuedDelivery: Codable, Identifiable, Equatable, Sendable {
         self.nextAttemptAt = nextAttemptAt
         self.lastError = lastError
         self.expiresAt = expiresAt
+        self.export = export
     }
 }
 

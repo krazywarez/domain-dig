@@ -430,6 +430,12 @@ final class DomainMonitoringService {
         } else {
             IntegrationService.shared.enqueue(events: outboundEvents)
         }
+        // Every domain the run actually inspected, whether or not it changed:
+        // an export is a record of the run, not an alert about it.
+        IntegrationService.shared.enqueueExports(
+            domains: results.map(\.domain),
+            trigger: .monitoring
+        )
 
         return MonitoringRunOutcome(
             success: errors.count < results.count,

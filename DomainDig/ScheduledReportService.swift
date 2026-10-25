@@ -156,6 +156,10 @@ final class ScheduledReportService {
         ScheduledReportStorage.saveSettings(settings)
 
         await LocalNotificationService.shared.notifyScheduledReportReady(domainCount: reports.count)
+        IntegrationService.shared.enqueueExports(
+            domains: reports.map(\.domain),
+            trigger: .scheduled
+        )
 
         return ScheduledReportOutcome(success: true, message: "Report generated for \(reports.count) domains.", log: log)
     }

@@ -292,6 +292,135 @@ final class S3UploadClientTests: XCTestCase {
         XCTAssertEqual(configuration.bucket, "my-bucket")
     }
 
+    // MARK: Triggers
+
+    /// Scheduled, monitoring and batch upload by default; an interactive Run
+    /// does not, because every tap would otherwise ship an object (D1).
+    func testInteractiveRunIsTheOnlyTriggerOffByDefault() {
+        let configuration = S3IntegrationConfiguration()
+
+        XCTAssertTrue(configuration.uploads(on: .scheduled))
+        XCTAssertTrue(configuration.uploads(on: .monitoring))
+        XCTAssertTrue(configuration.uploads(on: .batch))
+        XCTAssertFalse(configuration.uploads(on: .interactiveRun))
+    }
+
+    func testTriggersAreIndependentlySettable() {
+        var configuration = S3IntegrationConfiguration(triggers: [.interactiveRun])
+
+        XCTAssertTrue(configuration.uploads(on: .interactiveRun))
+        XCTAssertFalse(configuration.uploads(on: .monitoring))
+
+        configuration.triggers = []
+        for trigger in S3ExportTrigger.allCases {
+            XCTAssertFalse(configuration.uploads(on: trigger))
+        }
+    }
+
+    // MARK: Formats
+
+    /// JSON always uploads: it is the only format that round-trips, and the
+    /// others are renderings of it.
+    func testJSONUploadsEvenWithNoExtraFormats() {
+        XCTAssertEqual(S3IntegrationConfiguration().formats, [.json])
+    }
+
+    func testExtraFormatsAreAddedAfterJSON() {
+        let configuration = S3IntegrationConfiguration(extraFormats: [.pdf, .csv])
+
+        XCTAssertEqual(configuration.formats.first, .json)
+        XCTAssertEqual(Set(configuration.formats), [.json, .csv, .pdf])
+    }
+
+    /// JSON is implicit, so selecting it as an extra must not upload it twice.
+    func testJSONAsAnExtraFormatIsNotDuplicated() {
+        XCTAssertEqual(S3IntegrationConfiguration(extraFormats: [.json]).formats, [.json])
+    }
+
+    /// The key template is `{prefix}/{domain}/{iso8601}.{ext}`, so each format
+    /// lands at its own key rather than overwriting the last one.
+    func testEachFormatHasItsOwnExtension() {
+        XCTAssertEqual(DomainExportFormat.json.fileExtension, "json")
+        XCTAssertEqual(DomainExportFormat.pdf.fileExtension, "pdf")
+        XCTAssertEqual(DomainExportFormat.csv.fileExtension, "csv")
+        XCTAssertEqual(DomainExportFormat.pdf.mimeType, "application/pdf")
+        XCTAssertEqual(DomainExportFormat.json.mimeType, "application/json")
+    }
+
+    /// The export carrier is not an alert, so it must not appear in the list a
+    /// user filters an integration on.
+    func testTheExportEventTypeIsNotFilterable() {
+        XCTAssertFalse(MonitoringEventType.filterable.contains(.reportExported))
+        XCTAssertFalse(MonitoringEventType.filterable.contains(.test))
+        XCTAssertTrue(MonitoringEventType.filterable.contains(.dnsChanged))
+    }
+
+    /// Queue entries written before exports existed have no `export` field and
+    /// still have to decode.
+    func testAQueueEntryWithoutAnExportDescriptorStillDecodes() throws {
+        let json = Data("""
+            {
+              "id": "5E7E4B0E-0000-4000-8000-000000000001",
+              "integrationID": "5E7E4B0E-0000-4000-8000-000000000002",
+              "event": {
+                "id": "5E7E4B0E-0000-4000-8000-000000000003",
+                "type": "dnsChanged",
+                "severity": "warning",
+                "domain": "example.com",
+                "timestamp": 0,
+                "summary": "changed",
+                "details": {}
+              },
+              "createdAt": 0,
+              "attemptCount": 0,
+              "nextAttemptAt": 0,
+              "expiresAt": 1
+            }
+            """.utf8)
+
+        let decoded = try JSONDecoder().decode(QueuedDelivery.self, from: json)
+
+        XCTAssertNil(decoded.export)
+        XCTAssertEqual(decoded.event.domain, "example.com")
+    }
+
+    func testAnExportQueueEntryRoundTrips() throws {
+        let entry = QueuedDelivery(
+            integrationID: UUID(),
+            event: MonitoringEvent(
+                type: .reportExported,
+                severity: .info,
+                domain: "example.com",
+                summary: "Batch lookups: example.com as PDF"
+            ),
+            export: ExportDelivery(format: .pdf, trigger: .batch)
+        )
+
+        let decoded = try JSONDecoder().decode(
+            QueuedDelivery.self,
+            from: try JSONEncoder().encode(entry)
+        )
+
+        XCTAssertEqual(decoded.export, ExportDelivery(format: .pdf, trigger: .batch))
+        XCTAssertEqual(decoded.event.type, .reportExported)
+    }
+
+    /// Triggers and formats are persisted with the target.
+    func testTriggersAndFormatsRoundTripThroughCoding() throws {
+        var configuration = configuration()
+        configuration.triggers = [.interactiveRun, .batch]
+        configuration.extraFormats = [.pdf]
+
+        let decoded = try JSONDecoder().decode(
+            S3IntegrationConfiguration.self,
+            from: try JSONEncoder().encode(configuration)
+        )
+
+        XCTAssertEqual(decoded.triggers, [.interactiveRun, .batch])
+        XCTAssertEqual(decoded.extraFormats, [.pdf])
+        XCTAssertEqual(decoded.formats, [.json, .pdf])
+    }
+
     /// The secret is never part of the configuration — it lives in the
     /// Keychain and only the reference is stored.
     func testTheConfigurationCarriesNoSecret() throws {

@@ -23,6 +23,18 @@ enum DomainExportFormat: String, CaseIterable, Identifiable, Codable {
         case .pdf: return "PDF"
         }
     }
+
+    /// Sent as `Content-Type` when a report is uploaded, so a bucket serves it
+    /// back as the right thing rather than as a download.
+    var mimeType: String {
+        switch self {
+        case .text: return "text/plain; charset=utf-8"
+        case .csv: return "text/csv; charset=utf-8"
+        case .json: return "application/json"
+        case .markdown: return "text/markdown; charset=utf-8"
+        case .pdf: return "application/pdf"
+        }
+    }
 }
 
 enum DomainReportExporter {

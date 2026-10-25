@@ -1466,6 +1466,9 @@ final class DomainViewModel {
         let saveStartedAt = DomainDebugLog.signpostStart("DomainViewModel.saveHistoryEntry", domain: domain)
         let entry = saveHistoryEntry(replaceLatest: false, reuseCurrentAnalysis: true)
         DomainDebugLog.signpostEnd("DomainViewModel.saveHistoryEntry", start: saveStartedAt, domain: domain)
+        // Opt-in, and off by default: this fires on every Run, so a target
+        // that enabled it ships an object per tap.
+        IntegrationService.shared.enqueueExports(domains: [domain], trigger: .interactiveRun)
         DomainDebugLog.signpostEnd("DomainViewModel.performLookup", start: lookupStartedAt, domain: domain)
         return entry
     }
@@ -2255,6 +2258,12 @@ final class DomainViewModel {
             generatedAt: Date()
         )
         latestBatchSweepSummary = summary
+        // Only the domains that actually completed: a failed lookup has no
+        // report to upload.
+        IntegrationService.shared.enqueueExports(
+            domains: batchResults.filter { $0.status == .completed }.map(\.domain),
+            trigger: .batch
+        )
         SweepActivityController.shared.end(changed: changedCount, warnings: warningCount)
         AppAccessibility.announce(
             "Sweep complete. \(summary.results.count) domains, \(changedCount) changed, \(warningCount) warnings."

@@ -201,7 +201,7 @@ private struct IntegrationEditorView: View {
     @State private var name: String = ""
     @State private var isEnabled = true
     @State private var minimumSeverity: EventSeverity = .warning
-    @State private var selectedEventTypes: Set<MonitoringEventType> = Set(MonitoringEventType.allCases.filter { $0 != .test })
+    @State private var selectedEventTypes: Set<MonitoringEventType> = Set(MonitoringEventType.filterable)
     @State private var s3Endpoint = ""
     @State private var s3Region = "us-east-1"
     @State private var s3Bucket = ""
@@ -209,6 +209,8 @@ private struct IntegrationEditorView: View {
     @State private var s3UsesPathStyle = false
     @State private var s3AccessKeyID = ""
     @State private var s3SecretAccessKey = ""
+    @State private var s3Triggers: Set<S3ExportTrigger> = S3ExportTrigger.defaults
+    @State private var s3ExtraFormats: Set<DomainExportFormat> = []
     @State private var domainsText = ""
 
     @State private var webhookURL = ""
@@ -254,7 +256,7 @@ private struct IntegrationEditorView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
 
-                ForEach(MonitoringEventType.allCases.filter { $0 != .test }, id: \.self) { eventType in
+                ForEach(MonitoringEventType.filterable, id: \.self) { eventType in
                     Toggle(
                         eventType.title,
                         isOn: Binding(
@@ -385,6 +387,54 @@ private struct IntegrationEditorView: View {
                             .foregroundStyle(Color(.appTextSecondary))
                     }
                 }
+
+                Section("Upload when") {
+                    ForEach(S3ExportTrigger.allCases) { trigger in
+                        Toggle(
+                            isOn: Binding(
+                                get: { s3Triggers.contains(trigger) },
+                                set: { isOn in
+                                    if isOn {
+                                        s3Triggers.insert(trigger)
+                                    } else {
+                                        s3Triggers.remove(trigger)
+                                    }
+                                }
+                            )
+                        ) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(trigger.title)
+                                if let detail = trigger.detail {
+                                    Text(detail)
+                                        .font(.caption)
+                                        .foregroundStyle(Color(.appTextSecondary))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Section("Formats") {
+                    Text("JSON always uploads. The others are renderings of it.")
+                        .font(.caption)
+                        .foregroundStyle(Color(.appTextSecondary))
+
+                    ForEach([DomainExportFormat.pdf, .csv]) { format in
+                        Toggle(
+                            format.title,
+                            isOn: Binding(
+                                get: { s3ExtraFormats.contains(format) },
+                                set: { isOn in
+                                    if isOn {
+                                        s3ExtraFormats.insert(format)
+                                    } else {
+                                        s3ExtraFormats.remove(format)
+                                    }
+                                }
+                            )
+                        )
+                    }
+                }
             }
 
             if let validationMessage {
@@ -442,6 +492,8 @@ private struct IntegrationEditorView: View {
             s3KeyPrefix = configuration.keyPrefix
             s3UsesPathStyle = configuration.usesPathStyle
             s3AccessKeyID = configuration.accessKeyID
+            s3Triggers = configuration.triggers
+            s3ExtraFormats = configuration.extraFormats
         }
     }
 
@@ -608,7 +660,9 @@ private struct IntegrationEditorView: View {
                             keyPrefix: s3KeyPrefix.trimmingCharacters(in: .whitespacesAndNewlines),
                             usesPathStyle: s3UsesPathStyle,
                             accessKeyID: trimmedAccessKeyID,
-                            credentialReference: existingReference
+                            credentialReference: existingReference,
+                            triggers: s3Triggers,
+                            extraFormats: s3ExtraFormats
                         )
                     ),
                     filters: filters

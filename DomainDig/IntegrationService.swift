@@ -112,6 +112,55 @@ final class IntegrationService {
             .sorted { $0.timestamp > $1.timestamp }
     }
 
+    /// Queues an upload of each domain's latest report to every S3 target set
+    /// to fire on `trigger`, one entry per configured format.
+    ///
+    /// Deliberately not routed through `enqueue(events:)`. That fans one event
+    /// out to every target and applies each target's severity and event-type
+    /// filters, which exist for alerts. Whether a completed run exports is a
+    /// per-target setting, and a finished run is not an alert, so the filters
+    /// must not decide it.
+    ///
+    /// One entry per format rather than one per report, so a PDF that fails to
+    /// upload retries without re-sending the JSON that already landed.
+    func enqueueExports(domains: [String], trigger: S3ExportTrigger) {
+        guard FeatureAccessService.hasAccess(to: .bucketExport) else { return }
+
+        var seen = Set<String>()
+        let normalizedDomains = domains
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+        guard !normalizedDomains.isEmpty else { return }
+
+        var queuedAny = false
+        for target in targets {
+            guard target.isEnabled, case .s3(let configuration) = target.configuration else { continue }
+            guard configuration.uploads(on: trigger) else { continue }
+
+            for domain in normalizedDomains {
+                for format in configuration.formats {
+                    queue.append(
+                        QueuedDelivery(
+                            integrationID: target.id,
+                            event: MonitoringEvent(
+                                type: .reportExported,
+                                severity: .info,
+                                domain: domain,
+                                summary: "\(trigger.title): \(domain) as \(format.title)"
+                            ),
+                            export: ExportDelivery(format: format, trigger: trigger)
+                        )
+                    )
+                    queuedAny = true
+                }
+            }
+        }
+
+        guard queuedAny else { return }
+        persistQueue()
+        scheduleProcessing()
+    }
+
     func enqueue(events: [MonitoringEvent]) {
         guard !events.isEmpty else { return }
         for event in events {
@@ -328,7 +377,7 @@ final class IntegrationService {
         }
 
         do {
-            try await deliver(item.event, to: target)
+            try await deliver(item, to: target)
             queue.remove(at: index)
             persistQueue()
             appendRecord(
@@ -382,7 +431,8 @@ final class IntegrationService {
         }
     }
 
-    private func deliver(_ event: MonitoringEvent, to target: IntegrationTarget) async throws {
+    private func deliver(_ item: QueuedDelivery, to target: IntegrationTarget) async throws {
+        let event = item.event
         switch target.configuration {
         case .webhook(let configuration):
             guard let reference = configuration.credentialReference else {
@@ -411,7 +461,7 @@ final class IntegrationService {
                 throw IntegrationError.missingSecret
             }
             let secretAccessKey = try IntegrationSecretStore.secret(reference: reference)
-            let object = Self.s3Object(for: event)
+            let object = try Self.s3Object(for: item, configuration: configuration)
             let request = try S3UploadClient.request(
                 for: object,
                 configuration: configuration,
@@ -457,34 +507,57 @@ final class IntegrationService {
         Self.save(queue, key: StorageKey.queue, defaults: defaults)
     }
 
-    /// What an event uploads: the domain's latest stored report when there is
-    /// one, and the event itself otherwise.
+    /// The object to upload.
     ///
-    /// A test delivery takes the second path, which is the point of it — it
-    /// proves the endpoint, the signature and the bucket policy without
-    /// needing a lookup to have happened first.
-    private static func s3Object(for event: MonitoringEvent) -> S3UploadClient.Object {
+    /// An export entry names its format and renders the domain's latest stored
+    /// report in it. Anything else — a test delivery, or an event on a target
+    /// with no report to find — uploads the event as JSON, which is what makes
+    /// the test action prove the endpoint, the signature and the bucket policy
+    /// without needing a lookup first.
+    ///
+    /// The key is `{prefix}/{domain}/{iso8601}.{ext}`, the prefix coming from
+    /// the configuration.
+    private static func s3Object(
+        for item: QueuedDelivery,
+        configuration: S3IntegrationConfiguration
+    ) throws -> S3UploadClient.Object {
+        let event = item.event
+        let domain = event.domain.isEmpty ? "unknown" : event.domain
+        let timestamp = Self.objectTimestampFormatter.string(from: event.timestamp)
+        let report = Self.latestReport(for: domain)
+
+        if let export = item.export, let report {
+            return S3UploadClient.Object(
+                key: "\(domain)/\(timestamp).\(export.format.fileExtension)",
+                body: try DomainReportExporter.data(for: report, format: export.format),
+                contentType: export.format.mimeType
+            )
+        }
+
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-
-        let domain = event.domain.isEmpty ? "unknown" : event.domain
-        let snapshot = MonitoringStorage.loadHistoryEntries()
-            .first { $0.domain.caseInsensitiveCompare(domain) == .orderedSame }?
-            .snapshot
-
         let body: Data
-        if let snapshot, let encoded = try? encoder.encode(DomainReportBuilder().build(from: snapshot)) {
+        if let report, let encoded = try? encoder.encode(report) {
             body = encoded
         } else {
             body = (try? encoder.encode(IntegrationEventPayload(event: event))) ?? Data()
         }
-
         return S3UploadClient.Object(
-            key: "\(domain)/\(Self.objectTimestampFormatter.string(from: event.timestamp)).json",
+            key: "\(domain)/\(timestamp).json",
             body: body,
-            contentType: "application/json"
+            contentType: DomainExportFormat.json.mimeType
         )
+    }
+
+    private static func latestReport(for domain: String) -> DomainReport? {
+        guard let snapshot = MonitoringStorage.loadHistoryEntries()
+            .first(where: { $0.domain.caseInsensitiveCompare(domain) == .orderedSame })?
+            .snapshot
+        else {
+            return nil
+        }
+        return DomainReportBuilder().build(from: snapshot)
     }
 
     private static let objectTimestampFormatter: ISO8601DateFormatter = {
