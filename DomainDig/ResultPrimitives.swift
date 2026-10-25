@@ -36,6 +36,25 @@ struct SectionTitleView: View {
     }
 }
 
+/// Whether a `CardView` draws its own surface, or whether whatever contains it
+/// already provides one.
+///
+/// Set to `false` by the screens that put cards in `List` rows, where the row's
+/// `.listRowBackground` is the surface and a card drawing its own would be a
+/// panel inside a panel. `CardView` sets it back to `true` for its content, so
+/// only the outermost card in a row gives up its chrome and a card nested
+/// inside one keeps it.
+private struct CardProvidesSurfaceKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    var cardProvidesSurface: Bool {
+        get { self[CardProvidesSurfaceKey.self] }
+        set { self[CardProvidesSurfaceKey.self] = newValue }
+    }
+}
+
 /// A card that wraps its content by default.
 ///
 /// `allowsHorizontalScroll` used to default to `true`, so nine call sites put
@@ -50,6 +69,7 @@ struct SectionTitleView: View {
 struct CardView<Content: View>: View {
     @Environment(\.appDensity) private var appDensity
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.cardProvidesSurface) private var providesSurface
     let allowsHorizontalScroll: Bool
     let content: Content
 
@@ -72,15 +92,19 @@ struct CardView<Content: View>: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(appDensity.metrics.cardPadding)
-        .background(Color(.appSurface))
-        .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
+        .padding(providesSurface ? appDensity.metrics.cardPadding : 0)
+        .background(providesSurface ? Color(.appSurface) : Color.clear)
+        .clipShape(
+            RoundedRectangle(cornerRadius: providesSurface ? appDensity.metrics.cardCornerRadius : 0)
+        )
     }
 
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: appDensity.metrics.cardSpacing) {
             content
         }
+        // Only the outermost card in a row gives up its surface.
+        .environment(\.cardProvidesSurface, true)
     }
 }
 

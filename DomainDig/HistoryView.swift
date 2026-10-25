@@ -171,120 +171,134 @@ struct HistoryDetailView: View {
     }
 
     var body: some View {
-        ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 0) {
-                snapshotBanner
-                SummaryView(fields: DomainViewModel.summaryFields(from: snapshot))
-                    .padding(.top, 8)
-                RiskSummaryCardView(report: report)
-                    .padding(.top, 8)
-                InsightsSummaryCardView(insights: report.insights)
-                    .padding(.top, 8)
-                IntelligenceSectionView(
-                    isCollapsed: .constant(false),
-                    report: report,
-                    showsPlaceholder: !FeatureAccessService.hasAccess(to: .intelligenceDetail)
-                )
-                .padding(.top, 8)
-                DomainSectionView(
-                    isCollapsed: .constant(false),
-                    rows: DomainViewModel.domainRows(from: snapshot),
-                    suggestions: DomainViewModel.suggestionRows(from: snapshot),
-                    showSuggestions: entry.availabilityResult?.status == .registered && !entry.suggestions.isEmpty,
-                    availabilityLoading: false,
-                    suggestionsLoading: false,
-                    provenance: snapshot.provenanceBySection[.availability],
-                    confidence: snapshot.availabilityConfidence,
-                    snapshotNote: entry.note,
-                    trackedDomain: trackedDomain,
-                    workflows: viewModel.workflowsContaining(domain: entry.domain),
-                    trackingLimitMessage: nil,
-                    onTrack: {
-                        _ = viewModel.trackDomain(domain: entry.domain, availabilityStatus: entry.availabilityResult?.status)
-                    },
-                    onTogglePinned: {
-                        guard let trackedDomain else { return }
-                        viewModel.togglePinned(for: trackedDomain)
-                    },
-                    onEditNote: nil,
-                    onAddToWorkflow: nil,
-                    onOpenWorkflow: nil,
-                    onRunWorkflow: nil
-                )
-                    .padding(.top, appDensity.metrics.sectionSpacing)
-                OwnershipSectionView(
-                    isCollapsed: .constant(false),
-                    rows: DomainViewModel.ownershipRows(from: snapshot),
-                    loading: false,
-                    error: snapshot.ownershipError,
-                    provenance: snapshot.provenanceBySection[.ownership],
-                    confidence: snapshot.ownershipConfidence
-                )
-                .padding(.top, appDensity.metrics.sectionSpacing)
-                SubdomainsSectionView(
-                    isCollapsed: .constant(false),
-                    rows: DomainViewModel.subdomainRows(from: snapshot),
-                    groups: report.subdomainGroups,
-                    loading: false,
-                    error: snapshot.subdomainsError,
-                    provenance: snapshot.provenanceBySection[.subdomains],
-                    confidence: snapshot.subdomainConfidence,
-                    showsExtendedPlaceholder: !FeatureAccessService.hasAccess(to: .extendedSubdomains)
-                )
-                .padding(.top, appDensity.metrics.sectionSpacing)
+        List {
+                Section {
+                    snapshotBanner
+                }
+                Section {
+                    SummaryView(fields: DomainViewModel.summaryFields(from: snapshot))
+                }
+                Section {
+                    RiskSummaryCardView(report: report)
+                }
+                Section {
+                    InsightsSummaryCardView(insights: report.insights)
+                }
+                Section {
+                    IntelligenceSectionView(
+                        isCollapsed: .constant(false),
+                        report: report,
+                        showsPlaceholder: !FeatureAccessService.hasAccess(to: .intelligenceDetail)
+                    )
+                }
+                Section {
+                    DomainSectionView(
+                        isCollapsed: .constant(false),
+                        rows: DomainViewModel.domainRows(from: snapshot),
+                        suggestions: DomainViewModel.suggestionRows(from: snapshot),
+                        showSuggestions: entry.availabilityResult?.status == .registered && !entry.suggestions.isEmpty,
+                        availabilityLoading: false,
+                        suggestionsLoading: false,
+                        provenance: snapshot.provenanceBySection[.availability],
+                        confidence: snapshot.availabilityConfidence,
+                        snapshotNote: entry.note,
+                        trackedDomain: trackedDomain,
+                        workflows: viewModel.workflowsContaining(domain: entry.domain),
+                        trackingLimitMessage: nil,
+                        onTrack: {
+                            _ = viewModel.trackDomain(domain: entry.domain, availabilityStatus: entry.availabilityResult?.status)
+                        },
+                        onTogglePinned: {
+                            guard let trackedDomain else { return }
+                            viewModel.togglePinned(for: trackedDomain)
+                        },
+                        onEditNote: nil,
+                        onAddToWorkflow: nil,
+                        onOpenWorkflow: nil,
+                        onRunWorkflow: nil
+                    )
+                }
+                Section {
+                    OwnershipSectionView(
+                        isCollapsed: .constant(false),
+                        rows: DomainViewModel.ownershipRows(from: snapshot),
+                        loading: false,
+                        error: snapshot.ownershipError,
+                        provenance: snapshot.provenanceBySection[.ownership],
+                        confidence: snapshot.ownershipConfidence
+                    )
+                }
+                Section {
+                    SubdomainsSectionView(
+                        isCollapsed: .constant(false),
+                        rows: DomainViewModel.subdomainRows(from: snapshot),
+                        groups: report.subdomainGroups,
+                        loading: false,
+                        error: snapshot.subdomainsError,
+                        provenance: snapshot.provenanceBySection[.subdomains],
+                        confidence: snapshot.subdomainConfidence,
+                        showsExtendedPlaceholder: !FeatureAccessService.hasAccess(to: .extendedSubdomains)
+                    )
+                }
                 if let comparisonSnapshot = viewModel.comparisonSnapshot(for: entry) {
                     if let changeSummary = entry.changeSummary {
-                        DomainChangeSummaryView(summary: changeSummary)
-                            .padding(.top, appDensity.metrics.sectionSpacing)
+                        Section {
+                            DomainChangeSummaryView(summary: changeSummary)
+                        }
                     }
-                    DomainDiffView(
-                        title: "Compared With Previous Snapshot",
-                        sections: DomainDiffService.diff(from: comparisonSnapshot, to: snapshot),
-                        contextNote: DomainDiffService.comparisonContextNote(from: comparisonSnapshot, to: snapshot),
-                        showsUnchanged: false,
-                        highlightedSectionID: nil
-                    )
-                    .padding(.top, appDensity.metrics.sectionSpacing)
+                    Section {
+                        DomainDiffView(
+                            title: "Compared With Previous Snapshot",
+                            sections: DomainDiffService.diff(from: comparisonSnapshot, to: snapshot),
+                            contextNote: DomainDiffService.comparisonContextNote(from: comparisonSnapshot, to: snapshot),
+                            showsUnchanged: false,
+                            highlightedSectionID: nil
+                        )
+                    }
                 }
-                DNSSectionView(
-                    isCollapsed: .constant(false),
-                    dnssecLabel: DomainViewModel.dnssecLabel(from: snapshot),
-                    patternSummary: report.dns.patternSummary,
-                    sections: DomainViewModel.dnsRows(from: snapshot),
-                    ptrMessage: DomainViewModel.ptrMessage(from: snapshot),
-                    loading: false,
-                    dnsProvenance: snapshot.provenanceBySection[.dns],
-                    ptrProvenance: snapshot.provenanceBySection[.ptr],
-                    sectionError: snapshot.dnsError
-                )
-                .padding(.top, appDensity.metrics.sectionSpacing)
-                WebSectionView(
-                    isCollapsed: .constant(false),
-                    data: DomainViewModel.webSectionData(from: snapshot, report: report)
-                )
-                .padding(.top, appDensity.metrics.sectionSpacing)
-                EmailSectionView(
-                    isCollapsed: .constant(false),
-                    rows: DomainViewModel.emailRows(from: snapshot),
-                    assessment: report.email,
-                    loading: false,
-                    provenance: snapshot.provenanceBySection[.emailSecurity],
-                    confidence: snapshot.emailSecurityConfidence,
-                    error: snapshot.emailSecurityError
-                )
-                .padding(.top, appDensity.metrics.sectionSpacing)
-                NetworkSectionView(
-                    isCollapsed: .constant(false),
-                    customPortsExpanded: .constant(false),
-                    customPortInput: .constant(""),
-                    data: DomainViewModel.networkSectionData(from: snapshot),
-                    onScanCustomPorts: { /* Historical snapshot; re-scanning is not offered here. */ }
-                )
-                .padding(.top, appDensity.metrics.sectionSpacing)
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 32)
+                Section {
+                    DNSSectionView(
+                        isCollapsed: .constant(false),
+                        dnssecLabel: DomainViewModel.dnssecLabel(from: snapshot),
+                        patternSummary: report.dns.patternSummary,
+                        sections: DomainViewModel.dnsRows(from: snapshot),
+                        ptrMessage: DomainViewModel.ptrMessage(from: snapshot),
+                        loading: false,
+                        dnsProvenance: snapshot.provenanceBySection[.dns],
+                        ptrProvenance: snapshot.provenanceBySection[.ptr],
+                        sectionError: snapshot.dnsError
+                    )
+                }
+                Section {
+                    WebSectionView(
+                        isCollapsed: .constant(false),
+                        data: DomainViewModel.webSectionData(from: snapshot, report: report)
+                    )
+                }
+                Section {
+                    EmailSectionView(
+                        isCollapsed: .constant(false),
+                        rows: DomainViewModel.emailRows(from: snapshot),
+                        assessment: report.email,
+                        loading: false,
+                        provenance: snapshot.provenanceBySection[.emailSecurity],
+                        confidence: snapshot.emailSecurityConfidence,
+                        error: snapshot.emailSecurityError
+                    )
+                }
+                Section {
+                    NetworkSectionView(
+                        isCollapsed: .constant(false),
+                        customPortsExpanded: .constant(false),
+                        customPortInput: .constant(""),
+                        data: DomainViewModel.networkSectionData(from: snapshot),
+                        onScanCustomPorts: { /* Historical snapshot; re-scanning is not offered here. */ }
+                    )
+                }
         }
+        .listRowBackground(Color(.appSurface))
+        .environment(\.cardProvidesSurface, false)
+        .scrollContentBackground(.hidden)
         .background(Color(.appBackground))
         .navigationTitle(entry.domain)
         .toolbar {

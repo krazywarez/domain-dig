@@ -415,6 +415,13 @@ struct EmptyStateCardView: View {
     }
 }
 
+/// A collapsible result section.
+///
+/// Its body is a `Group`, not a stack: inside a `List` that makes the header
+/// and each piece of content their own row, so the row backgrounds draw one
+/// grouped panel per section and the separators keep the cards inside it
+/// apart. Every caller puts it in a `List` for that reason — a stack would lay
+/// the children out itself and lose both.
 struct CollapsibleSectionView<HeaderTrailing: View, Content: View>: View {
     @Environment(\.appDensity) private var appDensity
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -440,7 +447,7 @@ struct CollapsibleSectionView<HeaderTrailing: View, Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: appDensity.metrics.cardSpacing) {
+        Group {
             Button {
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                     isCollapsed.toggle()

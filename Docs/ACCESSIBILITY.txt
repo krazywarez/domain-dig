@@ -169,6 +169,21 @@ The remaining Settings destinations — Display, History & Network, Local API,
 iCloud Sync, Monitoring Log, Monitoring Settings, Scheduled Reports, Import &
 Export, Data Management — are still unaudited.
 
+## Recent searches are never audited
+
+The empty-state suite launches a fresh install, so Inspect's recent-searches
+section — which only appears once a lookup has been run — is never in the tree
+when the audit walks it. Driving one real lookup and re-auditing surfaced four
+findings in it on iOS 27.0:
+
+- `dynamicType` on the "RECENT" header and on the "Clear" button
+- `hitRegion` too small on "Clear"
+- `sufficientElementDescription`, "label not human-readable", on a domain chip
+
+These are latent rather than new: nothing in the section changed when Inspect
+moved to a `List`. They need a seeded recent-searches fixture to be audited
+properly, which the seed harness does not have.
+
 ## Why the floor runtime needs its own run
 
 **Audit coverage is not nested across OS versions.** Each runtime reports

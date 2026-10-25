@@ -48,47 +48,38 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ScrollView(.vertical) {
-                VStack(spacing: 0) {
-                    inputSection
-                    if !viewModel.batchResults.isEmpty || viewModel.batchLookupRunning {
-                        batchSection
-                            .padding(.top, appDensity.metrics.cardSpacing)
-                    }
-                    if viewModel.hasRun {
-                        actionButtons
-                        if !viewModel.resultsLoaded {
-                            LookupProgressOverviewView(steps: viewModel.activeLoadingLabels)
-                                .padding(.top, appDensity.metrics.cardSpacing)
-                        } else if let statusMessage = resultStatusMessage {
+            List {
+                Section { inputSection }
+                if !viewModel.batchResults.isEmpty || viewModel.batchLookupRunning {
+                    Section { batchSection }
+                }
+                if viewModel.hasRun {
+                    Section { actionButtons }
+                    if !viewModel.resultsLoaded {
+                        Section { LookupProgressOverviewView(steps: viewModel.activeLoadingLabels) }
+                    } else if let statusMessage = resultStatusMessage {
+                        Section {
                             LookupStatusBannerView(message: statusMessage, resultSource: viewModel.currentResultSource)
-                                .padding(.top, appDensity.metrics.cardSpacing)
                         }
-                        if viewModel.resultsLoaded {
-                            SummaryView(fields: viewModel.summaryFields)
-                                .padding(.top, appDensity.metrics.cardSpacing)
-                            if let report = viewModel.currentReport {
-                                RiskSummaryCardView(report: report)
-                                    .padding(.top, appDensity.metrics.cardSpacing)
-                                InsightsSummaryCardView(insights: report.insights)
-                                    .padding(.top, appDensity.metrics.cardSpacing)
-                            }
-                            if let changeSummary = viewModel.currentChangeSummary {
-                                DomainChangeSummaryView(summary: changeSummary)
-                                    .padding(.top, appDensity.metrics.cardSpacing)
-                            }
-                        }
+                    }
+                    if viewModel.resultsLoaded {
+                        Section { SummaryView(fields: viewModel.summaryFields) }
                         if let report = viewModel.currentReport {
-                            intelligenceSection(report: report)
-                                .padding(.top, appDensity.metrics.sectionSpacing)
+                            Section { RiskSummaryCardView(report: report) }
+                            Section { InsightsSummaryCardView(insights: report.insights) }
                         }
-                        domainOverviewSection
-                            .padding(.top, appDensity.metrics.sectionSpacing)
-                        ownershipSection
-                        .padding(.top, appDensity.metrics.sectionSpacing)
-                        subdomainsSection
-                        .padding(.top, appDensity.metrics.sectionSpacing)
-                        if !viewModel.currentDiffSections.isEmpty {
+                        if let changeSummary = viewModel.currentChangeSummary {
+                            Section { DomainChangeSummaryView(summary: changeSummary) }
+                        }
+                    }
+                    if let report = viewModel.currentReport {
+                        Section { intelligenceSection(report: report) }
+                    }
+                    Section { domainOverviewSection }
+                    Section { ownershipSection }
+                    Section { subdomainsSection }
+                    if !viewModel.currentDiffSections.isEmpty {
+                        Section {
                             DomainDiffView(
                                 title: "Latest Changes",
                                 sections: viewModel.currentDiffSections,
@@ -96,15 +87,16 @@ struct ContentView: View {
                                 showsUnchanged: false,
                                 highlightedSectionID: nil
                             )
-                            .padding(.top, appDensity.metrics.sectionSpacing)
                         }
-                        dnsSection
-                        .padding(.top, appDensity.metrics.sectionSpacing)
+                    }
+                    Section { dnsSection }
+                    Section {
                         WebSectionView(
                             isCollapsed: sectionCollapsedBinding(.web),
                             data: viewModel.webSectionData
                         )
-                        .padding(.top, appDensity.metrics.sectionSpacing)
+                    }
+                    Section {
                         EmailSectionView(
                             isCollapsed: sectionCollapsedBinding(.email),
                             rows: viewModel.emailRows,
@@ -114,7 +106,8 @@ struct ContentView: View {
                             confidence: viewModel.currentSnapshot.emailSecurityConfidence,
                             error: viewModel.emailSecurityError
                         )
-                        .padding(.top, appDensity.metrics.sectionSpacing)
+                    }
+                    Section {
                         NetworkSectionView(
                             isCollapsed: sectionCollapsedBinding(.network),
                             customPortsExpanded: $customPortsExpanded,
@@ -122,21 +115,15 @@ struct ContentView: View {
                             data: viewModel.networkSectionData,
                             onScanCustomPorts: runCustomPortScan
                         )
-                        .padding(.top, appDensity.metrics.sectionSpacing)
-                    } else if !viewModel.recentSearches.isEmpty {
-                        recentSearchesSection
                     }
+                } else if !viewModel.recentSearches.isEmpty {
+                    Section { recentSearchesSection }
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 32)
             }
-            .background(
-                LinearGradient(
-                    colors: [Color(.appBackground), Color(.appSurface)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
+            .listRowBackground(Color(.appSurface))
+            .environment(\.cardProvidesSurface, false)
+            .scrollContentBackground(.hidden)
+            .background(Color(.appBackground))
             .navigationTitle("DomainDig")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
