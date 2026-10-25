@@ -44,15 +44,18 @@ enabled = false
 # above today's worst file and fails anything past it. Lower it when a file is
 # genuinely split, never raise it to make a commit pass.
 #
-# Measured after the A13 splits: DomainViewModel 370, CloudSyncService 198,
-# WatchlistView 146, DomainDataPortabilityService 146, AuditViews 128,
-# ContentView 119, DomainDiffViews 115, DomainReportExporter 114,
-# SettingsViews 112, WorkflowsView 107.
+# Measured after moving DomainViewModel's export formatters out:
+# DomainViewModel 280, CloudSyncService 198, WatchlistView 146,
+# DomainDataPortabilityService 146, AuditViews 128, ContentView 119,
+# DomainDiffViews 115, DomainReportExporter 114, SettingsViews 112,
+# WorkflowsView 107.
 #
-# DomainViewModel alone holds this threshold where it is — the next file is 172
-# points below it. Splitting it would let this drop to about 210, and it is the
-# hard one: A2 collapsed its section state but left the four-way model
-# duplication that makes it long.
+# DomainViewModel still holds this threshold where it is. Getting below about
+# 200 needs batch and portfolio out of it, and neither is a file move: Swift
+# extensions cannot hold stored properties, so the batch pipeline's six
+# `private(set)` properties and the portfolio caches would have to become
+# settable from any file. That trades real encapsulation for a lint number.
+# Extracting them as types that own their state is the way; see A13.
 [smells.file_complexity]
 enabled = true
 
@@ -81,4 +84,4 @@ filter_patterns = [
 ]
 
 [language.swift.smells.file_complexity]
-threshold = 380
+threshold = 290
