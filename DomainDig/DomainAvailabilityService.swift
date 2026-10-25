@@ -5,6 +5,7 @@ struct DomainAvailabilityService {
 
     static func check(
         domain: String,
+        allowsRDAP: Bool = true,
         rdapTransport: RDAPTransport = URLSessionRDAPTransport(),
         dns: DNSLookup = DNSLookupService()
     ) async -> DomainAvailabilityResult {
@@ -14,7 +15,10 @@ struct DomainAvailabilityService {
         }
 
         // RDAP is the registry's own record, so it settles both directions.
-        if let registryStatus = await checkViaRDAP(domain: normalizedDomain, transport: rdapTransport) {
+        // Declining it leaves only the fallback below, which is why availability
+        // then reports `.unknown` rather than `.available`.
+        if allowsRDAP,
+           let registryStatus = await checkViaRDAP(domain: normalizedDomain, transport: rdapTransport) {
             return DomainAvailabilityResult(domain: normalizedDomain, status: registryStatus)
         }
 

@@ -1325,7 +1325,11 @@ final class DomainViewModel {
         }
 
         let previous = historyEntries(for: normalizedDomain).first?.snapshot
-        let snapshot = await inspectionService.inspectSnapshot(domain: normalizedDomain, previousSnapshot: previous)
+        let snapshot = await inspectionService.inspectSnapshot(
+            domain: normalizedDomain,
+            previousSnapshot: previous,
+            scope: InspectionScope.current(defaults: defaults)
+        )
         guard let entry = saveHistoryEntry(
             from: snapshot,
             replaceLatest: false,
@@ -1433,7 +1437,11 @@ final class DomainViewModel {
             trackedDomainID: currentTrackedDomain?.id,
             replacingLatest: false
         )
-        let inspectedSnapshot = await inspectionService.inspectSnapshot(domain: domain, previousSnapshot: previous)
+        let inspectedSnapshot = await inspectionService.inspectSnapshot(
+            domain: domain,
+            previousSnapshot: previous,
+            scope: InspectionScope.current(defaults: defaults)
+        )
         DomainDebugLog.debug("DomainViewModel.performLookup inspectionReturned domain=\(domain)")
         guard !Task.isCancelled, isCurrentLookup(lookupID) else { return nil }
 
@@ -1519,10 +1527,14 @@ final class DomainViewModel {
         }
     }
 
-    private static func performBatchLookup(domain: String, previousSnapshot: LookupSnapshot?) async -> BatchLookupPayload? {
+    private static func performBatchLookup(
+        domain: String,
+        previousSnapshot: LookupSnapshot?,
+        scope: InspectionScope
+    ) async -> BatchLookupPayload? {
         guard !Task.isCancelled else { return nil }
         let inspectionService = DomainInspectionService()
-        let snapshot = await inspectionService.inspectSnapshot(domain: domain, previousSnapshot: previousSnapshot)
+        let snapshot = await inspectionService.inspectSnapshot(domain: domain, previousSnapshot: previousSnapshot, scope: scope)
         guard !Task.isCancelled else { return nil }
         return BatchLookupPayload(snapshot: snapshot.resolvedAfterFallback(to: previousSnapshot))
     }
@@ -2141,8 +2153,8 @@ final class DomainViewModel {
         updateBatchResult(domain: domain, status: .running, quickStatus: "Running", entry: nil, errorMessage: nil)
         let previousSnapshot = previousSnapshot(for: domain, trackedDomainID: trackedDomain(for: domain)?.id, replacingLatest: false)
 
-        group.addTask { [domain, previousSnapshot] in
-            let payload = await Self.performBatchLookup(domain: domain, previousSnapshot: previousSnapshot)
+        group.addTask { [domain, previousSnapshot, scope = InspectionScope.current(defaults: defaults)] in
+            let payload = await Self.performBatchLookup(domain: domain, previousSnapshot: previousSnapshot, scope: scope)
             return (domain, payload)
         }
     }

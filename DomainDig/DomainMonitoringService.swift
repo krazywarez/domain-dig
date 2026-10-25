@@ -326,6 +326,9 @@ final class DomainMonitoringService {
         } else {
             notificationsAuthorized = false
         }
+        // Monitoring inspects on the user's behalf, so it runs with the profile
+        // and the enrichment choice they set for their own lookups.
+        let monitoringScope = InspectionScope.current()
         var results: [MonitoringDomainResult] = []
         var errors: [String] = []
         var alertsTriggered = 0
@@ -339,7 +342,8 @@ final class DomainMonitoringService {
             let previousSnapshot = latestSnapshot(for: trackedDomain, history: history)
             let inspectedSnapshot = await inspectionService.inspectSnapshot(
                 domain: trackedDomain.domain,
-                previousSnapshot: previousSnapshot
+                previousSnapshot: previousSnapshot,
+                scope: monitoringScope
             )
             let snapshot = inspectedSnapshot.resolvedAfterFallback(to: previousSnapshot)
             // When the fallback fires, `snapshot` *is* `previousSnapshot`, so

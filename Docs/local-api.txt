@@ -78,6 +78,19 @@ Every response — success or error — is wrapped in the same envelope:
 
 `certificateWarningLevel` encodes as `"none"`, `"warning"`, or `"critical"`.
 
+Both `/inspect` routes accept an optional `profile` query parameter, `full` or
+`quick`. It defaults to `full`, so a caller that omits it gets every section as
+before. `quick` runs DNS, registration, ownership, TLS, HSTS, HTTP, redirects
+and PTR, and leaves out reachability, port scanning, subdomain discovery, IP
+geolocation and name suggestions; each omitted section carries a message saying
+it was not run.
+
+When the device owner has turned off third-party enrichment in Settings, both
+routes follow that setting and a request cannot override it: ownership,
+subdomain discovery, IP geolocation and name suggestions are not collected, and
+registration is decided from DNS alone, which reports `registered` or
+`unknown` but never `available`.
+
 `DomainReport` is the app's canonical report model (the same shape the JSON
 export produces); see `DomainReportBuilder.swift` for its fields. It is a large
 object and is treated as an additive contract: new fields may appear without a
@@ -90,6 +103,7 @@ version bump.
 | 400 | `bad_request` | The HTTP request line/path could not be parsed |
 | 400 | `invalid_body` | `POST /inspect` body was not `{ "domain": "…" }` |
 | 400 | `invalid_domain` | A path/body domain was empty or invalid |
+| 400 | `invalid_profile` | `profile` was present but named no known profile |
 | 401 | `unauthorized` | Missing or incorrect token |
 | 404 | `not_found` | No such route |
 | 404 | `domain_not_found` | No local data / tracked domain for the given name |

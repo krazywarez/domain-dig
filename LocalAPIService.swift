@@ -555,9 +555,15 @@ struct LocalAPIRequestHandler {
         case .monitoring:
             return successResponse(monitoringPayload())
         case .inspectFromBody:
-            return await inspectBodyResponse(request.body)
+            guard let scope = InspectionScope.requested(from: request.queryItems) else {
+                return Self.invalidProfileResponse
+            }
+            return await inspectBodyResponse(request.body, scope: scope)
         case let .inspect(domain):
-            return await inspectResponse(for: domain)
+            guard let scope = InspectionScope.requested(from: request.queryItems) else {
+                return Self.invalidProfileResponse
+            }
+            return await inspectResponse(for: domain, scope: scope)
         case let .setMonitoring(domain, enabled):
             return await setMonitoring(enabled: enabled, for: domain)
         }
@@ -609,22 +615,34 @@ struct LocalAPIRequestHandler {
         )
     }
 
-    private func inspectBodyResponse(_ body: Data) async -> LocalAPIHTTPResponse {
+    private static var invalidProfileResponse: LocalAPIHTTPResponse {
+        .error(
+            statusCode: 400,
+            code: "invalid_profile",
+            message: "profile must be one of: \(InspectionProfile.allCases.map(\.rawValue).joined(separator: ", "))."
+        )
+    }
+
+    private func inspectBodyResponse(_ body: Data, scope: InspectionScope) async -> LocalAPIHTTPResponse {
         guard let payload = try? decoder.decode(InspectRequestPayload.self, from: body) else {
             return .error(statusCode: 400, code: "invalid_body", message: "Expected JSON body: {\"domain\":\"example.com\"}.")
         }
 
-        return await inspectResponse(for: payload.domain)
+        return await inspectResponse(for: payload.domain, scope: scope)
     }
 
-    private func inspectResponse(for domain: String) async -> LocalAPIHTTPResponse {
+    private func inspectResponse(for domain: String, scope: InspectionScope) async -> LocalAPIHTTPResponse {
         let normalized = normalizedDomain(domain)
         guard !normalized.isEmpty else {
             return .error(statusCode: 400, code: "invalid_domain", message: "A valid domain is required.")
         }
 
         let previousSnapshot = latestHistoryEntry(for: normalized)?.snapshot
-        let report = await inspectionService.inspect(domain: normalized, previousSnapshot: previousSnapshot)
+        let report = await inspectionService.inspect(
+            domain: normalized,
+            previousSnapshot: previousSnapshot,
+            scope: scope
+        )
         return successResponse(InspectResponsePayload(report: report))
     }
 

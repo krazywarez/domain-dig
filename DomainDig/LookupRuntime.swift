@@ -65,9 +65,9 @@ actor LookupRuntime {
         )
     }
 
-    func availability(domain: String) async -> CachedLookupResult<DomainAvailabilityResult> {
+    func availability(domain: String, allowsRDAP: Bool) async -> CachedLookupResult<DomainAvailabilityResult> {
         CachedLookupResult(
-            value: await DomainAvailabilityService.check(domain: domain),
+            value: await DomainAvailabilityService.check(domain: domain, allowsRDAP: allowsRDAP),
             source: .live
         )
     }

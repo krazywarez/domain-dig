@@ -141,9 +141,22 @@ private struct HistoryNetworkSettingsView: View {
     @Bindable var viewModel: DomainViewModel
     @AppStorage(DNSResolverOption.userDefaultsKey) private var storedResolverURL = DNSResolverOption.defaultURLString
     @AppStorage(AppDensity.userDefaultsKey) private var storedDensity = AppDensity.compact.rawValue
+    @AppStorage(InspectionScope.profileDefaultsKey) private var storedProfile = InspectionProfile.full.rawValue
+    @AppStorage(InspectionScope.enrichmentDefaultsKey) private var allowsThirdPartyEnrichment = true
 
     @State private var resolverOption: DNSResolverOption = .cloudflare
     @State private var customResolverURL = DNSResolverOption.defaultURLString
+
+    private static let enrichmentCaption = """
+        On, DomainDig asks rdap.org for registration and ownership, crt.sh for subdomain discovery, \
+        and ipapi.co for IP location. Off, it contacts none of them: ownership, subdomain discovery, \
+        IP location and name suggestions become unavailable, and registration is decided from DNS \
+        alone, so a domain that resolves reads as registered and anything else as unknown.
+        """
+
+    private var selectedProfile: InspectionProfile {
+        InspectionProfile(rawValue: storedProfile) ?? .full
+    }
 
     private var customResolverError: String? {
         guard resolverOption == .custom else { return nil }
@@ -189,6 +202,22 @@ private struct HistoryNetworkSettingsView: View {
                             .foregroundStyle(Color(.statusCritical))
                     }
                 }
+
+                Picker("Lookup profile", selection: $storedProfile) {
+                    ForEach(InspectionProfile.allCases) { profile in
+                        Text(profile.title).tag(profile.rawValue)
+                    }
+                }
+
+                Text(selectedProfile.detail)
+                    .font(appDensity.font(.caption, design: .default))
+                    .foregroundStyle(Color(.appTextSecondary))
+
+                Toggle("Allow third-party enrichment", isOn: $allowsThirdPartyEnrichment)
+
+                Text(Self.enrichmentCaption)
+                    .font(appDensity.font(.caption, design: .default))
+                    .foregroundStyle(Color(.appTextSecondary))
             }
         }
         .navigationTitle("History & Network")

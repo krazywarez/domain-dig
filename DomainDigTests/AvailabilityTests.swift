@@ -141,6 +141,69 @@ final class DomainAvailabilityTests: XCTestCase {
         XCTAssertEqual(results.map(\.domain), ["example.net", "example.io"])
         XCTAssertEqual(results.map(\.status), [.available, .registered])
     }
+
+    // MARK: Declining RDAP
+
+    /// With third-party enrichment off, `rdap.org` is not contacted at all, and
+    /// registration is decided from DNS: a name that resolves is registered.
+    func testDecliningRDAPDecidesRegisteredFromDNSWithoutContactingRDAP() async {
+        let transport = StubRDAPTransport { _ in
+            XCTFail("declining RDAP should not reach rdap.org")
+            return (Data(), stubHTTPResponse(status: 200, host: "rdap.org", domain: ""))
+        }
+        let dns = StubDNSLookup(records: [.A: [DNSRecord(value: "203.0.113.10", ttl: 300)]])
+
+        let result = await DomainAvailabilityService.check(
+            domain: "example.com",
+            allowsRDAP: false,
+            rdapTransport: transport,
+            dns: dns
+        )
+
+        XCTAssertEqual(result.status, .registered)
+        XCTAssertEqual(transport.requestedDomains, [])
+        XCTAssertGreaterThan(dns.lookupCount, 0, "the DNS fallback is the only source left")
+    }
+
+    /// The fallback can only prove registration. Without RDAP an unregistered
+    /// name is `.unknown`, never `.available` — the whole point of keeping the
+    /// two apart is that DoH drops NXDOMAIN.
+    func testDecliningRDAPNeverReportsAvailable() async {
+        let transport = StubRDAPTransport { _ in
+            XCTFail("declining RDAP should not reach rdap.org")
+            return (Data(), stubHTTPResponse(status: 404, host: "rdap.verisign.com", domain: "example.com"))
+        }
+        let dns = StubDNSLookup(records: [:])
+
+        let result = await DomainAvailabilityService.check(
+            domain: "example.com",
+            allowsRDAP: false,
+            rdapTransport: transport,
+            dns: dns
+        )
+
+        XCTAssertEqual(result.status, .unknown)
+        XCTAssertEqual(transport.requestedDomains, [])
+    }
+
+    /// Blank input is still rejected before either source.
+    func testDecliningRDAPStillRejectsBlankInput() async {
+        let transport = StubRDAPTransport { _ in
+            XCTFail("blank input should not reach the network")
+            return (Data(), stubHTTPResponse(status: 200, host: "rdap.org", domain: ""))
+        }
+        let dns = StubDNSLookup(records: [:])
+
+        let result = await DomainAvailabilityService.check(
+            domain: "   ",
+            allowsRDAP: false,
+            rdapTransport: transport,
+            dns: dns
+        )
+
+        XCTAssertEqual(result.status, .unknown)
+        XCTAssertEqual(dns.lookupCount, 0)
+    }
 }
 
 private final class StubRDAPTransport: RDAPTransport {

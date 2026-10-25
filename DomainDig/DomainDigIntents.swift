@@ -35,7 +35,10 @@ struct InspectDomainIntent: AppIntent {
             throw InspectDomainError.emptyDomain
         }
 
-        let snapshot = await DomainInspectionService().inspectSnapshot(domain: requested)
+        let snapshot = await DomainInspectionService().inspectSnapshot(
+            domain: requested,
+            scope: .current()
+        )
         let report = DomainReportBuilder().build(from: snapshot)
 
         let summary = Self.summaryText(for: report)

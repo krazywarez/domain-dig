@@ -8,27 +8,39 @@ struct DomainInspectionService {
         self.runtime = runtime
     }
 
-    func inspect(domain: String, previousSnapshot: LookupSnapshot? = nil) async -> DomainReport {
-        let snapshot = await inspectSnapshot(domain: domain, previousSnapshot: previousSnapshot)
+    func inspect(
+        domain: String,
+        previousSnapshot: LookupSnapshot? = nil,
+        scope: InspectionScope
+    ) async -> DomainReport {
+        let snapshot = await inspectSnapshot(domain: domain, previousSnapshot: previousSnapshot, scope: scope)
         return reportBuilder.build(from: snapshot)
     }
 
-    func inspectSnapshot(domain: String, previousSnapshot: LookupSnapshot? = nil) async -> LookupSnapshot {
+    func inspectSnapshot(
+        domain: String,
+        previousSnapshot: LookupSnapshot? = nil,
+        scope: InspectionScope
+    ) async -> LookupSnapshot {
         let normalizedDomain = normalize(domain)
         let inspectionStartedAt = DomainDebugLog.signpostStart("Inspection.inspectSnapshot", domain: normalizedDomain)
         let startedAt = Date()
         let resolverDisplayName = DNSLookupService.currentResolverDisplayName()
         let resolverURLString = DNSLookupService.currentResolverURLString()
-        var ledger = InspectionLedger(resolverDisplayName: resolverDisplayName)
+        var ledger = InspectionLedger(resolverDisplayName: resolverDisplayName, scope: scope)
 
         async let dnsFetch = runtime.dns(domain: normalizedDomain)
-        async let availabilityFetch = runtime.availability(domain: normalizedDomain)
+        async let availabilityFetch = runtime.availability(domain: normalizedDomain, allowsRDAP: scope.allowsRDAP)
         async let sslFetch = runtime.ssl(domain: normalizedDomain)
         async let hstsFetch = runtime.hsts(domain: normalizedDomain)
         async let httpFetch = runtime.http(domain: normalizedDomain)
-        async let ownershipFetch = runtime.ownership(domain: normalizedDomain)
+        async let ownershipFetch = whenInScope(.ownership, scope) {
+            await runtime.ownership(domain: normalizedDomain)
+        }
         async let redirectFetch = runtime.redirectChain(domain: normalizedDomain)
-        async let subdomainFetch = runtime.subdomains(domain: normalizedDomain)
+        async let subdomainFetch = whenInScope(.subdomains, scope) {
+            await runtime.subdomains(domain: normalizedDomain)
+        }
 
         let resolvedDNS = await dnsFetch
         DomainDebugLog.debug("Inspection.sectionComplete domain=\(normalizedDomain) section=dns source=\(resolvedDNS.source.rawValue)")
@@ -59,8 +71,10 @@ struct DomainInspectionService {
         let resolvedOwnership = await ownershipFetch
         DomainDebugLog.debug("Inspection.sectionComplete domain=\(normalizedDomain) section=ownership source=\(resolvedOwnership.source.rawValue)")
         let ownershipResult = normalizeErrors(in: resolvedOwnership.value)
-        ledger.track(.ownership, source: resolvedOwnership.source)
-        ledger.captureFailure(for: .ownership, result: ownershipResult)
+        if scope.runs(.ownership) {
+            ledger.track(.ownership, source: resolvedOwnership.source)
+            ledger.captureFailure(for: .ownership, result: ownershipResult)
+        }
 
         let redirects = await redirectFetch
         DomainDebugLog.debug("Inspection.sectionComplete domain=\(normalizedDomain) section=redirect source=\(redirects.source.rawValue)")
@@ -71,8 +85,10 @@ struct DomainInspectionService {
         let resolvedSubdomains = await subdomainFetch
         DomainDebugLog.debug("Inspection.sectionComplete domain=\(normalizedDomain) section=subdomains source=\(resolvedSubdomains.source.rawValue)")
         let subdomainResult = normalizeErrors(in: resolvedSubdomains.value)
-        ledger.track(.subdomains, source: resolvedSubdomains.source)
-        ledger.captureFailure(for: .subdomains, result: subdomainResult)
+        if scope.runs(.subdomains) {
+            ledger.track(.subdomains, source: resolvedSubdomains.source)
+            ledger.captureFailure(for: .subdomains, result: subdomainResult)
+        }
 
         let dnsSections = mapServiceResult(dnsResult, emptyValue: [])
         let sslInfo = mapOptionalValueServiceResult(sslResult)
@@ -90,29 +106,37 @@ struct DomainInspectionService {
         let canReuseDNSDependents = canReuseDependentSections(from: previousSnapshot, dnsSections: dnsSections.value)
         let canReuseIPDependents = canReuseIPBasedSections(from: previousSnapshot, primaryIP: primaryIP)
 
-        let reachabilityOutcome = await whenRoutable(hasNetworkTarget) {
-            await runtime.reachability(domain: normalizedDomain)
+        let reachabilityOutcome = await whenInScope(.reachability, scope) {
+            await whenRoutable(hasNetworkTarget) {
+                await runtime.reachability(domain: normalizedDomain)
+            }
         }
         let reachabilityResult = normalizeErrors(in: reachabilityOutcome.value)
         DomainDebugLog.debug("Inspection.sectionComplete domain=\(normalizedDomain) section=reachability hasNetworkTarget=\(hasNetworkTarget) source=\(reachabilityOutcome.source.rawValue)")
-        ledger.track(.reachability, source: reachabilityOutcome.source)
-        if hasNetworkTarget {
-            ledger.captureFailure(for: .reachability, result: reachabilityResult)
+        if scope.runs(.reachability) {
+            ledger.track(.reachability, source: reachabilityOutcome.source)
+            if hasNetworkTarget {
+                ledger.captureFailure(for: .reachability, result: reachabilityResult)
+            }
         }
         let reachabilityResultValue = mapServiceResult(reachabilityResult, emptyValue: [])
 
-        let portScanOutcome = await whenRoutable(hasNetworkTarget) {
-            await runtime.portScan(domain: normalizedDomain)
+        let portScanOutcome = await whenInScope(.portScan, scope) {
+            await whenRoutable(hasNetworkTarget) {
+                await runtime.portScan(domain: normalizedDomain)
+            }
         }
         let portScanResult = normalizeErrors(in: portScanOutcome.value)
         DomainDebugLog.debug("Inspection.sectionComplete domain=\(normalizedDomain) section=portScan hasNetworkTarget=\(hasNetworkTarget) source=\(portScanOutcome.source.rawValue)")
-        ledger.track(.portScan, source: portScanOutcome.source)
-        if hasNetworkTarget {
-            ledger.captureFailure(for: .portScan, result: portScanResult)
+        if scope.runs(.portScan) {
+            ledger.track(.portScan, source: portScanOutcome.source)
+            if hasNetworkTarget {
+                ledger.captureFailure(for: .portScan, result: portScanResult)
+            }
         }
-        let portScanResults = hasNetworkTarget
+        let portScanResults = scope.runs(.portScan) && hasNetworkTarget
             ? await mapPortScanResult(portScanResult, domain: normalizedDomain)
-            : (value: [], message: nil)
+            : (value: [], message: scope.skipReason(for: .portScan))
 
         let emailOutcome = await reusingPrevious(
             previousSnapshot?.emailSecurity,
@@ -127,7 +151,7 @@ struct DomainInspectionService {
         ledger.captureFailure(for: .emailSecurity, result: normalizedEmailResult)
 
         let suggestionsOutcome: CachedLookupResult<[DomainSuggestionResult]>
-        if availability.value.status == .registered {
+        if scope.runs(.suggestions), availability.value.status == .registered {
             suggestionsOutcome = await runtime.suggestions(domain: normalizedDomain)
             ledger.track(.suggestions, source: suggestionsOutcome.source)
         } else {
@@ -144,17 +168,21 @@ struct DomainInspectionService {
             ) {
                 await runtime.ptr(ip: primaryIP, resolverURLString: resolverURLString)
             }
-            let geo = await reusingPrevious(
-                previousSnapshot?.ipGeolocation,
-                error: previousSnapshot?.ipGeolocationError,
-                when: canReuseIPDependents
-            ) {
-                await runtime.ipGeolocation(ip: primaryIP)
+            let geo = await whenInScope(.ipGeolocation, scope) {
+                await reusingPrevious(
+                    previousSnapshot?.ipGeolocation,
+                    error: previousSnapshot?.ipGeolocationError,
+                    when: canReuseIPDependents
+                ) {
+                    await runtime.ipGeolocation(ip: primaryIP)
+                }
             }
             ledger.track(.ptr, source: ptr.source)
             ledger.captureFailure(for: .ptr, result: normalizeErrors(in: ptr.value))
-            ledger.track(.ipGeolocation, source: geo.source)
-            ledger.captureFailure(for: .ipGeolocation, result: normalizeErrors(in: geo.value))
+            if scope.runs(.ipGeolocation) {
+                ledger.track(.ipGeolocation, source: geo.source)
+                ledger.captureFailure(for: .ipGeolocation, result: normalizeErrors(in: geo.value))
+            }
             ptrOutcome = ptr
             geoOutcome = geo
         } else {
@@ -267,6 +295,16 @@ struct DomainInspectionService {
             .lowercased() ?? domain.lowercased()
     }
 
+    /// The section's lookup, or a stand-in carrying why the scope skipped it.
+    private func whenInScope<Value>(
+        _ section: LookupSectionKind,
+        _ scope: InspectionScope,
+        fetch: () async -> CachedLookupResult<ServiceResult<Value>>
+    ) async -> CachedLookupResult<ServiceResult<Value>> {
+        guard let reason = scope.skipReason(for: section) else { return await fetch() }
+        return CachedLookupResult(value: .empty(reason), source: .live)
+    }
+
     /// A lookup that needs an address to reach, or an empty result when the
     /// domain has none.
     private func whenRoutable<Value>(
@@ -300,7 +338,8 @@ struct DomainInspectionService {
         for section: LookupSectionKind,
         source: LookupResultSource,
         collectedAt: Date,
-        resolverDisplayName: String
+        resolverDisplayName: String,
+        allowsRDAP: Bool
     ) -> SectionProvenance {
         switch section {
         case .dns, .ptr:
@@ -313,9 +352,9 @@ struct DomainInspectionService {
             )
         case .availability:
             return SectionProvenance(
-                source: "RDAP lookup with DNS fallback",
+                source: allowsRDAP ? "RDAP lookup with DNS fallback" : "DNS query",
                 collectedAt: collectedAt,
-                provider: "rdap.org / selected resolver",
+                provider: allowsRDAP ? "rdap.org / selected resolver" : "Selected DoH resolver",
                 resolver: resolverDisplayName,
                 resultSource: source
             )
@@ -590,6 +629,7 @@ struct DomainInspectionService {
 /// from, which were served from cache, and which failed.
 private struct InspectionLedger {
     let resolverDisplayName: String
+    let scope: InspectionScope
     var cachedSections = Set<LookupSectionKind>()
     var sectionSources: [LookupResultSource] = []
     var provenanceBySection: [LookupSectionKind: SectionProvenance] = [:]
@@ -601,7 +641,8 @@ private struct InspectionLedger {
             for: section,
             source: source,
             collectedAt: Date(),
-            resolverDisplayName: resolverDisplayName
+            resolverDisplayName: resolverDisplayName,
+            allowsRDAP: scope.allowsRDAP
         )
         sectionSources.append(source)
         provenanceBySection[section] = provenance
