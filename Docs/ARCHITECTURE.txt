@@ -27,9 +27,9 @@ Inspection flow:
 
 The app has one active Audit Mode implementation:
 
-- Models live in `DomainDig/DomainDig/AuditModels.swift`.
-- UI lives in `DomainDig/DomainDig/AuditViews.swift`.
-- Export rendering lives in `DomainDig/DomainDig/AuditExporter.swift`.
+- Models live in `DomainDig/AuditModels.swift`.
+- UI lives in `DomainDig/AuditViews.swift`.
+- Export rendering lives in `DomainDig/AuditExporter.swift`.
 - Persistence is owned by `DomainViewModel` through `DomainDataPortabilityService`.
 
 An audit session captures:

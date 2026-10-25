@@ -7,42 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		05F775C7E0743AF727B008EE /* LocalAPIContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7572DA0A838E0A044F045260 /* LocalAPIContract.swift */; };
 		38316D90539394C2CC7C12BE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DE8B269A01CC5E593DA3DFC2 /* Foundation.framework */; };
-		47CD3BB1AE143733A73E0E5B /* DomainReportExporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D7C7D97A4006831572F468 /* DomainReportExporterTests.swift */; };
-		4F96CEB875EC3501E784CE39 /* DataMigrationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 435AFB3F99D579D3D7B58279 /* DataMigrationServiceTests.swift */; };
-		81359F63C7A23454B8FA0141 /* DomainReportBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82320955416797CFE59464A /* DomainReportBuilderTests.swift */; };
-		8BBFEF092F9874AE00E8E144 /* DomainInspectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BBFEF032F9874AE00E8E144 /* DomainInspectionService.swift */; };
-		8BBFEF0A2F9874AE00E8E144 /* DomainReportBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BBFEF042F9874AE00E8E144 /* DomainReportBuilder.swift */; };
-		8BBFEF0B2F9874AE00E8E144 /* DomainReportExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BBFEF052F9874AE00E8E144 /* DomainReportExporter.swift */; };
-		8BBFEF0C2F9874AE00E8E144 /* LookupSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BBFEF062F9874AE00E8E144 /* LookupSnapshot.swift */; };
-		8BCA3CC02F9C8D57004B742C /* LocalAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCA3CBC2F9C8D57004B742C /* LocalAPIModels.swift */; };
-		8BCA3CC12F9C8D57004B742C /* LocalAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCA3CBD2F9C8D57004B742C /* LocalAPIService.swift */; };
 		8BDA00010000000000000002 /* DomainDigWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8BDA00010000000000000001 /* DomainDigWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		8BDB00010000000000000002 /* DomainDigShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8BDB00010000000000000001 /* DomainDigShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		8BF9DA872F9B13FB00EF41D5 /* DomainDataPortabilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BF9DA842F9B13FB00EF41D5 /* DomainDataPortabilityService.swift */; };
-		99024E91EED2275FD80E83A9 /* AppInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499B99A1866999A38AC475F5 /* AppInfoTests.swift */; };
-		A1B2C3D40000000000000102 /* HistoryEntryCodableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000101 /* HistoryEntryCodableTests.swift */; };
-		A5AF921BC1C2E6E940CC05DC /* SnapshotFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CA789D3607B55E3612E6FFA /* SnapshotFixture.swift */; };
-		C7CA9E02B0DC2708DE7A8563 /* DomainDataPortabilityServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC948A02EC0184228BC4630E /* DomainDataPortabilityServiceTests.swift */; };
-		E959C4D24DAAB3CB80D854B2 /* DiffServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15A25DF2B8BB52589D49986B /* DiffServiceTests.swift */; };
-		A1B2C3D40000000000000202 /* InspectionInputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000201 /* InspectionInputTests.swift */; };
-		A1B2C3D40000000000000602 /* FeatureAccessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000601 /* FeatureAccessTests.swift */; };
-		A1B2C3D40000000000000702 /* SMTPMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000701 /* SMTPMessageTests.swift */; };
-		A1B2C3D40000000000000802 /* LocalAPIRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000801 /* LocalAPIRoutingTests.swift */; };
-		A1B2C3D40000000000000902 /* MonitoringSchedulingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000901 /* MonitoringSchedulingTests.swift */; };
-		A1B2C3D40000000000001002 /* DomainViewModelStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001001 /* DomainViewModelStoreTests.swift */; };
-		A1B2C3D40000000000001102 /* LookupCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001101 /* LookupCacheTests.swift */; };
-		A1B2C3D40000000000001202 /* HistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001201 /* HistoryStoreTests.swift */; };
-		A1B2C3D40000000000001402 /* SectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001401 /* SectionStateTests.swift */; };
-		A1B2C3D40000000000001502 /* PortfolioDashboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001501 /* PortfolioDashboardTests.swift */; };
-		A1B2C3D40000000000001602 /* InspectionScopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001601 /* InspectionScopeTests.swift */; };
-		A1B2C3D40000000000001702 /* AWSSigV4Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001701 /* AWSSigV4Tests.swift */; };
-		A1B2C3D40000000000001802 /* S3UploadClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001801 /* S3UploadClientTests.swift */; };
-		A1B2C3D40000000000000302 /* AvailabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000301 /* AvailabilityTests.swift */; };
-		A1B2C3D40000000000000402 /* CloudSyncMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000401 /* CloudSyncMergeTests.swift */; };
-		A1B2C3D40000000000000502 /* DomainNameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000501 /* DomainNameTests.swift */; };
-		EA12012CDB4C21ABB4217D86 /* LocalAPIContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D85A44C5F315A1644AC9073 /* LocalAPIContractTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -92,46 +59,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		0D85A44C5F315A1644AC9073 /* LocalAPIContractTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalAPIContractTests.swift; sourceTree = "<group>"; };
-		15A25DF2B8BB52589D49986B /* DiffServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiffServiceTests.swift; sourceTree = "<group>"; };
-		435AFB3F99D579D3D7B58279 /* DataMigrationServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DataMigrationServiceTests.swift; sourceTree = "<group>"; };
-		499B99A1866999A38AC475F5 /* AppInfoTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppInfoTests.swift; sourceTree = "<group>"; };
-		54D7C7D97A4006831572F468 /* DomainReportExporterTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DomainReportExporterTests.swift; sourceTree = "<group>"; };
-		5CA789D3607B55E3612E6FFA /* SnapshotFixture.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnapshotFixture.swift; sourceTree = "<group>"; };
-		7572DA0A838E0A044F045260 /* LocalAPIContract.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalAPIContract.swift; sourceTree = "<group>"; };
 		8B6472EF300EBFA30018E10A /* SyncedProducts.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = SyncedProducts.storekit; sourceTree = "<group>"; };
 		8B7800692F6090E300933221 /* DomainDig.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DomainDig.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		8BBFEF032F9874AE00E8E144 /* DomainInspectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainInspectionService.swift; sourceTree = "<group>"; };
-		8BBFEF042F9874AE00E8E144 /* DomainReportBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainReportBuilder.swift; sourceTree = "<group>"; };
-		8BBFEF052F9874AE00E8E144 /* DomainReportExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainReportExporter.swift; sourceTree = "<group>"; };
-		8BBFEF062F9874AE00E8E144 /* LookupSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookupSnapshot.swift; sourceTree = "<group>"; };
-		8BCA3CBC2F9C8D57004B742C /* LocalAPIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAPIModels.swift; sourceTree = "<group>"; };
-		8BCA3CBD2F9C8D57004B742C /* LocalAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAPIService.swift; sourceTree = "<group>"; };
 		8BDA00010000000000000001 /* DomainDigWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DomainDigWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BDB00010000000000000001 /* DomainDigShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DomainDigShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BDC00010000000000000001 /* DomainDigUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DomainDigUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		8BF9DA842F9B13FB00EF41D5 /* DomainDataPortabilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainDataPortabilityService.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000000101 /* HistoryEntryCodableTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryEntryCodableTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000000201 /* InspectionInputTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InspectionInputTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000000601 /* FeatureAccessTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeatureAccessTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000000701 /* SMTPMessageTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SMTPMessageTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000000801 /* LocalAPIRoutingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalAPIRoutingTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000000901 /* MonitoringSchedulingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MonitoringSchedulingTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000001001 /* DomainViewModelStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DomainViewModelStoreTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000001101 /* LookupCacheTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LookupCacheTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000001201 /* HistoryStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryStoreTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000001401 /* SectionStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SectionStateTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000001501 /* PortfolioDashboardTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PortfolioDashboardTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000001601 /* InspectionScopeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InspectionScopeTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000001701 /* AWSSigV4Tests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AWSSigV4Tests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000001801 /* S3UploadClientTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = S3UploadClientTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000000301 /* AvailabilityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AvailabilityTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000000401 /* CloudSyncMergeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CloudSyncMergeTests.swift; sourceTree = "<group>"; };
-		A1B2C3D40000000000000501 /* DomainNameTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DomainNameTests.swift; sourceTree = "<group>"; };
 		A77F7ED29E7C6669F5E61C04 /* DomainDigTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DomainDigTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		CC948A02EC0184228BC4630E /* DomainDataPortabilityServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DomainDataPortabilityServiceTests.swift; sourceTree = "<group>"; };
 		DE8B269A01CC5E593DA3DFC2 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		E82320955416797CFE59464A /* DomainReportBuilderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DomainReportBuilderTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -193,6 +127,11 @@
 			path = DomainDigUITests;
 			sourceTree = "<group>";
 		};
+		8BDD0001000000000000000E /* DomainDigTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = DomainDigTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -243,46 +182,6 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		2B31A5F9F390F512E966D4B1 /* Fixtures */ = {
-			isa = PBXGroup;
-			children = (
-				5CA789D3607B55E3612E6FFA /* SnapshotFixture.swift */,
-			);
-			path = Fixtures;
-			sourceTree = "<group>";
-		};
-		7CC29A88387286DE8B4D17B3 /* DomainDigTests */ = {
-			isa = PBXGroup;
-			children = (
-				2B31A5F9F390F512E966D4B1 /* Fixtures */,
-				15A25DF2B8BB52589D49986B /* DiffServiceTests.swift */,
-				E82320955416797CFE59464A /* DomainReportBuilderTests.swift */,
-				54D7C7D97A4006831572F468 /* DomainReportExporterTests.swift */,
-				CC948A02EC0184228BC4630E /* DomainDataPortabilityServiceTests.swift */,
-				0D85A44C5F315A1644AC9073 /* LocalAPIContractTests.swift */,
-				435AFB3F99D579D3D7B58279 /* DataMigrationServiceTests.swift */,
-				499B99A1866999A38AC475F5 /* AppInfoTests.swift */,
-				A1B2C3D40000000000000101 /* HistoryEntryCodableTests.swift */,
-				A1B2C3D40000000000000201 /* InspectionInputTests.swift */,
-				A1B2C3D40000000000000601 /* FeatureAccessTests.swift */,
-				A1B2C3D40000000000000701 /* SMTPMessageTests.swift */,
-				A1B2C3D40000000000000801 /* LocalAPIRoutingTests.swift */,
-				A1B2C3D40000000000000901 /* MonitoringSchedulingTests.swift */,
-				A1B2C3D40000000000001001 /* DomainViewModelStoreTests.swift */,
-				A1B2C3D40000000000001101 /* LookupCacheTests.swift */,
-				A1B2C3D40000000000001201 /* HistoryStoreTests.swift */,
-				A1B2C3D40000000000001401 /* SectionStateTests.swift */,
-				A1B2C3D40000000000001501 /* PortfolioDashboardTests.swift */,
-				A1B2C3D40000000000001601 /* InspectionScopeTests.swift */,
-				A1B2C3D40000000000001701 /* AWSSigV4Tests.swift */,
-				A1B2C3D40000000000001801 /* S3UploadClientTests.swift */,
-				A1B2C3D40000000000000301 /* AvailabilityTests.swift */,
-				A1B2C3D40000000000000401 /* CloudSyncMergeTests.swift */,
-				A1B2C3D40000000000000501 /* DomainNameTests.swift */,
-			);
-			path = DomainDigTests;
-			sourceTree = "<group>";
-		};
 		8B7800602F6090E300933221 = {
 			isa = PBXGroup;
 			children = (
@@ -293,16 +192,8 @@
 				8BDB0001000000000000000E /* DomainDigShareExtension */,
 				8BDC0001000000000000000E /* DomainDigUITests */,
 				8B78006A2F6090E300933221 /* Products */,
-				8BBFEF062F9874AE00E8E144 /* LookupSnapshot.swift */,
-				8BBFEF042F9874AE00E8E144 /* DomainReportBuilder.swift */,
-				8BBFEF032F9874AE00E8E144 /* DomainInspectionService.swift */,
-				8BBFEF052F9874AE00E8E144 /* DomainReportExporter.swift */,
-				8BF9DA842F9B13FB00EF41D5 /* DomainDataPortabilityService.swift */,
-				8BCA3CBC2F9C8D57004B742C /* LocalAPIModels.swift */,
-				8BCA3CBD2F9C8D57004B742C /* LocalAPIService.swift */,
 				12026CD045DFB45E9E37D207 /* Frameworks */,
-				7CC29A88387286DE8B4D17B3 /* DomainDigTests */,
-				7572DA0A838E0A044F045260 /* LocalAPIContract.swift */,
+				8BDD0001000000000000000E /* DomainDigTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -341,6 +232,9 @@
 			);
 			dependencies = (
 				D17881CF5E934733B8E99DE8 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				8BDD0001000000000000000E /* DomainDigTests */,
 			);
 			name = DomainDigTests;
 			productName = DomainDigTests;
@@ -530,31 +424,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E959C4D24DAAB3CB80D854B2 /* DiffServiceTests.swift in Sources */,
-				81359F63C7A23454B8FA0141 /* DomainReportBuilderTests.swift in Sources */,
-				A1B2C3D40000000000000102 /* HistoryEntryCodableTests.swift in Sources */,
-				47CD3BB1AE143733A73E0E5B /* DomainReportExporterTests.swift in Sources */,
-				C7CA9E02B0DC2708DE7A8563 /* DomainDataPortabilityServiceTests.swift in Sources */,
-				A5AF921BC1C2E6E940CC05DC /* SnapshotFixture.swift in Sources */,
-				EA12012CDB4C21ABB4217D86 /* LocalAPIContractTests.swift in Sources */,
-				4F96CEB875EC3501E784CE39 /* DataMigrationServiceTests.swift in Sources */,
-				99024E91EED2275FD80E83A9 /* AppInfoTests.swift in Sources */,
-				A1B2C3D40000000000000202 /* InspectionInputTests.swift in Sources */,
-				A1B2C3D40000000000000602 /* FeatureAccessTests.swift in Sources */,
-				A1B2C3D40000000000000702 /* SMTPMessageTests.swift in Sources */,
-				A1B2C3D40000000000000802 /* LocalAPIRoutingTests.swift in Sources */,
-				A1B2C3D40000000000000902 /* MonitoringSchedulingTests.swift in Sources */,
-				A1B2C3D40000000000001002 /* DomainViewModelStoreTests.swift in Sources */,
-				A1B2C3D40000000000001102 /* LookupCacheTests.swift in Sources */,
-				A1B2C3D40000000000001202 /* HistoryStoreTests.swift in Sources */,
-				A1B2C3D40000000000001402 /* SectionStateTests.swift in Sources */,
-				A1B2C3D40000000000001502 /* PortfolioDashboardTests.swift in Sources */,
-				A1B2C3D40000000000001602 /* InspectionScopeTests.swift in Sources */,
-				A1B2C3D40000000000001702 /* AWSSigV4Tests.swift in Sources */,
-				A1B2C3D40000000000001802 /* S3UploadClientTests.swift in Sources */,
-				A1B2C3D40000000000000302 /* AvailabilityTests.swift in Sources */,
-				A1B2C3D40000000000000402 /* CloudSyncMergeTests.swift in Sources */,
-				A1B2C3D40000000000000502 /* DomainNameTests.swift in Sources */,
+
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -562,14 +432,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8BCA3CC02F9C8D57004B742C /* LocalAPIModels.swift in Sources */,
-				8BCA3CC12F9C8D57004B742C /* LocalAPIService.swift in Sources */,
-				8BBFEF092F9874AE00E8E144 /* DomainInspectionService.swift in Sources */,
-				8BBFEF0A2F9874AE00E8E144 /* DomainReportBuilder.swift in Sources */,
-				8BBFEF0B2F9874AE00E8E144 /* DomainReportExporter.swift in Sources */,
-				8BF9DA872F9B13FB00EF41D5 /* DomainDataPortabilityService.swift in Sources */,
-				8BBFEF0C2F9874AE00E8E144 /* LookupSnapshot.swift in Sources */,
-				05F775C7E0743AF727B008EE /* LocalAPIContract.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
