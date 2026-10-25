@@ -88,6 +88,8 @@ struct IntegrationsSettingsView: View {
             return configuration.destinationLabel
         case .email(let configuration):
             return configuration.recipientAddresses.joined(separator: ", ")
+        case .s3(let configuration):
+            return configuration.bucket.isEmpty ? "S3 bucket" : configuration.bucket
         }
     }
 }
@@ -183,6 +185,8 @@ private struct IntegrationDetailView: View {
             return configuration.destinationLabel
         case .email(let configuration):
             return configuration.recipientAddresses.joined(separator: ", ")
+        case .s3(let configuration):
+            return configuration.bucket
         }
     }
 }
@@ -198,6 +202,13 @@ private struct IntegrationEditorView: View {
     @State private var isEnabled = true
     @State private var minimumSeverity: EventSeverity = .warning
     @State private var selectedEventTypes: Set<MonitoringEventType> = Set(MonitoringEventType.allCases.filter { $0 != .test })
+    @State private var s3Endpoint = ""
+    @State private var s3Region = "us-east-1"
+    @State private var s3Bucket = ""
+    @State private var s3KeyPrefix = "domaindig"
+    @State private var s3UsesPathStyle = false
+    @State private var s3AccessKeyID = ""
+    @State private var s3SecretAccessKey = ""
     @State private var domainsText = ""
 
     @State private var webhookURL = ""
@@ -216,11 +227,17 @@ private struct IntegrationEditorView: View {
         Form {
             Section("Integration") {
                 Picker("Type", selection: $type) {
-                    ForEach(IntegrationType.allCases) { integrationType in
+                    ForEach(selectableTypes) { integrationType in
                         Text(integrationType.title).tag(integrationType)
                     }
                 }
                 .disabled(existingTarget != nil)
+
+                if !FeatureAccessService.hasAccess(to: .bucketExport) {
+                    Text("Export to your own bucket is \(FeatureAccessService.upgradeMessage(for: .bucketExport)).")
+                        .font(.caption)
+                        .foregroundStyle(Color(.appTextSecondary))
+                }
 
                 TextField("Name", text: $name)
                 Toggle("Enabled", isOn: $isEnabled)
@@ -322,6 +339,52 @@ private struct IntegrationEditorView: View {
                             .foregroundStyle(Color(.appTextSecondary))
                     }
                 }
+            case .s3:
+                Section("Bucket") {
+                    TextField("https://s3.eu-central-1.amazonaws.com", text: $s3Endpoint)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+
+                    Text("Must be https. Signing puts your access key ID on the wire, and the signature with it.")
+                        .font(.caption)
+                        .foregroundStyle(Color(.appTextSecondary))
+
+                    TextField("Bucket", text: $s3Bucket)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    TextField("Region", text: $s3Region)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    TextField("Key prefix", text: $s3KeyPrefix)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    Toggle("Path-style addressing", isOn: $s3UsesPathStyle)
+
+                    Text("Addresses the bucket as endpoint/bucket/key. MinIO needs this, and so do R2 custom domains.")
+                        .font(.caption)
+                        .foregroundStyle(Color(.appTextSecondary))
+                }
+
+                Section("Credentials") {
+                    TextField("Access key ID", text: $s3AccessKeyID)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    SecureField(
+                        existingTarget == nil ? "Secret access key" : "Replace secret access key",
+                        text: $s3SecretAccessKey
+                    )
+
+                    if existingTarget != nil {
+                        Text("Saved secret access key remains in Keychain unless you replace it.")
+                            .font(.caption)
+                            .foregroundStyle(Color(.appTextSecondary))
+                    }
+                }
             }
 
             if let validationMessage {
@@ -372,6 +435,13 @@ private struct IntegrationEditorView: View {
             senderAddress = configuration.senderAddress
             recipientAddresses = configuration.recipientAddresses.joined(separator: ", ")
             smtpSecurity = configuration.securityMode
+        case .s3(let configuration):
+            s3Endpoint = configuration.endpoint
+            s3Region = configuration.region
+            s3Bucket = configuration.bucket
+            s3KeyPrefix = configuration.keyPrefix
+            s3UsesPathStyle = configuration.usesPathStyle
+            s3AccessKeyID = configuration.accessKeyID
         }
     }
 
@@ -499,11 +569,70 @@ private struct IntegrationEditorView: View {
                     target: target,
                     emailPassword: emailPassword.nilIfBlank
                 )
+            case .s3:
+                guard FeatureAccessService.hasAccess(to: .bucketExport) else {
+                    validationMessage = "Export to your own bucket is \(FeatureAccessService.upgradeMessage(for: .bucketExport))."
+                    return
+                }
+
+                let existingReference: String? = {
+                    guard case .s3(let configuration) = existingTarget?.configuration else { return nil }
+                    return configuration.credentialReference
+                }()
+
+                let trimmedBucket = s3Bucket.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmedBucket.isEmpty else {
+                    validationMessage = "Bucket is required."
+                    return
+                }
+                let trimmedAccessKeyID = s3AccessKeyID.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmedAccessKeyID.isEmpty else {
+                    validationMessage = "Access key ID is required."
+                    return
+                }
+                if s3SecretAccessKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && existingReference == nil {
+                    validationMessage = "Secret access key is required."
+                    return
+                }
+
+                let target = IntegrationTarget(
+                    id: targetID,
+                    type: .s3,
+                    name: trimmedName,
+                    isEnabled: isEnabled,
+                    configuration: .s3(
+                        S3IntegrationConfiguration(
+                            endpoint: s3Endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
+                            region: s3Region.trimmingCharacters(in: .whitespacesAndNewlines),
+                            bucket: trimmedBucket,
+                            keyPrefix: s3KeyPrefix.trimmingCharacters(in: .whitespacesAndNewlines),
+                            usesPathStyle: s3UsesPathStyle,
+                            accessKeyID: trimmedAccessKeyID,
+                            credentialReference: existingReference
+                        )
+                    ),
+                    filters: filters
+                )
+                try integrationService.upsert(
+                    target: target,
+                    s3SecretAccessKey: s3SecretAccessKey.nilIfBlank
+                )
             }
 
             dismiss()
         } catch {
             validationMessage = error.localizedDescription
+        }
+    }
+
+    /// Bucket export is Pro+ (D1), so a tier without it does not get the
+    /// option. An existing target keeps its type listed, so a downgrade leaves
+    /// the editor readable rather than blank.
+    private var selectableTypes: [IntegrationType] {
+        IntegrationType.allCases.filter { integrationType in
+            if integrationType == existingTarget?.type { return true }
+            guard integrationType == .s3 else { return true }
+            return FeatureAccessService.hasAccess(to: .bucketExport)
         }
     }
 

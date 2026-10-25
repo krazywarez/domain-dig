@@ -160,4 +160,18 @@ final class FeatureAccessTests: XCTestCase {
         XCTAssertFalse(FeatureAccessService.canAddTrackedDomain(currentCount: 500, tier: .free))
         XCTAssertTrue(FeatureAccessService.canAddTrackedDomain(currentCount: 500, tier: .pro))
     }
+
+    /// Export to the user's own bucket is Pro+ (D1). Pro+ takes
+    /// `allCases`, so a new capability lands there by construction — this is
+    /// the check that it did not also land in free or pro.
+    func testBucketExportIsProPlusOnly() {
+        XCTAssertFalse(FeatureAccessService.entitlements(for: .free).capabilities.contains(.bucketExport))
+        XCTAssertFalse(FeatureAccessService.entitlements(for: .pro).capabilities.contains(.bucketExport))
+        XCTAssertTrue(FeatureAccessService.entitlements(for: .proPlus).capabilities.contains(.bucketExport))
+    }
+
+    func testBucketExportPromptsForProPlus() {
+        XCTAssertEqual(FeatureAccessService.upgradeMessage(for: .bucketExport), "Available in Pro+")
+        XCTAssertEqual(FeatureAccessService.upgradePrompt(for: .bucketExport).title, "Available in Pro+")
+    }
 }

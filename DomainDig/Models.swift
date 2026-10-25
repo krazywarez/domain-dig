@@ -1735,6 +1735,7 @@ enum IntegrationType: String, Codable, CaseIterable, Identifiable, Sendable {
     case webhook
     case slack
     case email
+    case s3
 
     var id: String { rawValue }
 
@@ -1819,16 +1820,58 @@ struct EmailIntegrationConfiguration: Codable, Equatable, Sendable {
     }
 }
 
+/// An S3-compatible bucket the user owns: S3 itself, R2, B2, MinIO, Wasabi or
+/// Spaces.
+///
+/// The secret access key is not here. It lives in the Keychain through
+/// `IntegrationSecretStore`, and `credentialReference` is how this finds it.
+struct S3IntegrationConfiguration: Codable, Equatable, Sendable {
+    /// The service endpoint, for example `https://s3.eu-central-1.amazonaws.com`
+    /// or `https://<account>.r2.cloudflarestorage.com`. Rejected unless https.
+    var endpoint: String
+    /// The SigV4 signing region. R2 and most MinIO deployments want `auto` or
+    /// `us-east-1`; it has to match whatever the endpoint expects.
+    var region: String
+    var bucket: String
+    /// Prepended to every object key.
+    var keyPrefix: String
+    /// Address the bucket as `endpoint/bucket/key` rather than
+    /// `bucket.endpoint/key`. MinIO needs this, and so do R2 custom domains.
+    var usesPathStyle: Bool
+    var accessKeyID: String
+    var credentialReference: String?
+
+    init(
+        endpoint: String = "",
+        region: String = "us-east-1",
+        bucket: String = "",
+        keyPrefix: String = "domaindig",
+        usesPathStyle: Bool = false,
+        accessKeyID: String = "",
+        credentialReference: String? = nil
+    ) {
+        self.endpoint = endpoint
+        self.region = region
+        self.bucket = bucket
+        self.keyPrefix = keyPrefix
+        self.usesPathStyle = usesPathStyle
+        self.accessKeyID = accessKeyID
+        self.credentialReference = credentialReference
+    }
+}
+
 enum IntegrationConfiguration: Codable, Equatable, Sendable {
     case webhook(WebhookIntegrationConfiguration)
     case slack(SlackIntegrationConfiguration)
     case email(EmailIntegrationConfiguration)
+    case s3(S3IntegrationConfiguration)
 
     private enum CodingKeys: String, CodingKey {
         case type
         case webhook
         case slack
         case email
+        case s3
     }
 
     init(from decoder: Decoder) throws {
@@ -1841,6 +1884,8 @@ enum IntegrationConfiguration: Codable, Equatable, Sendable {
             self = .slack(try container.decode(SlackIntegrationConfiguration.self, forKey: .slack))
         case .email:
             self = .email(try container.decode(EmailIntegrationConfiguration.self, forKey: .email))
+        case .s3:
+            self = .s3(try container.decode(S3IntegrationConfiguration.self, forKey: .s3))
         }
     }
 
@@ -1856,6 +1901,9 @@ enum IntegrationConfiguration: Codable, Equatable, Sendable {
         case .email(let configuration):
             try container.encode(IntegrationType.email, forKey: .type)
             try container.encode(configuration, forKey: .email)
+        case .s3(let configuration):
+            try container.encode(IntegrationType.s3, forKey: .type)
+            try container.encode(configuration, forKey: .s3)
         }
     }
 
@@ -1867,6 +1915,8 @@ enum IntegrationConfiguration: Codable, Equatable, Sendable {
             return .slack
         case .email:
             return .email
+        case .s3:
+            return .s3
         }
     }
 }

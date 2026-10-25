@@ -34,7 +34,8 @@ final class IntegrationService {
         target: IntegrationTarget,
         webhookURL: String? = nil,
         slackWebhookURL: String? = nil,
-        emailPassword: String? = nil
+        emailPassword: String? = nil,
+        s3SecretAccessKey: String? = nil
     ) throws {
         var updatedTarget = target
 
@@ -64,6 +65,18 @@ final class IntegrationService {
                 configuration.credentialReference = reference
                 updatedTarget.configuration = .email(configuration)
             }
+        case .s3(var configuration):
+            // Validated on every save, not only when a new key is supplied:
+            // the endpoint is editable on its own, and an http endpoint would
+            // put the access key ID and the signature on the wire in the
+            // clear. F3's NSAllowsArbitraryLoads means nothing else stops it.
+            try Self.validateHTTPS(configuration.endpoint)
+            if let s3SecretAccessKey {
+                let reference = configuration.credentialReference ?? Self.secretReference(for: updatedTarget.id, suffix: "s3")
+                try IntegrationSecretStore.save(secret: s3SecretAccessKey, reference: reference)
+                configuration.credentialReference = reference
+            }
+            updatedTarget.configuration = .s3(configuration)
         }
 
         if let index = targets.firstIndex(where: { $0.id == updatedTarget.id }) {
@@ -233,6 +246,8 @@ final class IntegrationService {
                 configuration.credentialReference
             case .email(let configuration):
                 configuration.credentialReference
+            case .s3(let configuration):
+                configuration.credentialReference
             }
         }
     }
@@ -391,6 +406,26 @@ final class IntegrationService {
                 headers: [:],
                 timeoutSeconds: 15
             )
+        case .s3(let configuration):
+            guard let reference = configuration.credentialReference else {
+                throw IntegrationError.missingSecret
+            }
+            let secretAccessKey = try IntegrationSecretStore.secret(reference: reference)
+            let object = Self.s3Object(for: event)
+            let request = try S3UploadClient.request(
+                for: object,
+                configuration: configuration,
+                credentials: AWSSigV4.Credentials(
+                    accessKeyID: configuration.accessKeyID,
+                    secretAccessKey: secretAccessKey
+                ),
+                now: Date()
+            )
+            let (data, response) = try await URLSession.shared.data(for: request)
+            try S3UploadClient.validate(
+                statusCode: (response as? HTTPURLResponse)?.statusCode ?? 0,
+                body: data
+            )
         case .email(let configuration):
             guard let reference = configuration.credentialReference else {
                 throw IntegrationError.missingSecret
@@ -422,6 +457,42 @@ final class IntegrationService {
         Self.save(queue, key: StorageKey.queue, defaults: defaults)
     }
 
+    /// What an event uploads: the domain's latest stored report when there is
+    /// one, and the event itself otherwise.
+    ///
+    /// A test delivery takes the second path, which is the point of it — it
+    /// proves the endpoint, the signature and the bucket policy without
+    /// needing a lookup to have happened first.
+    private static func s3Object(for event: MonitoringEvent) -> S3UploadClient.Object {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+
+        let domain = event.domain.isEmpty ? "unknown" : event.domain
+        let snapshot = MonitoringStorage.loadHistoryEntries()
+            .first { $0.domain.caseInsensitiveCompare(domain) == .orderedSame }?
+            .snapshot
+
+        let body: Data
+        if let snapshot, let encoded = try? encoder.encode(DomainReportBuilder().build(from: snapshot)) {
+            body = encoded
+        } else {
+            body = (try? encoder.encode(IntegrationEventPayload(event: event))) ?? Data()
+        }
+
+        return S3UploadClient.Object(
+            key: "\(domain)/\(Self.objectTimestampFormatter.string(from: event.timestamp)).json",
+            body: body,
+            contentType: "application/json"
+        )
+    }
+
+    private static let objectTimestampFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        return formatter
+    }()
+
     private func deleteSecrets(for target: IntegrationTarget) {
         switch target.configuration {
         case .webhook(let configuration):
@@ -436,6 +507,10 @@ final class IntegrationService {
             if let reference = configuration.credentialReference {
                 try? IntegrationSecretStore.delete(reference: reference)
             }
+        case .s3(let configuration):
+            if let reference = configuration.credentialReference {
+                try? IntegrationSecretStore.delete(reference: reference)
+            }
         }
     }
 
@@ -447,6 +522,8 @@ final class IntegrationService {
             return configuration.destinationLabel
         case .email(let configuration):
             return configuration.recipientAddresses.joined(separator: ", ")
+        case .s3(let configuration):
+            return configuration.bucket.isEmpty ? target.name : configuration.bucket
         }
     }
 
