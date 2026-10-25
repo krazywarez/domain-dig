@@ -110,66 +110,6 @@ private struct BatchLookupPayload {
     let snapshot: LookupSnapshot
 }
 
-struct PortfolioDomainStatus: Identifiable {
-    let trackedDomain: TrackedDomain
-    let latestEntry: HistoryEntry?
-    let report: DomainReport
-    let apexDomain: String
-    let health: DomainHealth
-    let lastChangeDate: Date?
-    let lastMonitoringFailure: Date?
-    let instabilityScore: Int
-    let certificateExpiryState: CertificateWarningLevel
-    let certificateDaysRemaining: Int?
-    let isUnreachable: Bool
-    let recentDNSChange: Bool
-    let recentCriticalChange: Bool
-    let recentFailureCount: Int
-
-    var id: UUID { trackedDomain.id }
-}
-
-struct PortfolioActivityItem: Identifiable {
-    let id: String
-    let trackedDomainID: UUID
-    let domain: String
-    let message: String
-    let timestamp: Date
-    let health: DomainHealth
-    let systemImage: String
-}
-
-struct PortfolioAttentionItem: Identifiable {
-    let id: String
-    let trackedDomainID: UUID
-    let domain: String
-    let reason: String
-    let timestamp: Date
-    let health: DomainHealth
-}
-
-struct PortfolioGroup: Identifiable {
-    let apexDomain: String
-    let domains: [PortfolioDomainStatus]
-
-    var id: String { apexDomain }
-}
-
-struct PortfolioDashboardData {
-    let snapshot: PortfolioSnapshot
-    let domainStates: [PortfolioDomainStatus]
-    let recentActivity: [PortfolioActivityItem]
-    let attentionRequired: [PortfolioAttentionItem]
-    let expiringSoon: [PortfolioDomainStatus]
-    let groups: [PortfolioGroup]
-}
-
-private struct PortfolioDashboardStamp: Equatable {
-    let trackedDomainSignature: [String]
-    let historySignature: [String]
-    let monitoringSignature: [String]
-}
-
 @MainActor
 @Observable
 final class DomainViewModel {
@@ -323,8 +263,6 @@ final class DomainViewModel {
     private var trackedDomainsPersistenceDirty = false
     private let reportBuilder = DomainReportBuilder()
     private let inspectionService = DomainInspectionService()
-    private var cachedPortfolioDashboardData: PortfolioDashboardData?
-    private var cachedPortfolioDashboardStamp: PortfolioDashboardStamp?
     private(set) var currentResultSource: LookupResultSource = .live
     private(set) var currentCachedSections: [LookupSectionKind] = []
     private(set) var currentStatusMessage: String?
@@ -520,12 +458,17 @@ final class DomainViewModel {
         return sortedTrackedDomains(from: filtered, using: watchlistSortOption)
     }
 
+    /// Builds the dashboard. Uncached, deliberately: the cache this replaces
+    /// was keyed on a signature of every tracked domain, the last 250 history
+    /// rows and the last 100 monitoring logs, built with
+    /// `.formatted(.number.precision(.fractionLength(3)))` — roughly 350
+    /// interpolations per access, and the dashboard reads this more than twenty
+    /// times per render, so checking the cache cost far more than the build it
+    /// was avoiding (A4).
+    ///
+    /// Callers that need it more than once should read it once and filter with
+    /// `filtered(by:searchText:)`, which is what `DashboardView` does.
     var portfolioDashboardData: PortfolioDashboardData {
-        let stamp = portfolioDashboardStamp()
-        if let cachedPortfolioDashboardData, cachedPortfolioDashboardStamp == stamp {
-            return cachedPortfolioDashboardData
-        }
-
         let domainStates = buildPortfolioDomainStates()
         let recentActivity = buildPortfolioActivity(from: domainStates)
         let attentionRequired = buildAttentionQueue(from: domainStates)
@@ -535,7 +478,7 @@ final class DomainViewModel {
                 ($0.certificateDaysRemaining ?? .max, $0.trackedDomain.domain)
                     < ($1.certificateDaysRemaining ?? .max, $1.trackedDomain.domain)
             }
-        let groups = buildPortfolioGroups(from: domainStates)
+        let groups = PortfolioDashboardData.groups(from: domainStates)
         let snapshot = PortfolioSnapshot(
             totalDomains: domainStates.count,
             healthyCount: domainStates.filter { $0.health == .healthy }.count,
@@ -548,7 +491,7 @@ final class DomainViewModel {
             expiringSoonCount: expiringSoon.count,
             unreachableCount: domainStates.filter(\.isUnreachable).count
         )
-        let data = PortfolioDashboardData(
+        return PortfolioDashboardData(
             snapshot: snapshot,
             domainStates: domainStates,
             recentActivity: recentActivity,
@@ -556,35 +499,6 @@ final class DomainViewModel {
             expiringSoon: expiringSoon,
             groups: groups
         )
-        cachedPortfolioDashboardStamp = stamp
-        cachedPortfolioDashboardData = data
-        return data
-    }
-
-    var filteredPortfolioDomainStates: [PortfolioDomainStatus] {
-        let query = dashboardSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return portfolioDashboardData.domainStates.filter { state in
-            matchesPortfolioFilter(state) && matchesDashboardSearch(state, query: query)
-        }
-    }
-
-    var filteredPortfolioGroups: [PortfolioGroup] {
-        buildPortfolioGroups(from: filteredPortfolioDomainStates)
-    }
-
-    var filteredPortfolioRecentActivity: [PortfolioActivityItem] {
-        let visibleDomainIDs = Set(filteredPortfolioDomainStates.map(\.trackedDomain.id))
-        return portfolioDashboardData.recentActivity.filter { visibleDomainIDs.contains($0.trackedDomainID) }
-    }
-
-    var filteredPortfolioAttentionRequired: [PortfolioAttentionItem] {
-        let visibleDomainIDs = Set(filteredPortfolioDomainStates.map(\.trackedDomain.id))
-        return portfolioDashboardData.attentionRequired.filter { visibleDomainIDs.contains($0.trackedDomainID) }
-    }
-
-    var filteredPortfolioExpiringSoon: [PortfolioDomainStatus] {
-        let visibleDomainIDs = Set(filteredPortfolioDomainStates.map(\.trackedDomain.id))
-        return portfolioDashboardData.expiringSoon.filter { visibleDomainIDs.contains($0.trackedDomain.id) }
     }
 
     var timelineDomains: [String] {
@@ -2482,42 +2396,6 @@ final class DomainViewModel {
         trackedDomains.first(where: { $0.id == id })
     }
 
-    private func portfolioDashboardStamp() -> PortfolioDashboardStamp {
-        PortfolioDashboardStamp(
-            trackedDomainSignature: trackedDomains
-                .sorted { $0.id.uuidString < $1.id.uuidString }
-                .map {
-                    [
-                        $0.id.uuidString,
-                        $0.updatedAt.timeIntervalSinceReferenceDate.formatted(.number.precision(.fractionLength(3))),
-                        String($0.pendingMonitoringAlerts.count),
-                        $0.lastMonitoredAt?.timeIntervalSinceReferenceDate.formatted(.number.precision(.fractionLength(3))) ?? "0",
-                        $0.lastAlertAt?.timeIntervalSinceReferenceDate.formatted(.number.precision(.fractionLength(3))) ?? "0"
-                    ].joined(separator: "|")
-                },
-            historySignature: history
-                .prefix(250)
-                .map {
-                    [
-                        $0.id.uuidString,
-                        $0.timestamp.timeIntervalSinceReferenceDate.formatted(.number.precision(.fractionLength(3))),
-                        String($0.changeCount),
-                        $0.severitySummary?.rawValue.description ?? "-"
-                    ].joined(separator: "|")
-                },
-            monitoringSignature: monitoringLogs
-                .prefix(100)
-                .map {
-                    [
-                        $0.id.uuidString,
-                        $0.timestamp.timeIntervalSinceReferenceDate.formatted(.number.precision(.fractionLength(3))),
-                        String($0.alertsTriggered),
-                        String($0.changesFound)
-                    ].joined(separator: "|")
-                }
-        )
-    }
-
     private func buildPortfolioDomainStates() -> [PortfolioDomainStatus] {
         let now = Date()
         return sortedTrackedDomains(from: trackedDomains, using: .pinned).map { trackedDomain in
@@ -2661,7 +2539,7 @@ final class DomainViewModel {
         }
         .sorted { lhs, rhs in
             if lhs.health != rhs.health {
-                return healthRank(lhs.health) > healthRank(rhs.health)
+                return lhs.health.severityRank > rhs.health.severityRank
             }
             return lhs.timestamp > rhs.timestamp
         }
@@ -2691,56 +2569,6 @@ final class DomainViewModel {
             return ("Recent critical change detected", changedAt)
         }
         return ("Needs attention", state.trackedDomain.updatedAt)
-    }
-
-    private func buildPortfolioGroups(from domainStates: [PortfolioDomainStatus]) -> [PortfolioGroup] {
-        Dictionary(grouping: domainStates, by: \.apexDomain)
-            .map { apexDomain, domains in
-                PortfolioGroup(
-                    apexDomain: apexDomain,
-                    domains: domains.sorted { lhs, rhs in
-                        if lhs.health != rhs.health {
-                            return healthRank(lhs.health) > healthRank(rhs.health)
-                        }
-                        return lhs.trackedDomain.domain.localizedCaseInsensitiveCompare(rhs.trackedDomain.domain) == .orderedAscending
-                    }
-                )
-            }
-            .sorted { lhs, rhs in
-                if let lhsMostSevere = lhs.domains.map(\.health).map(healthRank).max(),
-                   let rhsMostSevere = rhs.domains.map(\.health).map(healthRank).max(),
-                   lhsMostSevere != rhsMostSevere {
-                    return lhsMostSevere > rhsMostSevere
-                }
-                return lhs.apexDomain.localizedCaseInsensitiveCompare(rhs.apexDomain) == .orderedAscending
-            }
-    }
-
-    private func matchesPortfolioFilter(_ state: PortfolioDomainStatus) -> Bool {
-        switch dashboardFilter {
-        case .all:
-            return true
-        case .healthy:
-            return state.health == .healthy
-        case .warning:
-            return state.health == .warning
-        case .critical:
-            return state.health == .critical
-        case .changed:
-            guard let lastChangeDate = state.lastChangeDate else { return false }
-            return Date().timeIntervalSince(lastChangeDate) <= 24 * 60 * 60
-        case .expiring:
-            return state.certificateExpiryState != .none
-        case .unreachable:
-            return state.isUnreachable
-        }
-    }
-
-    private func matchesDashboardSearch(_ state: PortfolioDomainStatus, query: String) -> Bool {
-        guard !query.isEmpty else { return true }
-        let normalizedQuery = query.lowercased()
-        return state.trackedDomain.domain.lowercased().contains(normalizedQuery)
-            || state.apexDomain.lowercased().contains(normalizedQuery)
     }
 
     private func portfolioHistoryMessage(for entry: HistoryEntry) -> String {
@@ -2809,17 +2637,6 @@ final class DomainViewModel {
             .map(String.init)
         guard parts.count > 2 else { return domain.lowercased() }
         return parts.suffix(2).joined(separator: ".")
-    }
-
-    private func healthRank(_ health: DomainHealth) -> Int {
-        switch health {
-        case .healthy:
-            return 0
-        case .warning:
-            return 1
-        case .critical:
-            return 2
-        }
     }
 
     private func exportSnapshots(for domains: [TrackedDomain]) -> [LookupSnapshot] {

@@ -35,6 +35,7 @@
 		A1B2C3D40000000000001102 /* LookupCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001101 /* LookupCacheTests.swift */; };
 		A1B2C3D40000000000001202 /* HistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001201 /* HistoryStoreTests.swift */; };
 		A1B2C3D40000000000001402 /* SectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001401 /* SectionStateTests.swift */; };
+		A1B2C3D40000000000001502 /* PortfolioDashboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000001501 /* PortfolioDashboardTests.swift */; };
 		A1B2C3D40000000000000302 /* AvailabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000301 /* AvailabilityTests.swift */; };
 		A1B2C3D40000000000000402 /* CloudSyncMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000401 /* CloudSyncMergeTests.swift */; };
 		A1B2C3D40000000000000502 /* DomainNameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000501 /* DomainNameTests.swift */; };
@@ -117,6 +118,7 @@
 		A1B2C3D40000000000001101 /* LookupCacheTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LookupCacheTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000001201 /* HistoryStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryStoreTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000001401 /* SectionStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SectionStateTests.swift; sourceTree = "<group>"; };
+		A1B2C3D40000000000001501 /* PortfolioDashboardTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PortfolioDashboardTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000301 /* AvailabilityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AvailabilityTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000401 /* CloudSyncMergeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CloudSyncMergeTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000501 /* DomainNameTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DomainNameTests.swift; sourceTree = "<group>"; };
@@ -264,6 +266,7 @@
 				A1B2C3D40000000000001101 /* LookupCacheTests.swift */,
 				A1B2C3D40000000000001201 /* HistoryStoreTests.swift */,
 				A1B2C3D40000000000001401 /* SectionStateTests.swift */,
+				A1B2C3D40000000000001501 /* PortfolioDashboardTests.swift */,
 				A1B2C3D40000000000000301 /* AvailabilityTests.swift */,
 				A1B2C3D40000000000000401 /* CloudSyncMergeTests.swift */,
 				A1B2C3D40000000000000501 /* DomainNameTests.swift */,
@@ -536,6 +539,7 @@
 				A1B2C3D40000000000001102 /* LookupCacheTests.swift in Sources */,
 				A1B2C3D40000000000001202 /* HistoryStoreTests.swift in Sources */,
 				A1B2C3D40000000000001402 /* SectionStateTests.swift in Sources */,
+				A1B2C3D40000000000001502 /* PortfolioDashboardTests.swift in Sources */,
 				A1B2C3D40000000000000302 /* AvailabilityTests.swift in Sources */,
 				A1B2C3D40000000000000402 /* CloudSyncMergeTests.swift in Sources */,
 				A1B2C3D40000000000000502 /* DomainNameTests.swift in Sources */,

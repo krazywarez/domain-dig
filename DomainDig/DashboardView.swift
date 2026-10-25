@@ -12,6 +12,14 @@ struct DashboardView: View {
     ]
 
     var body: some View {
+        // Once per body evaluation. Each of these reads used to rebuild the
+        // whole dashboard, and there were more than twenty of them (A4).
+        let dashboard = viewModel.portfolioDashboardData
+        let visible = dashboard.filtered(
+            by: viewModel.dashboardFilter,
+            searchText: viewModel.dashboardSearchText
+        )
+
         List {
             if viewModel.trackedDomains.isEmpty {
                 Section {
@@ -27,12 +35,12 @@ struct DashboardView: View {
             } else {
                 Section {
                     LazyVGrid(columns: summaryColumns, spacing: 10) {
-                        summaryCard(title: "Total Domains", value: viewModel.portfolioDashboardData.snapshot.totalDomains, filter: .all, tint: Color(.statusInfo))
-                        summaryCard(title: "Healthy", value: viewModel.portfolioDashboardData.snapshot.healthyCount, filter: .healthy, tint: Color(.statusPositive))
-                        summaryCard(title: "Warning", value: viewModel.portfolioDashboardData.snapshot.warningCount, filter: .warning, tint: Color(.statusWarning))
-                        summaryCard(title: "Critical", value: viewModel.portfolioDashboardData.snapshot.criticalCount, filter: .critical, tint: Color(.statusCritical))
-                        summaryCard(title: "Changes (24h)", value: viewModel.portfolioDashboardData.snapshot.changedLast24h, filter: .changed, tint: Color(.statusWarning))
-                        summaryCard(title: "Unreachable", value: viewModel.portfolioDashboardData.snapshot.unreachableCount, filter: .unreachable, tint: Color(.statusCritical))
+                        summaryCard(title: "Total Domains", value: dashboard.snapshot.totalDomains, filter: .all, tint: Color(.statusInfo))
+                        summaryCard(title: "Healthy", value: dashboard.snapshot.healthyCount, filter: .healthy, tint: Color(.statusPositive))
+                        summaryCard(title: "Warning", value: dashboard.snapshot.warningCount, filter: .warning, tint: Color(.statusWarning))
+                        summaryCard(title: "Critical", value: dashboard.snapshot.criticalCount, filter: .critical, tint: Color(.statusCritical))
+                        summaryCard(title: "Changes (24h)", value: dashboard.snapshot.changedLast24h, filter: .changed, tint: Color(.statusWarning))
+                        summaryCard(title: "Unreachable", value: dashboard.snapshot.unreachableCount, filter: .unreachable, tint: Color(.statusCritical))
                     }
                     .padding(.vertical, 4)
                 }
@@ -80,10 +88,10 @@ struct DashboardView: View {
                 .listRowBackground(Color(.appSurface))
 
                 Section("Recent Activity") {
-                    if viewModel.filteredPortfolioRecentActivity.isEmpty {
+                    if visible.recentActivity.isEmpty {
                         dashboardEmptyRow("No recent portfolio changes")
                     } else {
-                        ForEach(viewModel.filteredPortfolioRecentActivity.prefix(8)) { item in
+                        ForEach(visible.recentActivity.prefix(8)) { item in
                             trackedDomainLink(item.trackedDomainID) {
                                 PortfolioActivityRow(item: item)
                             }
@@ -93,10 +101,10 @@ struct DashboardView: View {
                 .listRowBackground(Color(.appSurface))
 
                 Section("Attention Required") {
-                    if viewModel.filteredPortfolioAttentionRequired.isEmpty {
+                    if visible.attentionRequired.isEmpty {
                         dashboardEmptyRow("Nothing urgent right now")
                     } else {
-                        ForEach(viewModel.filteredPortfolioAttentionRequired.prefix(8)) { item in
+                        ForEach(visible.attentionRequired.prefix(8)) { item in
                             trackedDomainLink(item.trackedDomainID) {
                                 PortfolioAttentionRow(item: item)
                             }
@@ -106,10 +114,10 @@ struct DashboardView: View {
                 .listRowBackground(Color(.appSurface))
 
                 Section("Expiring Soon") {
-                    if viewModel.filteredPortfolioExpiringSoon.isEmpty {
+                    if visible.expiringSoon.isEmpty {
                         dashboardEmptyRow("No certificates expiring within 30 days")
                     } else {
-                        ForEach(viewModel.filteredPortfolioExpiringSoon.prefix(8)) { state in
+                        ForEach(visible.expiringSoon.prefix(8)) { state in
                             NavigationLink {
                                 TrackedDomainDetailView(viewModel: viewModel, trackedDomain: state.trackedDomain)
                             } label: {
@@ -122,10 +130,10 @@ struct DashboardView: View {
                 .listRowBackground(Color(.appSurface))
 
                 Section("Portfolio List") {
-                    if viewModel.filteredPortfolioGroups.isEmpty {
+                    if visible.groups.isEmpty {
                         dashboardEmptyRow("No domains match the current filter")
                     } else {
-                        ForEach(viewModel.filteredPortfolioGroups) { group in
+                        ForEach(visible.groups) { group in
                             DisclosureGroup(
                                 isExpanded: disclosureBinding(for: group.apexDomain),
                                 content: {

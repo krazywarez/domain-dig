@@ -44,18 +44,18 @@ enabled = false
 # above today's worst file and fails anything past it. Lower it when a file is
 # genuinely split, never raise it to make a commit pass.
 #
-# Measured after moving DomainViewModel's export formatters out:
-# DomainViewModel 280, CloudSyncService 198, WatchlistView 146,
-# DomainDataPortabilityService 146, AuditViews 128, ContentView 119,
-# DomainDiffViews 115, DomainReportExporter 114, SettingsViews 112,
-# WorkflowsView 107.
+# Measured after A4 and the portfolio split: DomainViewModel 272,
+# CloudSyncService 198, WatchlistView 146, DomainDataPortabilityService 146,
+# AuditViews 128, ContentView 119, DomainDiffViews 115,
+# DomainReportExporter 114, SettingsViews 112, WorkflowsView 107.
 #
-# DomainViewModel still holds this threshold where it is. Getting below about
-# 200 needs batch and portfolio out of it, and neither is a file move: Swift
-# extensions cannot hold stored properties, so the batch pipeline's six
-# `private(set)` properties and the portfolio caches would have to become
-# settable from any file. That trades real encapsulation for a lint number.
-# Extracting them as types that own their state is the way; see A13.
+# DomainViewModel still holds this threshold, and moving code has stopped
+# paying: the last 145 lines out of it bought 8 points, because what is left
+# is orchestration rather than separable clusters. Going much below 270 needs
+# the batch pipeline restructured, not relocated — it writes six
+# `private(set)` properties and calls back into eight view-model members, so
+# any extraction either widens that state or carries a back-reference. See
+# A13 for the measurements.
 [smells.file_complexity]
 enabled = true
 
@@ -84,4 +84,4 @@ filter_patterns = [
 ]
 
 [language.swift.smells.file_complexity]
-threshold = 290
+threshold = 280
