@@ -177,78 +177,118 @@ final class DomainViewModel {
     var bulkInput: String = ""
     var domainInputError: String?
 
-    var dnsSections: [DNSSection] = []
-    var dnsLoading = false
-    var dnsError: String?
-    var availabilityResult: DomainAvailabilityResult?
-    var availabilityLoading = false
-    var suggestions: [DomainSuggestionResult] = []
-    var suggestionsLoading = false
+    // MARK: Section state
 
-    var sslInfo: SSLCertificateInfo?
-    var sslLoading = false
-    var sslError: String?
-    var hstsPreloaded: Bool?
-    var hstsLoading = false
+    /// Each section's value, phase and error as one stored property, so the
+    /// three are written together or not at all. There were 20 `*Loading`
+    /// flags and 19 `*Error` strings before, independently assignable (A2).
+    ///
+    /// The accessors below keep the names every reader already uses. They are
+    /// a staging layer: the next step is views reading the state directly, as
+    /// the Web and Network slices already do.
+    var dnsState = SectionState<[DNSSection]>()
+    var availabilityState = SectionState<DomainAvailabilityResult>()
+    var suggestionsState = SectionState<[DomainSuggestionResult]>()
+    var sslState = SectionState<SSLCertificateInfo>()
+    var hstsState = SectionState<Bool>()
+    var httpHeadersState = SectionState<[HTTPHeader]>()
+    var reachabilityState = SectionState<[PortReachability]>()
+    var ipGeolocationState = SectionState<IPGeolocation>()
+    var emailSecurityState = SectionState<EmailSecurityResult>()
+    var ownershipState = SectionState<DomainOwnership>()
+    var ownershipHistoryState = SectionState<[DomainOwnershipHistoryEvent]>()
+    var ptrState = SectionState<String>()
+    var redirectChainState = SectionState<[RedirectHop]>()
+    var subdomainsState = SectionState<[DiscoveredSubdomain]>()
+    var extendedSubdomainsState = SectionState<[DiscoveredSubdomain]>()
+    var dnsHistoryState = SectionState<[DNSHistoryEvent]>()
+    var domainPricingState = SectionState<DomainPricingInsight>()
+    var reputationState = SectionState<DomainReputationResult>()
+    var portScanState = SectionState<[PortScanResult]>()
+    var customPortScanState = SectionState<[PortScanResult]>()
 
-    var httpHeaders: [HTTPHeader] = []
+    var dnsSections: [DNSSection] { dnsState.items }
+    var dnsLoading: Bool { dnsState.isLoading }
+    var dnsError: String? { dnsState.error }
+
+    var availabilityResult: DomainAvailabilityResult? { availabilityState.value }
+    var availabilityLoading: Bool { availabilityState.isLoading }
+
+    var suggestions: [DomainSuggestionResult] { suggestionsState.items }
+    var suggestionsLoading: Bool { suggestionsState.isLoading }
+
+    var sslInfo: SSLCertificateInfo? { sslState.value }
+    var sslLoading: Bool { sslState.isLoading }
+    var sslError: String? { sslState.error }
+
+    var hstsPreloaded: Bool? { hstsState.value }
+    var hstsLoading: Bool { hstsState.isLoading }
+
+    var httpHeaders: [HTTPHeader] { httpHeadersState.items }
+    var httpHeadersLoading: Bool { httpHeadersState.isLoading }
+    var httpHeadersError: String? { httpHeadersState.error }
+
+    var reachabilityResults: [PortReachability] { reachabilityState.items }
+    var reachabilityLoading: Bool { reachabilityState.isLoading }
+    var reachabilityError: String? { reachabilityState.error }
+
+    var ipGeolocation: IPGeolocation? { ipGeolocationState.value }
+    var ipGeolocationLoading: Bool { ipGeolocationState.isLoading }
+    var ipGeolocationError: String? { ipGeolocationState.error }
+
+    var emailSecurity: EmailSecurityResult? { emailSecurityState.value }
+    var emailSecurityLoading: Bool { emailSecurityState.isLoading }
+    var emailSecurityError: String? { emailSecurityState.error }
+
+    var ownershipResult: DomainOwnership? { ownershipState.value }
+    var ownershipLoading: Bool { ownershipState.isLoading }
+    var ownershipError: String? { ownershipState.error }
+
+    var ownershipHistory: [DomainOwnershipHistoryEvent] { ownershipHistoryState.items }
+    var ownershipHistoryLoading: Bool { ownershipHistoryState.isLoading }
+    var ownershipHistoryError: String? { ownershipHistoryState.error }
+
+    var ptrRecord: String? { ptrState.value }
+    var ptrLoading: Bool { ptrState.isLoading }
+    var ptrError: String? { ptrState.error }
+
+    var redirectChain: [RedirectHop] { redirectChainState.items }
+    var redirectChainLoading: Bool { redirectChainState.isLoading }
+    var redirectChainError: String? { redirectChainState.error }
+
+    var subdomains: [DiscoveredSubdomain] { subdomainsState.items }
+    var subdomainsLoading: Bool { subdomainsState.isLoading }
+    var subdomainsError: String? { subdomainsState.error }
+
+    var extendedSubdomains: [DiscoveredSubdomain] { extendedSubdomainsState.items }
+    var extendedSubdomainsLoading: Bool { extendedSubdomainsState.isLoading }
+    var extendedSubdomainsError: String? { extendedSubdomainsState.error }
+
+    var dnsHistory: [DNSHistoryEvent] { dnsHistoryState.items }
+    var dnsHistoryLoading: Bool { dnsHistoryState.isLoading }
+    var dnsHistoryError: String? { dnsHistoryState.error }
+
+    var domainPricing: DomainPricingInsight? { domainPricingState.value }
+    var domainPricingLoading: Bool { domainPricingState.isLoading }
+    var domainPricingError: String? { domainPricingState.error }
+
+    var reputation: DomainReputationResult? { reputationState.value }
+    var reputationLoading: Bool { reputationState.isLoading }
+    var reputationError: String? { reputationState.error }
+
+    var portScanResults: [PortScanResult] { portScanState.items }
+    var portScanLoading: Bool { portScanState.isLoading }
+    var portScanError: String? { portScanState.error }
+
+    var customPortResults: [PortScanResult] { customPortScanState.items }
+    var customPortScanLoading: Bool { customPortScanState.isLoading }
+    var customPortScanError: String? { customPortScanState.error }
+
     var httpSecurityGrade: String?
     var httpStatusCode: Int?
     var httpResponseTimeMs: Int?
     var httpProtocol: String?
     var http3Advertised = false
-    var httpHeadersLoading = false
-    var httpHeadersError: String?
-
-    var reachabilityResults: [PortReachability] = []
-    var reachabilityLoading = false
-    var reachabilityError: String?
-
-    var ipGeolocation: IPGeolocation?
-    var ipGeolocationLoading = false
-    var ipGeolocationError: String?
-
-    var emailSecurity: EmailSecurityResult?
-    var emailSecurityLoading = false
-    var emailSecurityError: String?
-
-    var ownershipResult: DomainOwnership?
-    var ownershipLoading = false
-    var ownershipError: String?
-    var ownershipHistory: [DomainOwnershipHistoryEvent] = []
-    var ownershipHistoryLoading = false
-    var ownershipHistoryError: String?
-
-    var ptrRecord: String?
-    var ptrLoading = false
-    var ptrError: String?
-
-    var redirectChain: [RedirectHop] = []
-    var redirectChainLoading = false
-    var redirectChainError: String?
-
-    var subdomains: [DiscoveredSubdomain] = []
-    var subdomainsLoading = false
-    var subdomainsError: String?
-    var extendedSubdomains: [DiscoveredSubdomain] = []
-    var extendedSubdomainsLoading = false
-    var extendedSubdomainsError: String?
-    var dnsHistory: [DNSHistoryEvent] = []
-    var dnsHistoryLoading = false
-    var dnsHistoryError: String?
-    var domainPricing: DomainPricingInsight?
-    var domainPricingLoading = false
-    var domainPricingError: String?
-    var reputation: DomainReputationResult?
-    var reputationLoading = false
-    var reputationError: String?
-
-    var portScanResults: [PortScanResult] = []
-    var portScanLoading = false
-    var portScanError: String?
-    var customPortResults: [PortScanResult] = []
-    var customPortScanLoading = false
-    var customPortScanError: String?
 
     var hasRun = false
     private(set) var searchedDomain: String = ""
@@ -372,22 +412,24 @@ final class DomainViewModel {
     }
 
     var resultsLoaded: Bool {
-        hasRun &&
-            !dnsLoading &&
-            !availabilityLoading &&
-            !suggestionsLoading &&
-            !sslLoading &&
-            !hstsLoading &&
-            !httpHeadersLoading &&
-            !reachabilityLoading &&
-            !ipGeolocationLoading &&
-            !emailSecurityLoading &&
-            !ownershipLoading &&
-            !ptrLoading &&
-            !redirectChainLoading &&
-            !subdomainsLoading &&
-            !portScanLoading &&
-            !customPortScanLoading
+        guard hasRun else { return false }
+        return [
+            dnsState.isSettled,
+            availabilityState.isSettled,
+            suggestionsState.isSettled,
+            sslState.isSettled,
+            hstsState.isSettled,
+            httpHeadersState.isSettled,
+            reachabilityState.isSettled,
+            ipGeolocationState.isSettled,
+            emailSecurityState.isSettled,
+            ownershipState.isSettled,
+            ptrState.isSettled,
+            redirectChainState.isSettled,
+            subdomainsState.isSettled,
+            portScanState.isSettled,
+            !customPortScanState.isLoading
+        ].allSatisfy { $0 }
     }
 
     var activeLoadingLabels: [String] {
@@ -1327,13 +1369,12 @@ final class DomainViewModel {
 
     func runCustomPortScan(ports: [UInt16]) async {
         guard !searchedDomain.isEmpty else {
-            customPortScanError = "Run a domain lookup first"
+            customPortScanState = .settled(value: [], error: "Run a domain lookup first")
             return
         }
 
         guard !ports.isEmpty else {
-            customPortScanError = "Enter at least one valid port"
-            customPortResults = []
+            customPortScanState = .settled(value: [], error: "Enter at least one valid port")
             return
         }
 
@@ -1341,9 +1382,7 @@ final class DomainViewModel {
         let domain = searchedDomain
         let lookupID = activeLookupID
 
-        customPortScanLoading = true
-        customPortScanError = nil
-        customPortResults = []
+        customPortScanState = .loading
 
         customPortScanTask = Task { [weak self] in
             guard let self else { return }
@@ -1407,8 +1446,7 @@ final class DomainViewModel {
     }
 
     func loadOwnershipHistory() async {
-        await loadLookup(into: \.ownershipHistory, loading: \.ownershipHistoryLoading, error: \.ownershipHistoryError,
-                         fallback: "Ownership history unavailable") {
+        await loadLookup(into: \.ownershipHistoryState, fallback: "Ownership history unavailable") {
             await ExternalDataService.shared.ownershipHistory(
                 domain: searchedDomain,
                 currentOwnership: ownershipResult,
@@ -1418,8 +1456,7 @@ final class DomainViewModel {
     }
 
     func loadDNSHistory() async {
-        await loadLookup(into: \.dnsHistory, loading: \.dnsHistoryLoading, error: \.dnsHistoryError,
-                         fallback: "DNS history unavailable") {
+        await loadLookup(into: \.dnsHistoryState, fallback: "DNS history unavailable") {
             await ExternalDataService.shared.dnsHistory(
                 domain: searchedDomain,
                 dnsSections: dnsSections,
@@ -1429,8 +1466,11 @@ final class DomainViewModel {
     }
 
     func loadExtendedSubdomains() async {
-        await loadLookup(.extendedSubdomains, into: \.extendedSubdomains, loading: \.extendedSubdomainsLoading, error: \.extendedSubdomainsError,
-                         fallback: "Extended subdomains unavailable") {
+        await loadLookup(
+            .extendedSubdomains,
+            into: \.extendedSubdomainsState,
+            fallback: "Extended subdomains unavailable"
+        ) {
             await ExternalDataService.shared.extendedSubdomains(
                 domain: searchedDomain,
                 existing: subdomains
@@ -1443,9 +1483,7 @@ final class DomainViewModel {
     /// doesn't include it; without one the lookup is open to every tier.
     private func loadLookup<Item>(
         _ capability: FeatureCapability? = nil,
-        into items: ReferenceWritableKeyPath<DomainViewModel, [Item]>,
-        loading: ReferenceWritableKeyPath<DomainViewModel, Bool>,
-        error: ReferenceWritableKeyPath<DomainViewModel, String?>,
+        into state: ReferenceWritableKeyPath<DomainViewModel, SectionState<[Item]>>,
         fallback: String,
         fetch: () async -> ServiceResult<[Item]>
     ) async {
@@ -1454,14 +1492,11 @@ final class DomainViewModel {
             upgradePrompt = FeatureAccessService.upgradePrompt(for: capability)
             return
         }
-        guard self[keyPath: items].isEmpty else { return }
+        guard self[keyPath: state].items.isEmpty else { return }
 
-        self[keyPath: loading] = true
-        self[keyPath: error] = nil
-
-        (self[keyPath: items], self[keyPath: error]) = found(await fetch(), fallback: fallback)
-
-        self[keyPath: loading] = false
+        self[keyPath: state] = .loading
+        let (items, message) = found(await fetch(), fallback: fallback)
+        self[keyPath: state] = .settled(value: items, error: message)
         _ = saveHistoryEntry(replaceLatest: true)
     }
 
@@ -1506,7 +1541,10 @@ final class DomainViewModel {
         return entry
     }
 
-    private func applySnapshot(_ snapshot: LookupSnapshot) {
+    /// The single place section state is written from an inspection result.
+    /// Internal so the tests that pin what each section ends up showing can
+    /// reach it without a live lookup.
+    func applySnapshot(_ snapshot: LookupSnapshot) {
         currentHistoryEntryID = snapshot.historyEntryID
         currentSnapshotTimestamp = snapshot.timestamp
         currentResultSource = snapshot.resultSource
@@ -1527,79 +1565,44 @@ final class DomainViewModel {
         DomainDebugLog.signpostEnd("DomainViewModel.reportBuilder.build", start: reportStartedAt, domain: snapshot.domain)
         currentChangeSummary = currentReport?.changeSummary ?? snapshot.changeSummary
 
-        dnsSections = snapshot.dnsSections
-        dnsError = snapshot.dnsError
-        availabilityResult = snapshot.availabilityResult
-        suggestions = snapshot.suggestions
-        sslInfo = snapshot.sslInfo
-        sslError = snapshot.sslError
-        hstsPreloaded = snapshot.hstsPreloaded
-        httpHeaders = snapshot.httpHeaders
+        dnsState = .settled(value: snapshot.dnsSections, error: snapshot.dnsError)
+        availabilityState = .settled(value: snapshot.availabilityResult)
+        suggestionsState = .settled(value: snapshot.suggestions)
+        sslState = .settled(value: snapshot.sslInfo, error: snapshot.sslError)
+        hstsState = .settled(value: snapshot.hstsPreloaded)
+        httpHeadersState = .settled(value: snapshot.httpHeaders, error: snapshot.httpHeadersError)
         httpSecurityGrade = snapshot.httpSecurityGrade
         httpStatusCode = snapshot.httpStatusCode
         httpResponseTimeMs = snapshot.httpResponseTimeMs
         httpProtocol = snapshot.httpProtocol
         http3Advertised = snapshot.http3Advertised
-        httpHeadersError = snapshot.httpHeadersError
-        reachabilityResults = snapshot.reachabilityResults
-        reachabilityError = snapshot.reachabilityError
-        ipGeolocation = snapshot.ipGeolocation
-        ipGeolocationError = snapshot.ipGeolocationError
-        emailSecurity = snapshot.emailSecurity
-        emailSecurityError = snapshot.emailSecurityError
-        ownershipResult = snapshot.ownership
-        ownershipError = snapshot.ownershipError
-        ownershipHistory = snapshot.ownershipHistory
-        ownershipHistoryError = snapshot.ownershipHistoryError
-        ptrRecord = snapshot.ptrRecord
-        ptrError = snapshot.ptrError
-        redirectChain = snapshot.redirectChain
-        redirectChainError = snapshot.redirectChainError
-        subdomains = snapshot.subdomains
-        subdomainsError = snapshot.subdomainsError
-        extendedSubdomains = snapshot.extendedSubdomains
-        extendedSubdomainsError = snapshot.extendedSubdomainsError
-        dnsHistory = snapshot.dnsHistory
-        dnsHistoryError = snapshot.dnsHistoryError
-        domainPricing = snapshot.domainPricing
-        domainPricingError = snapshot.domainPricingError
-        portScanResults = snapshot.portScanResults.filter { $0.kind == .standard }
-        customPortResults = snapshot.portScanResults.filter { $0.kind == .custom }
-        portScanError = snapshot.portScanError
-        customPortScanError = nil
-
-        dnsLoading = false
-        availabilityLoading = false
-        suggestionsLoading = false
-        sslLoading = false
-        hstsLoading = false
-        httpHeadersLoading = false
-        reachabilityLoading = false
-        ipGeolocationLoading = false
-        emailSecurityLoading = false
-        ownershipLoading = false
-        ownershipHistoryLoading = false
-        ptrLoading = false
-        redirectChainLoading = false
-        subdomainsLoading = false
-        extendedSubdomainsLoading = false
-        dnsHistoryLoading = false
-        domainPricingLoading = false
-        portScanLoading = false
-        customPortScanLoading = false
+        reachabilityState = .settled(value: snapshot.reachabilityResults, error: snapshot.reachabilityError)
+        ipGeolocationState = .settled(value: snapshot.ipGeolocation, error: snapshot.ipGeolocationError)
+        emailSecurityState = .settled(value: snapshot.emailSecurity, error: snapshot.emailSecurityError)
+        ownershipState = .settled(value: snapshot.ownership, error: snapshot.ownershipError)
+        ownershipHistoryState = .settled(value: snapshot.ownershipHistory, error: snapshot.ownershipHistoryError)
+        ptrState = .settled(value: snapshot.ptrRecord, error: snapshot.ptrError)
+        redirectChainState = .settled(value: snapshot.redirectChain, error: snapshot.redirectChainError)
+        subdomainsState = .settled(value: snapshot.subdomains, error: snapshot.subdomainsError)
+        extendedSubdomainsState = .settled(value: snapshot.extendedSubdomains, error: snapshot.extendedSubdomainsError)
+        dnsHistoryState = .settled(value: snapshot.dnsHistory, error: snapshot.dnsHistoryError)
+        domainPricingState = .settled(value: snapshot.domainPricing, error: snapshot.domainPricingError)
+        reputationState = .settled(value: snapshot.reputation, error: snapshot.reputationError)
+        portScanState = .settled(
+            value: snapshot.portScanResults.filter { $0.kind == .standard },
+            error: snapshot.portScanError
+        )
+        customPortScanState = .settled(value: snapshot.portScanResults.filter { $0.kind == .custom })
     }
 
     private func applyCustomPortResult(_ result: ServiceResult<[PortScanResult]>) {
         switch result {
         case let .success(results):
-            customPortResults = results
-            customPortScanError = nil
+            customPortScanState = .settled(value: results)
             _ = saveHistoryEntry(replaceLatest: true)
         case let .empty(message), let .error(message):
-            customPortResults = []
-            customPortScanError = message
+            customPortScanState = .settled(value: [], error: message)
         }
-        customPortScanLoading = false
     }
 
     private static func performBatchLookup(domain: String, previousSnapshot: LookupSnapshot?) async -> BatchLookupPayload? {
@@ -2111,7 +2114,6 @@ final class DomainViewModel {
         ownershipDiff = []
         clearLookupState()
         setAllLoadingStates(true)
-        customPortScanLoading = false
         return lookupID
     }
 
@@ -2382,93 +2384,62 @@ final class DomainViewModel {
         )
     }
 
+    /// Resets every section before a new lookup, so the previous domain's
+    /// results cannot be mistaken for this one's. One assignment per section
+    /// now; it used to be three.
     private func clearLookupState() {
-        dnsSections = []
-        dnsError = nil
-        dnsLoading = false
-        availabilityResult = nil
-        availabilityLoading = false
-        suggestions = []
-        suggestionsLoading = false
-        sslInfo = nil
-        sslError = nil
-        sslLoading = false
-        hstsPreloaded = nil
-        hstsLoading = false
-        httpHeaders = []
+        dnsState = .idle
+        availabilityState = .idle
+        suggestionsState = .idle
+        sslState = .idle
+        hstsState = .idle
+        httpHeadersState = .idle
         httpSecurityGrade = nil
         httpStatusCode = nil
         httpResponseTimeMs = nil
         httpProtocol = nil
         http3Advertised = false
-        httpHeadersError = nil
-        httpHeadersLoading = false
-        reachabilityResults = []
-        reachabilityError = nil
-        reachabilityLoading = false
-        ipGeolocation = nil
-        ipGeolocationError = nil
-        ipGeolocationLoading = false
-        emailSecurity = nil
-        emailSecurityError = nil
-        emailSecurityLoading = false
-        ownershipResult = nil
-        ownershipError = nil
-        ownershipLoading = false
-        ownershipHistory = []
-        ownershipHistoryError = nil
-        ownershipHistoryLoading = false
-        ptrRecord = nil
-        ptrError = nil
-        ptrLoading = false
-        redirectChain = []
-        redirectChainError = nil
-        redirectChainLoading = false
-        subdomains = []
-        subdomainsError = nil
-        subdomainsLoading = false
-        extendedSubdomains = []
-        extendedSubdomainsError = nil
-        extendedSubdomainsLoading = false
-        dnsHistory = []
-        dnsHistoryError = nil
-        dnsHistoryLoading = false
-        domainPricing = nil
-        domainPricingError = nil
-        domainPricingLoading = false
-        portScanResults = []
-        portScanError = nil
-        portScanLoading = false
-        customPortResults = []
-        customPortScanError = nil
-        customPortScanLoading = false
-        currentHistoryEntryID = nil
-        currentSnapshotTimestamp = Date()
-        currentResultSource = .live
-        currentCachedSections = []
-        currentStatusMessage = nil
-        currentReport = nil
+        reachabilityState = .idle
+        ipGeolocationState = .idle
+        emailSecurityState = .idle
+        ownershipState = .idle
+        ownershipHistoryState = .idle
+        ptrState = .idle
+        redirectChainState = .idle
+        subdomainsState = .idle
+        extendedSubdomainsState = .idle
+        dnsHistoryState = .idle
+        domainPricingState = .idle
+        reputationState = .idle
+        portScanState = .idle
+        customPortScanState = .idle
     }
 
+    /// Puts the sections a lookup drives into flight, and resets the
+    /// on-demand ones — ownership history, extended subdomains, DNS history
+    /// and pricing are fetched when the user opens them, not by the lookup, so
+    /// they were never part of this either.
     private func setAllLoadingStates(_ loading: Bool) {
-        dnsLoading = loading
-        availabilityLoading = loading
-        suggestionsLoading = loading
-        sslLoading = loading
-        hstsLoading = loading
-        httpHeadersLoading = loading
-        reachabilityLoading = loading
-        ipGeolocationLoading = loading
-        emailSecurityLoading = loading
-        ownershipLoading = loading
-        ownershipHistoryLoading = false
-        ptrLoading = loading
-        redirectChainLoading = loading
-        subdomainsLoading = loading
-        extendedSubdomainsLoading = false
-        dnsHistoryLoading = false
-        domainPricingLoading = false
-        portScanLoading = loading
+        let phase: SectionPhase = loading ? .loading : .idle
+        dnsState.phase = phase
+        availabilityState.phase = phase
+        suggestionsState.phase = phase
+        sslState.phase = phase
+        hstsState.phase = phase
+        httpHeadersState.phase = phase
+        reachabilityState.phase = phase
+        ipGeolocationState.phase = phase
+        emailSecurityState.phase = phase
+        ownershipState.phase = phase
+        ptrState.phase = phase
+        redirectChainState.phase = phase
+        subdomainsState.phase = phase
+        portScanState.phase = phase
+
+        ownershipHistoryState.phase = .idle
+        extendedSubdomainsState.phase = .idle
+        dnsHistoryState.phase = .idle
+        domainPricingState.phase = .idle
     }
 
     private func primaryIPAddress(from sections: [DNSSection]) -> String? {

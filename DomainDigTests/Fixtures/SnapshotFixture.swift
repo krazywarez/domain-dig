@@ -17,6 +17,25 @@ enum SnapshotFixture {
 
     static let defaultResolverURL = "https://resolver.example/dns-query"
 
+    /// Per-section failure messages, so a test can build a snapshot where one
+    /// section failed and the rest succeeded. `LookupSnapshot` keeps a value
+    /// and an error per section independently, and the views render the error
+    /// over the value — which is the contract the section slices have to
+    /// preserve.
+    struct SectionFailures {
+        var dnsError: String?
+        var sslError: String?
+        var httpHeadersError: String?
+        var reachabilityError: String?
+        var ipGeolocationError: String?
+        var emailSecurityError: String?
+        var ownershipError: String?
+        var ptrError: String?
+        var redirectChainError: String?
+        var subdomainsError: String?
+        var portScanError: String?
+    }
+
     static func snapshot(
         domain: String = "example.com",
         timestamp: Date = referenceDate,
@@ -34,7 +53,9 @@ enum SnapshotFixture {
         extendedSubdomains: [DiscoveredSubdomain] = [],
         isPartialSnapshot: Bool = false,
         validationIssues: [String] = [],
-        changeSummary: DomainChangeSummary? = nil
+        changeSummary: DomainChangeSummary? = nil,
+        failures: SectionFailures = SectionFailures(),
+        provenanceBySection: [LookupSectionKind: SectionProvenance] = [:]
     ) -> LookupSnapshot {
         LookupSnapshot(
             historyEntryID: nil,
@@ -46,7 +67,7 @@ enum SnapshotFixture {
             resolverDisplayName: "Test Resolver",
             resolverURLString: resolverURLString,
             dataSources: [],
-            provenanceBySection: [:],
+            provenanceBySection: provenanceBySection,
             availabilityConfidence: nil,
             ownershipConfidence: nil,
             subdomainConfidence: nil,
@@ -61,11 +82,11 @@ enum SnapshotFixture {
             changeCount: 0,
             severitySummary: nil,
             dnsSections: dnsSections,
-            dnsError: nil,
+            dnsError: failures.dnsError,
             availabilityResult: availability.map { DomainAvailabilityResult(domain: domain, status: $0) },
             suggestions: [],
             sslInfo: sslInfo,
-            sslError: nil,
+            sslError: failures.sslError,
             hstsPreloaded: nil,
             httpHeaders: httpHeaders,
             httpSecurityGrade: httpSecurityGrade,
@@ -73,15 +94,15 @@ enum SnapshotFixture {
             httpResponseTimeMs: nil,
             httpProtocol: nil,
             http3Advertised: false,
-            httpHeadersError: nil,
+            httpHeadersError: failures.httpHeadersError,
             reachabilityResults: [],
-            reachabilityError: nil,
+            reachabilityError: failures.reachabilityError,
             ipGeolocation: nil,
-            ipGeolocationError: nil,
+            ipGeolocationError: failures.ipGeolocationError,
             emailSecurity: nil,
-            emailSecurityError: nil,
+            emailSecurityError: failures.emailSecurityError,
             ownership: ownership,
-            ownershipError: nil,
+            ownershipError: failures.ownershipError,
             ownershipHistory: [],
             ownershipHistoryError: nil,
             inferredProvider: nil,
@@ -93,11 +114,11 @@ enum SnapshotFixture {
             riskSignals: [],
             intelligenceTimeline: [],
             ptrRecord: ptrRecord,
-            ptrError: nil,
+            ptrError: failures.ptrError,
             redirectChain: [],
-            redirectChainError: nil,
+            redirectChainError: failures.redirectChainError,
             subdomains: subdomains,
-            subdomainsError: nil,
+            subdomainsError: failures.subdomainsError,
             extendedSubdomains: extendedSubdomains,
             extendedSubdomainsError: nil,
             dnsHistory: [],
@@ -107,7 +128,7 @@ enum SnapshotFixture {
             reputation: nil,
             reputationError: nil,
             portScanResults: [],
-            portScanError: nil,
+            portScanError: failures.portScanError,
             changeSummary: changeSummary,
             resultSource: resultSource,
             cachedSections: [],
@@ -246,6 +267,19 @@ enum SnapshotFixture {
                 snapshotIndex: index,
                 changeCount: index % 4
             )
+        )
+    }
+
+    static func provenance(
+        source: String = "test",
+        resultSource: LookupResultSource = .live
+    ) -> SectionProvenance {
+        SectionProvenance(
+            source: source,
+            collectedAt: referenceDate,
+            provider: nil,
+            resolver: nil,
+            resultSource: resultSource
         )
     }
 
