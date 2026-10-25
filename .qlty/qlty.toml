@@ -40,14 +40,19 @@ name = "trufflehog"
 [smells.return_statements]
 enabled = false
 
-# File complexity is a ratchet rather than a target. Measured 2026-10-25, the
-# ten worst files are ResultSectionViews 386, DomainViewModel 370, ContentView
-# 306, CloudSyncService 198, DomainDataPortabilityService 146, WatchlistView
-# 146, AuditViews 128, DomainReportExporter 114, SettingsViews 112 and
-# WorkflowsView 107; twenty-two files exceed qlty's default. Splitting them is
-# not this finding's job, but letting them grow is avoidable, so the threshold
-# sits just above today's worst case and fails anything past it. Lower it when
-# a file is genuinely split, never raise it to make a commit pass.
+# File complexity is a ratchet rather than a target: the threshold sits just
+# above today's worst file and fails anything past it. Lower it when a file is
+# genuinely split, never raise it to make a commit pass.
+#
+# Measured after the A13 splits: DomainViewModel 370, CloudSyncService 198,
+# WatchlistView 146, DomainDataPortabilityService 146, AuditViews 128,
+# ContentView 119, DomainDiffViews 115, DomainReportExporter 114,
+# SettingsViews 112, WorkflowsView 107.
+#
+# DomainViewModel alone holds this threshold where it is — the next file is 172
+# points below it. Splitting it would let this drop to about 210, and it is the
+# hard one: A2 collapsed its section state but left the four-way model
+# duplication that makes it long.
 [smells.file_complexity]
 enabled = true
 
@@ -76,4 +81,4 @@ filter_patterns = [
 ]
 
 [language.swift.smells.file_complexity]
-threshold = 400
+threshold = 380
