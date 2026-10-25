@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Run the accessibility audit against the oldest supported simulator runtime
-# before pushing.
+# Run the complexity ratchet and the accessibility audit against the oldest
+# supported simulator runtime before pushing.
 #
 # Enable once per clone:
 #     git config core.hooksPath .githooks
@@ -15,6 +15,11 @@
 # checkout. The GitHub image has no old runtimes, so the floor is the one thing
 # CI structurally cannot cover — and it is the one this machine can. Running
 # both here would just double the wait to re-check what CI already does.
+#
+# Why the hook runs qlty at all: nothing else does. This repository's origin is
+# gitbay, which has no build configured, so the smell gates in .qlty/qlty.toml
+# are only ever evaluated by someone running them. A ratchet nobody runs holds
+# nothing.
 #
 # Skip deliberately with: git push --no-verify
 
@@ -49,6 +54,51 @@ fi
 if ! printf '%s' "$changed" | grep -qE '\.(swift|xcassets|xcodeproj)|\.pbxproj|xcscheme'; then
   echo "pre-push: no Swift/project changes, skipping accessibility audit"
   exit 0
+fi
+
+qlty=''
+for candidate in "$(command -v qlty || true)" "$HOME/.qlty/bin/qlty"; do
+  if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+    qlty="$candidate"
+    break
+  fi
+done
+
+if [ -z "$qlty" ]; then
+  echo "pre-push: qlty not found, skipping the complexity ratchet"
+else
+  echo "pre-push: checking the complexity ratchet"
+
+  # Counted from SARIF rather than trusted to the exit code, which is 0 even
+  # with findings — `qlty smells --quiet` reports and does not fail. Only
+  # file-complexity is counted: duplication findings exist today
+  # (CloudSyncService has a 15-line similar block) and are reported, not gated.
+  over=$("$qlty" smells --all --sarif 2>/dev/null | python3 -c "
+import json, sys
+try:
+    document = json.load(sys.stdin)
+except Exception:
+    print('unknown')
+    raise SystemExit(0)
+print(sum(
+    1
+    for run in document.get('runs', [])
+    for result in run.get('results', [])
+    if result.get('ruleId') == 'qlty:file-complexity'
+))
+")
+
+  if [ "$over" = "unknown" ]; then
+    echo "pre-push: could not read qlty output, skipping the ratchet"
+  elif [ "$over" != "0" ]; then
+    echo
+    echo "pre-push: $over file(s) past the complexity threshold. Push aborted." >&2
+    echo "          See './Scripts/../.qlty/qlty.toml'. Split the file, or lower" >&2
+    echo "          the threshold deliberately — do not raise it to pass." >&2
+    echo "          List them with 'qlty smells --all'." >&2
+    echo "          Bypass with 'git push --no-verify'." >&2
+    exit 1
+  fi
 fi
 
 echo "pre-push: running accessibility audit on the floor runtime (~85s)"

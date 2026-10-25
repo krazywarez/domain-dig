@@ -40,11 +40,29 @@ name = "trufflehog"
 [smells.return_statements]
 enabled = false
 
-# Function and file complexity are left to review rather than counted.
-[smells.function_complexity]
-enabled = false
-
+# File complexity is a ratchet rather than a target. Measured 2026-10-25, the
+# ten worst files are ResultSectionViews 386, DomainViewModel 370, ContentView
+# 306, CloudSyncService 198, DomainDataPortabilityService 146, WatchlistView
+# 146, AuditViews 128, DomainReportExporter 114, SettingsViews 112 and
+# WorkflowsView 107; twenty-two files exceed qlty's default. Splitting them is
+# not this finding's job, but letting them grow is avoidable, so the threshold
+# sits just above today's worst case and fails anything past it. Lower it when
+# a file is genuinely split, never raise it to make a commit pass.
 [smells.file_complexity]
+enabled = true
+
+# Function complexity stays off because qlty's Swift parser mis-attributes it
+# here, not because the metric is unwanted. It reports `existingShare`
+# (CloudSyncService:336, eight lines, seven statements) as complexity 184
+# spanning lines 336-1515 — the whole rest of the file. `fetchZoneChanges` in
+# the same file is measured correctly (31, lines 1049-1135), so the fault is
+# inconsistent rather than systematic.
+#
+# That leaves no usable threshold. Anything at or under 184 fails on the
+# artifact and nothing else; anything above it cannot fail on the one real
+# result. A gate whose only output is a false positive teaches you to ignore
+# it. Revisit when qlty's Swift grammar changes.
+[smells.function_complexity]
 enabled = false
 
 # Exhaustive switch-over-enum lookup tables share shape but not content.
@@ -56,3 +74,6 @@ filter_patterns = [
   "(switch_statement _)",
   "(function_declaration name: (simple_identifier) @_n (#match? @_n \"^(ownershipHistory|dnsHistory)$\"))",
 ]
+
+[language.swift.smells.file_complexity]
+threshold = 400
