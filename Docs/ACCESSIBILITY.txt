@@ -143,6 +143,32 @@ Environment variables do not work: neither a plain `xcodebuild` env var nor a
 silently did nothing. And a committed value makes "when did clipping become
 enforced?" answerable with `git blame` instead of CI tribal knowledge.
 
+## Screens reached through Settings
+
+The suite audited the five root tabs and the watchlist only, so every screen
+behind a Settings row was unaudited — including the integration editor's whole
+form, which is the densest set of text fields and captions in the app, and the
+SMTP port caption added in !5, which had never been rendered at the largest
+Dynamic Type under audit (A-review C9).
+
+Integrations and the integration editor are now covered, **report-only**: they
+have never been through the ratchet, so gating them on first contact would fail
+the build on findings that predate the coverage. What they report on iOS 27.0:
+
+| Screen | Findings |
+| --- | --- |
+| Integrations | 1: `dynamicType` on "Process Queue Now" |
+| Integration editor | 7: `contrast` on "Cancel", "Save", "DNS Changed", "Routing Rules"; `dynamicType` on "Cancel" and "Save"; one characterised system-field-placeholder clip |
+
+"Cancel" and "Save" are the editor's toolbar buttons, which are plain `Button`s
+rather than density-aware text — that is why they appear in both categories.
+They go on the #21 burndown; `enforcedAuditTypes` widens to cover these screens
+once they are clear.
+
+The remaining Settings destinations — Display, History & Network, Local API,
+iCloud Sync, Monitoring Log, Monitoring Settings, Scheduled Reports, Import &
+Export, Data Management — are still unaudited.
+
 ## Why the floor runtime needs its own run
 
 **Audit coverage is not nested across OS versions.** Each runtime reports

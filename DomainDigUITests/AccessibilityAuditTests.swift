@@ -191,6 +191,63 @@ final class AccessibilityAuditTests: XCTestCase {
 
     // MARK: Helpers
 
+    // MARK: Screens reached through Settings (C9)
+
+    /// Integrations was not audited, so the SMTP port caption added in !5 had
+    /// never been rendered at the largest Dynamic Type under audit and nothing
+    /// here would have caught it wrapping badly.
+    ///
+    /// Report-only: these screens have never been through the ratchet, so
+    /// gating them now would fail the build on findings that predate the
+    /// coverage. They are a burndown list for #21 like the seeded screens, and
+    /// `enforcedAuditTypes` widens to cover them once they are clear.
+    func testIntegrationsScreen() throws {
+        let app = AccessibilityAuditHarness.launch()
+        app.selectRootTab("Settings")
+
+        let integrations = app.buttons["Integrations"]
+        XCTAssertTrue(
+            integrations.waitForExistence(timeout: 5),
+            "Settings no longer offers an Integrations row"
+        )
+        integrations.tap()
+
+        let audited = try AccessibilityAuditHarness.audit(
+            app,
+            screen: "integrations",
+            test: self,
+            reportOnly: true
+        )
+        try XCTSkipUnless(audited, "Audit did not complete in time for Integrations")
+    }
+
+    /// The integration editor's whole form, which is the densest set of text
+    /// fields and captions in the app and the one C9 named.
+    func testIntegrationEditorScreen() throws {
+        let app = AccessibilityAuditHarness.launch()
+        app.selectRootTab("Settings")
+
+        let integrations = app.buttons["Integrations"]
+        guard integrations.waitForExistence(timeout: 5) else {
+            throw XCTSkip("Settings no longer offers an Integrations row")
+        }
+        integrations.tap()
+
+        let add = app.buttons["Add Integration"]
+        guard add.waitForExistence(timeout: 5) else {
+            throw XCTSkip("the integrations screen offers no add button to reach the editor")
+        }
+        add.tap()
+
+        let audited = try AccessibilityAuditHarness.audit(
+            app,
+            screen: "integration-editor",
+            test: self,
+            reportOnly: true
+        )
+        try XCTSkipUnless(audited, "Audit did not complete in time for the integration editor")
+    }
+
     private func auditRootTab(_ tab: String) throws {
         let app = AccessibilityAuditHarness.launch()
         app.selectRootTab(tab)
