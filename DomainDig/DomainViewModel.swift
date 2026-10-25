@@ -268,6 +268,10 @@ final class DomainViewModel {
     private(set) var currentStatusMessage: String?
     private(set) var currentSnapshotTimestamp = Date()
     private(set) var currentHistoryEntryID: UUID?
+    /// The metadata the current lookup produced, in preference to whatever the
+    /// saved entry holds. Nil outside a lookup, when the saved entry is the
+    /// only source there is.
+    private(set) var currentInspectionMetadata: InspectionMetadata?
     private(set) var currentReport: DomainReport?
 
     private static let recentSearchesKey = "recentSearches"
@@ -582,19 +586,19 @@ final class DomainViewModel {
             appVersion: AppVersion.current,
             resolverDisplayName: resolverDisplayName,
             resolverURLString: resolverURLString,
-            dataSources: currentHistoryEntry?.dataSources ?? [],
-            provenanceBySection: currentHistoryEntry?.provenanceBySection ?? [:],
-            availabilityConfidence: currentHistoryEntry?.availabilityConfidence,
-            ownershipConfidence: currentHistoryEntry?.ownershipConfidence,
-            subdomainConfidence: currentHistoryEntry?.subdomainConfidence,
-            emailSecurityConfidence: currentHistoryEntry?.emailSecurityConfidence,
-            geolocationConfidence: currentHistoryEntry?.geolocationConfidence,
-            errorDetails: currentHistoryEntry?.errorDetails ?? [:],
-            isPartialSnapshot: currentHistoryEntry?.isPartialSnapshot ?? false,
-            validationIssues: currentHistoryEntry?.validationIssues ?? [],
+            dataSources: currentInspectionMetadata?.dataSources ?? currentHistoryEntry?.dataSources ?? [],
+            provenanceBySection: currentInspectionMetadata?.provenanceBySection ?? currentHistoryEntry?.provenanceBySection ?? [:],
+            availabilityConfidence: currentInspectionMetadata?.availabilityConfidence ?? currentHistoryEntry?.availabilityConfidence,
+            ownershipConfidence: currentInspectionMetadata?.ownershipConfidence ?? currentHistoryEntry?.ownershipConfidence,
+            subdomainConfidence: currentInspectionMetadata?.subdomainConfidence ?? currentHistoryEntry?.subdomainConfidence,
+            emailSecurityConfidence: currentInspectionMetadata?.emailSecurityConfidence ?? currentHistoryEntry?.emailSecurityConfidence,
+            geolocationConfidence: currentInspectionMetadata?.geolocationConfidence ?? currentHistoryEntry?.geolocationConfidence,
+            errorDetails: currentInspectionMetadata?.errorDetails ?? currentHistoryEntry?.errorDetails ?? [:],
+            isPartialSnapshot: currentInspectionMetadata?.isPartialSnapshot ?? currentHistoryEntry?.isPartialSnapshot ?? false,
+            validationIssues: currentInspectionMetadata?.validationIssues ?? currentHistoryEntry?.validationIssues ?? [],
             totalLookupDurationMs: lastLookupDurationMs,
-            snapshotIndex: currentHistoryEntry?.snapshotIndex,
-            previousSnapshotID: currentHistoryEntry?.previousSnapshotID,
+            snapshotIndex: currentInspectionMetadata?.snapshotIndex ?? currentHistoryEntry?.snapshotIndex,
+            previousSnapshotID: currentInspectionMetadata?.previousSnapshotID ?? currentHistoryEntry?.previousSnapshotID,
             changeCount: currentHistoryEntry?.changeCount ?? currentChangeSummary?.changedSections.count ?? 0,
             severitySummary: currentHistoryEntry?.severitySummary ?? currentChangeSummary?.severity,
             dnsSections: dnsSections,
@@ -1477,6 +1481,7 @@ final class DomainViewModel {
     /// Internal so the tests that pin what each section ends up showing can
     /// reach it without a live lookup.
     func applySnapshot(_ snapshot: LookupSnapshot) {
+        currentInspectionMetadata = InspectionMetadata(snapshot: snapshot)
         currentHistoryEntryID = snapshot.historyEntryID
         currentSnapshotTimestamp = snapshot.timestamp
         currentResultSource = snapshot.resultSource
@@ -2040,6 +2045,7 @@ final class DomainViewModel {
         searchedDomain = target
         hasRun = true
         currentHistoryEntryID = nil
+        currentInspectionMetadata = nil
         currentSnapshotTimestamp = Date()
         currentResultSource = .live
         currentCachedSections = []
@@ -2330,6 +2336,7 @@ final class DomainViewModel {
     /// results cannot be mistaken for this one's. One assignment per section
     /// now; it used to be three.
     private func clearLookupState() {
+        currentInspectionMetadata = nil
         dnsState = .idle
         availabilityState = .idle
         suggestionsState = .idle
@@ -3400,17 +3407,3 @@ final class DomainViewModel {
     }
 }
 
-// Private, and not shared with the identically named helpers elsewhere:
-// DomainInsightEngine's `nilIfEmpty` trims whitespace first and these do not,
-// so one internal version would quietly change behaviour there (A14).
-private extension String {
-    var nilIfEmpty: String? {
-        isEmpty ? nil : self
-    }
-}
-
-private extension Array where Element == String {
-    var nilIfEmpty: [String]? {
-        isEmpty ? nil : self
-    }
-}

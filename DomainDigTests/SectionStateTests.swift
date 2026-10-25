@@ -47,6 +47,51 @@ final class SectionStateTests: XCTestCase {
     /// Starting a lookup puts every section in flight; applying a snapshot
     /// takes them all out of it. Nothing may be left loading, or the section
     /// spins forever.
+    // MARK: Provenance (A12)
+
+    /// Provenance used to be recovered from the saved history entry, so it was
+    /// empty until the snapshot had been written. It now comes from the
+    /// snapshot itself, which is visible here because nothing is saved.
+    func testProvenanceIsAvailableBeforeTheSnapshotIsSaved() {
+        let viewModel = makeViewModel()
+        let provenance = SnapshotFixture.provenance(source: "DNS-over-HTTPS query", provider: "Selected DoH resolver")
+
+        viewModel.applySnapshot(
+            SnapshotFixture.snapshot(provenanceBySection: [.dns: provenance])
+        )
+
+        XCTAssertNil(viewModel.currentHistoryEntryID, "nothing should have been saved")
+        XCTAssertEqual(viewModel.currentSnapshot.provenanceBySection[.dns], provenance)
+    }
+
+    /// The case the finding called out: a lookup that ends with a status
+    /// message returns before saving, so this was the state in which every
+    /// section showed no source at all.
+    func testProvenanceSurvivesASnapshotThatWouldNotBeSaved() {
+        let viewModel = makeViewModel()
+        let provenance = SnapshotFixture.provenance(source: "RDAP domain lookup", provider: "rdap.org")
+
+        viewModel.applySnapshot(
+            SnapshotFixture.snapshot(provenanceBySection: [.ownership: provenance])
+        )
+
+        XCTAssertEqual(viewModel.currentSnapshot.provenanceBySection[.ownership], provenance)
+        XCTAssertEqual(viewModel.currentSnapshot.provenanceBySection.count, 1)
+    }
+
+    /// Reset drops it, so a cleared screen does not keep claiming a source.
+    func testResetClearsTheInspectionMetadata() {
+        let viewModel = makeViewModel()
+        viewModel.applySnapshot(
+            SnapshotFixture.snapshot(provenanceBySection: [.dns: SnapshotFixture.provenance()])
+        )
+        XCTAssertFalse(viewModel.currentSnapshot.provenanceBySection.isEmpty)
+
+        viewModel.reset()
+
+        XCTAssertTrue(viewModel.currentSnapshot.provenanceBySection.isEmpty)
+    }
+
     func testApplyingASnapshotSettlesEverySection() {
         let viewModel = makeViewModel()
         _ = viewModel.beginLookup(for: "example.com")
@@ -195,29 +240,22 @@ final class SectionStateTests: XCTestCase {
 
     // MARK: Provenance
 
-    /// Provenance does not come from the snapshot that was just applied.
-    /// `currentSnapshot` reads it from the saved history entry
-    /// (`DomainViewModel:623`), and `applySnapshot` stores it nowhere — so
-    /// between applying and saving, and on a lookup that ends with a status
-    /// message and is therefore never saved, the cards show no provenance at
-    /// all. Recorded as A12.
+    /// Provenance now comes from the snapshot that was just applied, which is
+    /// A12 closed. It used to be recovered from the saved history entry, so
+    /// between applying and saving — and on a lookup that ends with a status
+    /// message and is therefore never saved — the cards showed none at all.
     ///
-    /// This pins the behaviour as it is rather than as it should be, so that
-    /// A2's collapse can carry provenance with the section state and change
-    /// this test deliberately.
-    func testProvenanceIsNotCarriedByTheAppliedSnapshot() {
+    /// This asserts through the section slice the view consumes, which is what
+    /// the earlier version of this test pinned in the opposite direction.
+    func testTheAppliedSnapshotCarriesProvenanceToTheSection() {
         let viewModel = makeViewModel()
+        let provenance = SnapshotFixture.provenance(source: "Direct TLS handshake", provider: "Target host")
 
         viewModel.applySnapshot(
-            SnapshotFixture.snapshot(
-                provenanceBySection: [.ssl: SnapshotFixture.provenance(source: "test")]
-            )
+            SnapshotFixture.snapshot(provenanceBySection: [.ssl: provenance])
         )
 
-        XCTAssertNil(
-            viewModel.webSectionData.tls.provenance,
-            "provenance now survives applySnapshot — update this test and close A12"
-        )
+        XCTAssertEqual(viewModel.webSectionData.tls.provenance, provenance)
     }
 
     // MARK: A second lookup clears the first one's results

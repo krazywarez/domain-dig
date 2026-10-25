@@ -133,18 +133,18 @@ enum DomainInsightEngine {
             title: "Shared nameserver set detected",
             groups: groupedDomains(for: reports) {
                 let value = $0.ownership?.nameservers.sorted().joined(separator: "|")
-                return value?.nilIfEmpty
+                return value?.nilIfBlank
             },
             into: &insights
         )
         appendSharedInsights(
             title: "Shared registrar detected",
-            groups: groupedDomains(for: reports) { $0.ownership?.registrar?.nilIfEmpty },
+            groups: groupedDomains(for: reports) { $0.ownership?.registrar?.nilIfBlank },
             into: &insights
         )
         appendSharedInsights(
             title: "Shared TLS issuer detected",
-            groups: groupedDomains(for: reports) { $0.web.tls?.issuer.nilIfEmpty },
+            groups: groupedDomains(for: reports) { $0.web.tls?.issuer.nilIfBlank },
             into: &insights
         )
 
@@ -537,7 +537,7 @@ enum DomainInsightEngine {
         for reports: [DomainReport],
         keyPath: KeyPath<DomainReport, String?>
     ) -> [String: [String]] {
-        groupedDomains(for: reports) { $0[keyPath: keyPath]?.nilIfEmpty }
+        groupedDomains(for: reports) { $0[keyPath: keyPath]?.nilIfBlank }
     }
 
     private static func groupedDomains(
@@ -554,8 +554,4 @@ enum DomainInsightEngine {
 }
 
 private extension String {
-    var nilIfEmpty: String? {
-        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
 }

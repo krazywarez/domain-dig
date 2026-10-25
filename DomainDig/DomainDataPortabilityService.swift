@@ -1639,8 +1639,3 @@ private enum ImportPayload {
     }
 }
 
-private extension String {
-    var nilIfEmpty: String? {
-        isEmpty ? nil : self
-    }
-}

@@ -272,12 +272,13 @@ enum SnapshotFixture {
 
     static func provenance(
         source: String = "test",
+        provider: String? = nil,
         resultSource: LookupResultSource = .live
     ) -> SectionProvenance {
         SectionProvenance(
             source: source,
             collectedAt: referenceDate,
-            provider: nil,
+            provider: provider,
             resolver: nil,
             resultSource: resultSource
         )

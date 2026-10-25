@@ -284,11 +284,6 @@ extension View {
     }
 }
 
-private extension String {
-    var nilIfEmpty: String? {
-        isEmpty ? nil : self
-    }
-}
 
 extension ChangeImpactClassification {
     var tone: AppStatusTone {

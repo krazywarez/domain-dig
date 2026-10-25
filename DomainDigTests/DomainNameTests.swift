@@ -77,6 +77,33 @@ final class DomainNameTests: XCTestCase {
         )
     }
 
+    /// C8: the probe used to look only at a label's first few characters, so
+    /// an unencodable character sitting after them reported `.labelTooLong`
+    /// instead of `.malformedLabel`.
+    ///
+    /// Calibrated on the character rather than hard-coded, because which
+    /// scalars IDNA refuses is Foundation's business and moves between
+    /// releases. If none of the candidates is refused, there is nothing to
+    /// assert on this runtime.
+    func testAnUnencodableCharacterIsMalformedWhereverItSitsInTheLabel() throws {
+        let candidates = ["\u{200B}", "\u{FFFF}", "\u{2E2F}", "\u{1D173}"]
+        guard let unencodable = candidates.first(where: { character in
+            DomainName.validate("\(character).com") == .failure(.malformedLabel(character))
+        }) else {
+            throw XCTSkip("no IDNA-unencodable character among the candidates on this runtime")
+        }
+
+        // Far enough in that the old eight-character prefix probe missed it,
+        // and short enough that the label cannot be over the byte limit.
+        let label = String(repeating: "a", count: 20) + unencodable
+
+        XCTAssertEqual(
+            DomainName.validate("\(label).com"),
+            .failure(.malformedLabel(label)),
+            "an unencodable character past the probe length still makes the label malformed"
+        )
+    }
+
     func testAcceptsAUnicodeHost() {
         XCTAssertEqual(DomainName.validate("münchen.de"), .success("münchen.de"))
     }

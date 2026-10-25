@@ -15,7 +15,6 @@ import Foundation
 enum DomainName {
     private static let maximumLabelBytes = 63
     private static let maximumHostBytes = 253
-    private static let probeLabelCharacters = 8
 
     /// The normalized host on success. A Unicode host is returned as typed; only
     /// the length limits are measured on its IDNA-encoded form.
@@ -40,12 +39,24 @@ enum DomainName {
         // The limits apply to the encoded host, which is what the section
         // services send, so they are measured on the punycode form.
         guard let encoded = DomainHostURL.https(host)?.host else {
-            // `URL` refuses a host whose encoded label is over the limit instead
-            // of reporting which label it was, so the labels are re-encoded one
-            // at a time: a label that will not encode even truncated to
-            // `probeLabelCharacters` (short enough that it cannot reach the
-            // limit whatever it encodes to) is malformed rather than too long.
-            if let malformed = labels.first(where: { !canEncode(String($0.prefix(probeLabelCharacters))) }) {
+            // `URL` refuses a host whose encoded label is over the limit
+            // instead of reporting which label it was, so the two reasons are
+            // told apart here: a label holding a character that will not encode
+            // on its own is malformed, and anything else that will not encode is
+            // too long.
+            //
+            // Probing per character rather than per prefix is what makes the
+            // position irrelevant. The earlier version probed the label's first
+            // few characters, so an unencodable character after them was
+            // reported as merely too long.
+            //
+            // Not a complete IDNA characterisation: a label refused for a
+            // combination its characters form, rather than for one of them,
+            // still falls through to `.labelTooLong`. The input is rejected
+            // either way and only the message differs.
+            if let malformed = labels.first(where: { label in
+                label.contains { !canEncode(String($0)) }
+            }) {
                 return .failure(.malformedLabel(malformed))
             }
             return .failure(.labelTooLong)
@@ -97,6 +108,11 @@ enum DomainName {
         return character.isLetter || character.isNumber || character == "-" || character == "."
     }
 
+    /// Whether `label` encodes at all, independent of length.
+    ///
+    /// An all-ASCII label always does, so only non-ASCII input reaches the
+    /// probe. Callers pass a single character to ask whether that character is
+    /// encodable anywhere in a label.
     private static func canEncode(_ label: String) -> Bool {
         guard label.contains(where: { !$0.isASCII }) else { return true }
         // The ASCII suffix keeps the probe a two-label host.

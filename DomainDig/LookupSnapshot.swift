@@ -282,3 +282,43 @@ extension LookupSnapshot {
         )
     }
 }
+
+/// The metadata one inspection produced: where each section came from, how
+/// confident it is, what failed, and whether the result is partial.
+///
+/// `DomainViewModel.currentSnapshot` used to recover all of this from the
+/// *saved history entry*, so it was empty until the snapshot had been written
+/// and `currentHistoryEntryID` pointed at it. Two consequences, both fixed by
+/// carrying it from the lookup instead: the cards rendered without provenance
+/// between applying a snapshot and saving it, and a lookup that returns before
+/// saving — any partial or failed one — showed no provenance for any section,
+/// which is the case where knowing the source matters most (A12).
+struct InspectionMetadata: Equatable {
+    var dataSources: [String]
+    var provenanceBySection: [LookupSectionKind: SectionProvenance]
+    var availabilityConfidence: ConfidenceLevel?
+    var ownershipConfidence: ConfidenceLevel?
+    var subdomainConfidence: ConfidenceLevel?
+    var emailSecurityConfidence: ConfidenceLevel?
+    var geolocationConfidence: ConfidenceLevel?
+    var errorDetails: [LookupSectionKind: InspectionFailure]
+    var isPartialSnapshot: Bool
+    var validationIssues: [String]
+    var snapshotIndex: Int?
+    var previousSnapshotID: UUID?
+
+    init(snapshot: LookupSnapshot) {
+        dataSources = snapshot.dataSources
+        provenanceBySection = snapshot.provenanceBySection
+        availabilityConfidence = snapshot.availabilityConfidence
+        ownershipConfidence = snapshot.ownershipConfidence
+        subdomainConfidence = snapshot.subdomainConfidence
+        emailSecurityConfidence = snapshot.emailSecurityConfidence
+        geolocationConfidence = snapshot.geolocationConfidence
+        errorDetails = snapshot.errorDetails
+        isPartialSnapshot = snapshot.isPartialSnapshot
+        validationIssues = snapshot.validationIssues
+        snapshotIndex = snapshot.snapshotIndex
+        previousSnapshotID = snapshot.previousSnapshotID
+    }
+}

@@ -564,12 +564,3 @@ extension DomainViewModel {
     }
 }
 
-// Deliberately a private copy rather than a shared one. `nilIfEmpty` means two
-// different things in this codebase: DomainInsightEngine's trims whitespace
-// first, every other copy does not. The exporters moved here were using the
-// non-trimming version, so that is what they keep (A14).
-private extension String {
-    var nilIfEmpty: String? {
-        isEmpty ? nil : self
-    }
-}
