@@ -129,6 +129,25 @@ final class FeatureAccessTests: XCTestCase {
         XCTAssertFalse(names.contains("dnsHistory"))
     }
 
+    // MARK: Retention
+
+    /// The dial D1 settled on. These are the numbers the paywall promises and
+    /// the store enforces, so they are pinned here rather than inferred.
+    func testEachTierHasItsRetentionLimit() {
+        XCTAssertEqual(FeatureAccessService.entitlements(for: .free).historyRetentionLimit, 50)
+        XCTAssertEqual(FeatureAccessService.entitlements(for: .pro).historyRetentionLimit, 250)
+        XCTAssertEqual(FeatureAccessService.entitlements(for: .proPlus).historyRetentionLimit, 2_000)
+    }
+
+    func testRetentionRisesWithTheTier() {
+        let free = FeatureAccessService.entitlements(for: .free).historyRetentionLimit
+        let pro = FeatureAccessService.entitlements(for: .pro).historyRetentionLimit
+        let proPlus = FeatureAccessService.entitlements(for: .proPlus).historyRetentionLimit
+
+        XCTAssertLessThan(free, pro)
+        XCTAssertLessThan(pro, proPlus)
+    }
+
     // MARK: Downgrade safety
 
     /// A lapsed subscriber keeps data above the new ceiling. Nothing may refuse

@@ -758,10 +758,6 @@ enum DomainDataPortabilityService {
     /// reads it; nothing else should.
     static let legacyHistoryBlobKey = StorageKey.history
 
-    /// The hard ceiling on history, independent of the user's auto-prune
-    /// setting. The per-tier retention dial D1 settled on (50/250/2000)
-    /// replaces this constant; until then every tier shares it.
-    static let historyStorageCap = 250
 
 
     static func loadAuditSessions(defaults: UserDefaults = .standard) -> [AuditSession] {

@@ -165,7 +165,7 @@ private struct HistoryNetworkSettingsView: View {
                     }
                 }
 
-                Text("History remains local-first. Auto-prune only trims older local snapshots on this device and defaults to unlimited.")
+                Text(viewModel.historyRetentionCaption)
                     .font(appDensity.font(.caption, design: .default))
                     .foregroundStyle(Color(.appTextSecondary))
             }

@@ -302,7 +302,6 @@ final class DomainViewModel {
     var trackedDomains: [TrackedDomain]
 
     private static let historyKey = "lookupHistory"
-    private static let maxHistory = 250
     var history: [HistoryEntry]
     var auditSessions: [AuditSession]
     private static let workflowsKey = "domainWorkflows"
@@ -859,7 +858,7 @@ final class DomainViewModel {
             }
         }
         persistTrackedDomains()
-        relinked.forEach { storeHistoryEntry($0, replacingExisting: true) }
+        relinked.forEach { updateStoredHistory($0) }
         sanitizeMonitoringSelection()
     }
 
@@ -875,7 +874,7 @@ final class DomainViewModel {
             }
         }
         persistTrackedDomains()
-        relinked.forEach { storeHistoryEntry($0, replacingExisting: true) }
+        relinked.forEach { updateStoredHistory($0) }
         sanitizeMonitoringSelection()
     }
 
@@ -1809,6 +1808,9 @@ final class DomainViewModel {
             currentHistoryEntryID = entry.id
         }
 
+        // Before the insert: afterwards `history.count` includes this entry
+        // and `growthHistoryLimit` would never prune anything.
+        let storedLimit = growthHistoryLimit
         let replacedLatest = replaceLatest
             && !history.isEmpty
             && history[0].domain.caseInsensitiveCompare(snapshot.domain) == .orderedSame
@@ -1816,7 +1818,7 @@ final class DomainViewModel {
             history[0] = entry
         } else {
             history.insert(entry, at: 0)
-            trimHistoryToLimit()
+            history = Array(history.prefix(storedLimit))
         }
 
         updateTrackedDomainSnapshotMetadata(
@@ -1829,7 +1831,11 @@ final class DomainViewModel {
             certificateWarningLevel: DomainDiffService.certificateWarningLevel(for: snapshot),
             certificateDaysRemaining: snapshot.sslInfo?.daysUntilExpiry
         )
-        storeHistoryEntry(entry, replacingExisting: replacedLatest)
+        if replacedLatest {
+            updateStoredHistory(entry)
+        } else {
+            appendStoredHistory(entry, cap: storedLimit)
+        }
         notifyIfNeeded(for: entry, snapshot: snapshot, previousSnapshot: previousSnapshot)
         return entry
     }
@@ -1837,25 +1843,34 @@ final class DomainViewModel {
     /// A single snapshot written on its own. `persistHistory` rewrites every
     /// row because it cannot tell what changed; these callers can, and at the
     /// Pro+ cap that is the difference between 23 ms and 656 ms.
-    private func storeHistoryEntry(_ entry: HistoryEntry, replacingExisting: Bool) {
+    /// Replaces one stored snapshot. No cap: an update changes a row that is
+    /// already there and cannot push the store past its limit.
+    private func updateStoredHistory(_ entry: HistoryEntry) {
         if historyPersistenceSuspended {
             historyPersistenceDirty = true
             return
         }
-        if replacingExisting {
-            DomainDataPortabilityService.updateHistoryEntry(
-                entry,
-                defaults: defaults,
-                historyLocation: historyLocation
-            )
-        } else {
-            DomainDataPortabilityService.appendHistoryEntry(
-                entry,
-                cap: effectiveHistoryLimit,
-                defaults: defaults,
-                historyLocation: historyLocation
-            )
+        DomainDataPortabilityService.updateHistoryEntry(
+            entry,
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
+        refreshDataLifecycleSummary()
+    }
+
+    /// Stores a new snapshot under `cap`, which the caller reads before its
+    /// own insert so the row being added does not raise its own ceiling.
+    private func appendStoredHistory(_ entry: HistoryEntry, cap: Int) {
+        if historyPersistenceSuspended {
+            historyPersistenceDirty = true
+            return
         }
+        DomainDataPortabilityService.appendHistoryEntry(
+            entry,
+            cap: cap,
+            defaults: defaults,
+            historyLocation: historyLocation
+        )
         refreshDataLifecycleSummary()
     }
 
@@ -1874,7 +1889,8 @@ final class DomainViewModel {
 
     /// Rewrites the whole store. Only the auto-prune setting needs this — it
     /// drops rows from the middle and cannot say which. Every other writer
-    /// goes through `storeHistoryEntry` or `removeStoredHistory`.
+    /// goes through `appendStoredHistory`, `updateStoredHistory` or
+    /// `removeStoredHistory`.
     private func persistHistory() {
         if historyPersistenceSuspended {
             historyPersistenceDirty = true
@@ -1894,14 +1910,14 @@ final class DomainViewModel {
     func setHistoryAutoPruneOption(_ option: HistoryAutoPruneOption) {
         historyAutoPruneOption = option
         defaults.set(option.rawValue, forKey: Self.historyAutoPruneKey)
-        trimHistoryToLimit()
+        history = Array(history.prefix(requestedHistoryLimit))
         persistHistory()
     }
 
     func updateHistoryNote(_ note: String, for entry: HistoryEntry) {
         guard let index = history.firstIndex(where: { $0.id == entry.id }) else { return }
         history[index].note = note.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-        storeHistoryEntry(history[index], replacingExisting: true)
+        updateStoredHistory(history[index])
     }
 
     #if DEBUG
@@ -1958,14 +1974,44 @@ final class DomainViewModel {
         refreshDataLifecycleSummary()
     }
 
-    /// The number of snapshots this install keeps: the user's auto-prune
-    /// choice, never above the store's own ceiling.
-    private var effectiveHistoryLimit: Int {
-        min(historyAutoPruneOption.keepCount ?? Self.maxHistory, Self.maxHistory)
+    /// What Settings says under the auto-prune picker. The old copy claimed
+    /// auto-prune "defaults to unlimited", which was never true — there has
+    /// always been a hard ceiling, and under D1 it is the tier's.
+    var historyRetentionCaption: String {
+        let limit = tierHistoryLimit
+        let base = "History stays on this device. Your plan keeps up to \(limit) snapshots"
+        guard history.count > limit else {
+            return base + "; auto-prune trims to fewer if you want."
+        }
+        return base
+            + ", and you have \(history.count). Nothing already saved is removed —"
+            + " new snapshots replace the oldest instead."
     }
 
+    /// Snapshots this tier keeps: 50 free, 250 Pro, 2000 Pro+ under D1.
+    private var tierHistoryLimit: Int {
+        FeatureAccessService.historyRetentionLimit
+    }
+
+    /// The ceiling a newly stored snapshot is kept under, computed before the
+    /// insert. Never below what is already held: a lapsed Pro+ subscriber with
+    /// 2000 snapshots keeps all 2000 (Review Focus #6), and the store holds
+    /// there rather than draining to the lower tier a row at a time. For
+    /// anyone at or under their tier's limit this is just that limit.
+    var growthHistoryLimit: Int {
+        max(tierHistoryLimit, history.count)
+    }
+
+    /// What the user's own auto-prune choice asks for, which may be less than
+    /// the tier allows but never more. This one is permitted to delete,
+    /// because the user chose it.
+    var requestedHistoryLimit: Int {
+        min(historyAutoPruneOption.keepCount ?? tierHistoryLimit, tierHistoryLimit)
+    }
+
+    /// Caps growth without pruning what is already stored.
     private func trimHistoryToLimit() {
-        history = Array(history.prefix(effectiveHistoryLimit))
+        history = Array(history.prefix(growthHistoryLimit))
     }
 
     private func nextSnapshotIndex(for domain: String, trackedDomainID: UUID?) -> Int {
@@ -2099,7 +2145,7 @@ final class DomainViewModel {
             }
         }
 
-        relinked.forEach { storeHistoryEntry($0, replacingExisting: true) }
+        relinked.forEach { updateStoredHistory($0) }
 
         if let latestEntry = history.first(where: { $0.domain.caseInsensitiveCompare(domain) == .orderedSame }),
            let trackedIndex = trackedDomains.firstIndex(where: { $0.id == trackedDomain.id }) {

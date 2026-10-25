@@ -73,6 +73,10 @@ struct FeatureEntitlements: Equatable {
     let batchSizeLimit: Int?
     /// Concurrently open audit sessions; nil is unlimited.
     let activeAuditSessionLimit: Int?
+    /// Snapshots kept per install, the retention dial D1 settled on. Not
+    /// optional: every tier has a ceiling, and the store is not a place to
+    /// accumulate without one.
+    let historyRetentionLimit: Int
 }
 
 struct UpgradePromptContext: Identifiable, Equatable {
@@ -108,7 +112,8 @@ enum FeatureAccessService {
                 trackedDomainLimit: 5,
                 workflowLimit: 1,
                 batchSizeLimit: 10,
-                activeAuditSessionLimit: 1
+                activeAuditSessionLimit: 1,
+                historyRetentionLimit: 50
             )
         case .pro:
             return FeatureEntitlements(
@@ -127,7 +132,8 @@ enum FeatureAccessService {
                 trackedDomainLimit: effectivelyUnlimitedTrackedDomains,
                 workflowLimit: nil,
                 batchSizeLimit: nil,
-                activeAuditSessionLimit: nil
+                activeAuditSessionLimit: nil,
+                historyRetentionLimit: 250
             )
         case .proPlus:
             return FeatureEntitlements(
@@ -136,9 +142,16 @@ enum FeatureAccessService {
                 trackedDomainLimit: effectivelyUnlimitedTrackedDomains,
                 workflowLimit: nil,
                 batchSizeLimit: nil,
-                activeAuditSessionLimit: nil
+                activeAuditSessionLimit: nil,
+                historyRetentionLimit: 2_000
             )
         }
+    }
+
+    /// Snapshots this tier keeps. A downgrade lowers what the store may grow
+    /// to; it never prunes what is already there (Review Focus #6).
+    static var historyRetentionLimit: Int {
+        entitlements.historyRetentionLimit
     }
 
     static func hasAccess(to capability: FeatureCapability) -> Bool {

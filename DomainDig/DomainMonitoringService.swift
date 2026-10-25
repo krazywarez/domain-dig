@@ -259,7 +259,6 @@ final class DomainMonitoringService {
     static let shared = DomainMonitoringService()
 
     private let inspectionService = DomainInspectionService()
-    private let maxHistoryEntries = 250
     private let calendar = Calendar.current
 
     func performMonitoring(
@@ -599,10 +598,13 @@ final class DomainMonitoringService {
             failures: .init(snapshot: snapshot)
         )
 
+        // Same retention rule as the view model's: the tier's limit, but never
+        // below what is already stored, so a monitoring run on a lapsed Pro+
+        // install does not prune a history the app itself would keep. Read
+        // before the insert, or the row being added raises its own ceiling.
+        let storedLimit = max(FeatureAccessService.historyRetentionLimit, history.count)
         history.insert(entry, at: 0)
-        if history.count > maxHistoryEntries {
-            history = Array(history.prefix(maxHistoryEntries))
-        }
+        history = Array(history.prefix(storedLimit))
 
         if let index = trackedDomains.firstIndex(where: { $0.id == trackedDomainID }) {
             trackedDomains[index].lastSnapshotID = entry.id

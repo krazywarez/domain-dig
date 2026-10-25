@@ -166,23 +166,104 @@ final class DomainViewModelStoreTests: XCTestCase {
         XCTAssertEqual(viewModel.history.map(\.id), seeded.prefix(50).map(\.id))
     }
 
-    /// "Unlimited" is unlimited only up to the store's own hard cap. The
-    /// setting has no bearing on that ceiling.
-    func testTheHardCapAppliesEvenWhenPruningIsUnlimited() {
-        let viewModel = makeViewModel()
-        viewModel.history = makeEntries(300)
-
-        viewModel.setHistoryAutoPruneOption(.unlimited)
-
-        XCTAssertEqual(viewModel.history.count, 250)
-    }
-
     /// A store already over the cap must still be readable. Pruning happens on
     /// a write, not on a read, so loading must not drop rows.
     func testAStoreAlreadyOverTheCapLoadsEveryRow() {
         DomainDataPortabilityService.saveHistoryEntries(makeEntries(300), defaults: scratch, historyLocation: historyLocation)
 
         XCTAssertEqual(makeViewModel().history.count, 300)
+    }
+
+    // MARK: Retention
+
+    /// At or under the tier's limit, the ceiling a new snapshot is stored
+    /// under is simply that limit.
+    func testTheGrowthLimitIsTheTierLimitWhenUnderIt() {
+        let limit = FeatureAccessService.historyRetentionLimit
+        let viewModel = makeViewModel()
+
+        viewModel.history = []
+        XCTAssertEqual(viewModel.growthHistoryLimit, limit)
+
+        viewModel.history = makeEntries(limit)
+        XCTAssertEqual(viewModel.growthHistoryLimit, limit)
+    }
+
+    /// Review Focus #6. A lapsed Pro+ subscriber holds more snapshots than the
+    /// new tier allows, so the ceiling is what they hold — the store stops
+    /// growing without deleting anything, rather than draining to the lower
+    /// tier a row per lookup.
+    func testTheGrowthLimitNeverFallsBelowWhatIsHeld() {
+        let limit = FeatureAccessService.historyRetentionLimit
+        let viewModel = makeViewModel()
+        viewModel.history = makeEntries(limit + 200)
+
+        XCTAssertEqual(viewModel.growthHistoryLimit, limit + 200)
+    }
+
+    /// The user's own auto-prune choice may ask for less than the tier allows,
+    /// never more.
+    func testTheRequestedLimitIsClampedByTheTier() {
+        let limit = FeatureAccessService.historyRetentionLimit
+        let viewModel = makeViewModel()
+
+        viewModel.setHistoryAutoPruneOption(.keep50)
+        XCTAssertEqual(viewModel.requestedHistoryLimit, min(50, limit))
+
+        viewModel.setHistoryAutoPruneOption(.unlimited)
+        XCTAssertEqual(viewModel.requestedHistoryLimit, limit, "unlimited is the tier's limit, not unbounded")
+    }
+
+    /// The user asked, so this one is allowed to delete.
+    func testTheUsersAutoPruneChoiceIsAllowedToPrune() {
+        let viewModel = makeViewModel()
+        viewModel.history = makeEntries(120)
+
+        viewModel.setHistoryAutoPruneOption(.keep50)
+
+        XCTAssertEqual(viewModel.history.count, 50)
+        XCTAssertEqual(
+            DomainDataPortabilityService.loadHistoryIndex(
+                defaults: scratch,
+                historyLocation: historyLocation
+            ).count,
+            50
+        )
+    }
+
+    func testUnlimitedAutoPruneTrimsToTheTierLimit() {
+        let limit = FeatureAccessService.historyRetentionLimit
+        let viewModel = makeViewModel()
+        viewModel.history = makeEntries(limit + 50)
+
+        viewModel.setHistoryAutoPruneOption(.unlimited)
+
+        XCTAssertEqual(viewModel.history.count, limit)
+    }
+
+    // MARK: The Settings caption
+
+    /// The old copy said auto-prune "defaults to unlimited", which was never
+    /// true: there has always been a hard ceiling.
+    func testTheRetentionCaptionNamesTheLimitAndNotUnlimited() {
+        let viewModel = makeViewModel()
+        viewModel.history = []
+
+        let caption = viewModel.historyRetentionCaption
+
+        XCTAssertTrue(caption.contains("\(FeatureAccessService.historyRetentionLimit)"))
+        XCTAssertFalse(caption.lowercased().contains("unlimited"))
+    }
+
+    /// Over the limit the caption says nothing already saved is removed, which
+    /// is what the store actually does.
+    func testTheRetentionCaptionReassuresWhenOverTheLimit() {
+        let viewModel = makeViewModel()
+        viewModel.history = makeEntries(FeatureAccessService.historyRetentionLimit + 10)
+
+        let caption = viewModel.historyRetentionCaption
+
+        XCTAssertTrue(caption.contains("Nothing already saved is removed"))
     }
 
     // MARK: Tracking
