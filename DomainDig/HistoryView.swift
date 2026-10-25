@@ -260,22 +260,7 @@ struct HistoryDetailView: View {
                 .padding(.top, appDensity.metrics.sectionSpacing)
                 WebSectionView(
                     isCollapsed: .constant(false),
-                    certificateRows: DomainViewModel.webCertificateRows(from: snapshot),
-                    sslInfo: snapshot.sslInfo,
-                    tlsSummary: report.web,
-                    sslLoading: false,
-                    sslError: snapshot.sslError,
-                    tlsProvenance: snapshot.provenanceBySection[.ssl],
-                    responseRows: DomainViewModel.webResponseRows(from: snapshot),
-                    headers: snapshot.httpHeaders,
-                    headersLoading: false,
-                    headersError: snapshot.httpHeadersError,
-                    httpProvenance: snapshot.provenanceBySection[.httpHeaders],
-                    redirects: DomainViewModel.redirectRows(from: snapshot),
-                    redirectLoading: false,
-                    redirectError: snapshot.redirectChainError,
-                    redirectProvenance: snapshot.provenanceBySection[.redirectChain],
-                    finalURL: snapshot.redirectChain.last?.url
+                    data: DomainViewModel.webSectionData(from: snapshot, report: report)
                 )
                 .padding(.top, appDensity.metrics.sectionSpacing)
                 EmailSectionView(
@@ -290,26 +275,9 @@ struct HistoryDetailView: View {
                 .padding(.top, appDensity.metrics.sectionSpacing)
                 NetworkSectionView(
                     isCollapsed: .constant(false),
-                    reachabilityRows: DomainViewModel.reachabilityRows(from: snapshot),
-                    reachabilityLoading: false,
-                    reachabilityError: snapshot.reachabilityError,
-                    reachabilityProvenance: snapshot.provenanceBySection[.reachability],
-                    locationRows: DomainViewModel.locationRows(from: snapshot),
-                    geolocation: snapshot.ipGeolocation,
-                    geolocationLoading: false,
-                    geolocationError: snapshot.ipGeolocationError,
-                    geolocationProvenance: snapshot.provenanceBySection[.ipGeolocation],
-                    geolocationConfidence: snapshot.geolocationConfidence,
-                    standardPortRows: DomainViewModel.portRows(from: snapshot, kind: .standard),
-                    customPortRows: DomainViewModel.portRows(from: snapshot, kind: .custom),
-                    portScanLoading: false,
-                    portScanError: snapshot.portScanError,
-                    portScanProvenance: snapshot.provenanceBySection[.portScan],
-                    customPortScanLoading: false,
-                    customPortScanError: nil,
-                    isCloudflareProxied: snapshot.httpHeaders.contains(where: { $0.name.lowercased() == "cf-ray" }),
                     customPortsExpanded: .constant(false),
                     customPortInput: .constant(""),
+                    data: DomainViewModel.networkSectionData(from: snapshot),
                     onScanCustomPorts: { /* Historical snapshot; re-scanning is not offered here. */ }
                 )
                 .padding(.top, appDensity.metrics.sectionSpacing)

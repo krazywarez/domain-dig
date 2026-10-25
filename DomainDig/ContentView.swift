@@ -102,22 +102,7 @@ struct ContentView: View {
                         .padding(.top, appDensity.metrics.sectionSpacing)
                         WebSectionView(
                             isCollapsed: sectionCollapsedBinding(.web),
-                            certificateRows: viewModel.webCertificateRows,
-                            sslInfo: viewModel.sslInfo,
-                            tlsSummary: viewModel.currentTLSSummary,
-                            sslLoading: viewModel.sslLoading || viewModel.hstsLoading,
-                            sslError: viewModel.sslError,
-                            tlsProvenance: viewModel.currentSnapshot.provenanceBySection[.ssl],
-                            responseRows: viewModel.webResponseRows,
-                            headers: viewModel.httpHeaders,
-                            headersLoading: viewModel.httpHeadersLoading,
-                            headersError: viewModel.httpHeadersError,
-                            httpProvenance: viewModel.currentSnapshot.provenanceBySection[.httpHeaders],
-                            redirects: viewModel.redirectRows,
-                            redirectLoading: viewModel.redirectChainLoading,
-                            redirectError: viewModel.redirectChainError,
-                            redirectProvenance: viewModel.currentSnapshot.provenanceBySection[.redirectChain],
-                            finalURL: viewModel.currentSnapshot.redirectChain.last?.url
+                            data: viewModel.webSectionData
                         )
                         .padding(.top, appDensity.metrics.sectionSpacing)
                         EmailSectionView(
@@ -132,26 +117,9 @@ struct ContentView: View {
                         .padding(.top, appDensity.metrics.sectionSpacing)
                         NetworkSectionView(
                             isCollapsed: sectionCollapsedBinding(.network),
-                            reachabilityRows: viewModel.reachabilityRows,
-                            reachabilityLoading: viewModel.reachabilityLoading,
-                            reachabilityError: viewModel.reachabilityError,
-                            reachabilityProvenance: viewModel.currentSnapshot.provenanceBySection[.reachability],
-                            locationRows: viewModel.locationRows,
-                            geolocation: viewModel.ipGeolocation,
-                            geolocationLoading: viewModel.ipGeolocationLoading,
-                            geolocationError: viewModel.ipGeolocationError,
-                            geolocationProvenance: viewModel.currentSnapshot.provenanceBySection[.ipGeolocation],
-                            geolocationConfidence: viewModel.currentSnapshot.geolocationConfidence,
-                            standardPortRows: viewModel.standardPortRows,
-                            customPortRows: viewModel.customPortRows,
-                            portScanLoading: viewModel.portScanLoading,
-                            portScanError: viewModel.portScanError,
-                            portScanProvenance: viewModel.currentSnapshot.provenanceBySection[.portScan],
-                            customPortScanLoading: viewModel.customPortScanLoading,
-                            customPortScanError: viewModel.customPortScanError,
-                            isCloudflareProxied: viewModel.isCloudflareProxied,
                             customPortsExpanded: $customPortsExpanded,
                             customPortInput: $customPortInput,
+                            data: viewModel.networkSectionData,
                             onScanCustomPorts: runCustomPortScan
                         )
                         .padding(.top, appDensity.metrics.sectionSpacing)

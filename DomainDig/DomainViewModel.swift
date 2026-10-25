@@ -747,6 +747,118 @@ final class DomainViewModel {
         Self.ptrMessage(from: currentSnapshot)
     }
 
+    /// The same two slices built from a stored snapshot, for the history
+    /// detail view. Nothing is in flight there, so every panel is settled.
+    static func webSectionData(from snapshot: LookupSnapshot, report: DomainReport) -> WebSectionViewData {
+        WebSectionViewData(
+            tls: SectionPanelViewData(
+                error: snapshot.sslError,
+                provenance: snapshot.provenanceBySection[.ssl]
+            ),
+            certificateRows: webCertificateRows(from: snapshot),
+            sslInfo: snapshot.sslInfo,
+            tlsSummary: report.web,
+            http: SectionPanelViewData(
+                error: snapshot.httpHeadersError,
+                provenance: snapshot.provenanceBySection[.httpHeaders]
+            ),
+            responseRows: webResponseRows(from: snapshot),
+            headers: snapshot.httpHeaders,
+            redirect: SectionPanelViewData(
+                error: snapshot.redirectChainError,
+                provenance: snapshot.provenanceBySection[.redirectChain]
+            ),
+            redirectRows: redirectRows(from: snapshot),
+            finalURL: snapshot.redirectChain.last?.url
+        )
+    }
+
+    static func networkSectionData(from snapshot: LookupSnapshot) -> NetworkSectionViewData {
+        NetworkSectionViewData(
+            reachability: SectionPanelViewData(
+                error: snapshot.reachabilityError,
+                provenance: snapshot.provenanceBySection[.reachability]
+            ),
+            reachabilityRows: reachabilityRows(from: snapshot),
+            location: SectionPanelViewData(
+                error: snapshot.ipGeolocationError,
+                provenance: snapshot.provenanceBySection[.ipGeolocation],
+                confidence: snapshot.geolocationConfidence
+            ),
+            locationRows: locationRows(from: snapshot),
+            geolocation: snapshot.ipGeolocation,
+            portScan: SectionPanelViewData(
+                error: snapshot.portScanError,
+                provenance: snapshot.provenanceBySection[.portScan]
+            ),
+            standardPortRows: portRows(from: snapshot, kind: .standard),
+            customPortRows: portRows(from: snapshot, kind: .custom),
+            isCloudflareProxied: snapshot.httpHeaders.contains { $0.name.lowercased() == "cf-ray" }
+        )
+    }
+
+    /// Everything the Web section draws, assembled in one place. The call
+    /// site used to name seventeen arguments and had to keep their order
+    /// straight; this groups them by the card they belong to (A10).
+    var webSectionData: WebSectionViewData {
+        WebSectionViewData(
+            tls: SectionPanelViewData(
+                isLoading: sslLoading || hstsLoading,
+                error: sslError,
+                provenance: currentSnapshot.provenanceBySection[.ssl]
+            ),
+            certificateRows: webCertificateRows,
+            sslInfo: sslInfo,
+            tlsSummary: currentTLSSummary,
+            http: SectionPanelViewData(
+                isLoading: httpHeadersLoading,
+                error: httpHeadersError,
+                provenance: currentSnapshot.provenanceBySection[.httpHeaders]
+            ),
+            responseRows: webResponseRows,
+            headers: httpHeaders,
+            redirect: SectionPanelViewData(
+                isLoading: redirectChainLoading,
+                error: redirectChainError,
+                provenance: currentSnapshot.provenanceBySection[.redirectChain]
+            ),
+            redirectRows: redirectRows,
+            finalURL: currentSnapshot.redirectChain.last?.url
+        )
+    }
+
+    /// Everything the Network section draws. Twenty-two arguments before.
+    var networkSectionData: NetworkSectionViewData {
+        NetworkSectionViewData(
+            reachability: SectionPanelViewData(
+                isLoading: reachabilityLoading,
+                error: reachabilityError,
+                provenance: currentSnapshot.provenanceBySection[.reachability]
+            ),
+            reachabilityRows: reachabilityRows,
+            location: SectionPanelViewData(
+                isLoading: ipGeolocationLoading,
+                error: ipGeolocationError,
+                provenance: currentSnapshot.provenanceBySection[.ipGeolocation],
+                confidence: currentSnapshot.geolocationConfidence
+            ),
+            locationRows: locationRows,
+            geolocation: ipGeolocation,
+            portScan: SectionPanelViewData(
+                isLoading: portScanLoading,
+                error: portScanError,
+                provenance: currentSnapshot.provenanceBySection[.portScan]
+            ),
+            standardPortRows: standardPortRows,
+            customPortRows: customPortRows,
+            customPortScan: SectionPanelViewData(
+                isLoading: customPortScanLoading,
+                error: customPortScanError
+            ),
+            isCloudflareProxied: isCloudflareProxied
+        )
+    }
+
     var webCertificateRows: [InfoRowViewData] {
         Self.webCertificateRows(from: currentSnapshot)
     }

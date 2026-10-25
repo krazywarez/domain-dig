@@ -677,22 +677,43 @@ struct DNSSectionView: View {
 struct WebSectionView: View {
     @Environment(\.appDensity) private var appDensity
     @Binding var isCollapsed: Bool
-    let certificateRows: [InfoRowViewData]
-    let sslInfo: SSLCertificateInfo?
-    let tlsSummary: WebResultSummary?
-    let sslLoading: Bool
-    let sslError: String?
-    let tlsProvenance: SectionProvenance?
-    let responseRows: [InfoRowViewData]
-    let headers: [HTTPHeader]
-    let headersLoading: Bool
-    let headersError: String?
-    let httpProvenance: SectionProvenance?
-    let redirects: [RedirectHopViewData]
-    let redirectLoading: Bool
-    let redirectError: String?
-    let redirectProvenance: SectionProvenance?
-    let finalURL: String?
+
+    private let certificateRows: [InfoRowViewData]
+    private let sslInfo: SSLCertificateInfo?
+    private let tlsSummary: WebResultSummary?
+    private let sslLoading: Bool
+    private let sslError: String?
+    private let tlsProvenance: SectionProvenance?
+    private let responseRows: [InfoRowViewData]
+    private let headers: [HTTPHeader]
+    private let headersLoading: Bool
+    private let headersError: String?
+    private let httpProvenance: SectionProvenance?
+    private let redirects: [RedirectHopViewData]
+    private let redirectLoading: Bool
+    private let redirectError: String?
+    private let redirectProvenance: SectionProvenance?
+    private let finalURL: String?
+
+    init(isCollapsed: Binding<Bool>, data: WebSectionViewData) {
+        _isCollapsed = isCollapsed
+        certificateRows = data.certificateRows
+        sslInfo = data.sslInfo
+        tlsSummary = data.tlsSummary
+        sslLoading = data.tls.isLoading
+        sslError = data.tls.error
+        tlsProvenance = data.tls.provenance
+        responseRows = data.responseRows
+        headers = data.headers
+        headersLoading = data.http.isLoading
+        headersError = data.http.error
+        httpProvenance = data.http.provenance
+        redirects = data.redirectRows
+        redirectLoading = data.redirect.isLoading
+        redirectError = data.redirect.error
+        redirectProvenance = data.redirect.provenance
+        finalURL = data.finalURL
+    }
 
     var body: some View {
         CollapsibleSectionView(title: "Web", isCollapsed: $isCollapsed) {
@@ -911,27 +932,59 @@ struct EmailSectionView: View {
 struct NetworkSectionView: View {
     @Environment(\.appDensity) private var appDensity
     @Binding var isCollapsed: Bool
-    let reachabilityRows: [ReachabilityRowViewData]
-    let reachabilityLoading: Bool
-    let reachabilityError: String?
-    let reachabilityProvenance: SectionProvenance?
-    let locationRows: [InfoRowViewData]
-    let geolocation: IPGeolocation?
-    let geolocationLoading: Bool
-    let geolocationError: String?
-    let geolocationProvenance: SectionProvenance?
-    let geolocationConfidence: ConfidenceLevel?
-    let standardPortRows: [PortScanRowViewData]
-    let customPortRows: [PortScanRowViewData]
-    let portScanLoading: Bool
-    let portScanError: String?
-    let portScanProvenance: SectionProvenance?
-    let customPortScanLoading: Bool
-    let customPortScanError: String?
-    let isCloudflareProxied: Bool
     @Binding var customPortsExpanded: Bool
     @Binding var customPortInput: String
     let onScanCustomPorts: () -> Void
+
+    private let reachabilityRows: [ReachabilityRowViewData]
+    private let reachabilityLoading: Bool
+    private let reachabilityError: String?
+    private let reachabilityProvenance: SectionProvenance?
+    private let locationRows: [InfoRowViewData]
+    private let geolocation: IPGeolocation?
+    private let geolocationLoading: Bool
+    private let geolocationError: String?
+    private let geolocationProvenance: SectionProvenance?
+    private let geolocationConfidence: ConfidenceLevel?
+    private let standardPortRows: [PortScanRowViewData]
+    private let customPortRows: [PortScanRowViewData]
+    private let portScanLoading: Bool
+    private let portScanError: String?
+    private let portScanProvenance: SectionProvenance?
+    private let customPortScanLoading: Bool
+    private let customPortScanError: String?
+    private let isCloudflareProxied: Bool
+
+    init(
+        isCollapsed: Binding<Bool>,
+        customPortsExpanded: Binding<Bool>,
+        customPortInput: Binding<String>,
+        data: NetworkSectionViewData,
+        onScanCustomPorts: @escaping () -> Void
+    ) {
+        _isCollapsed = isCollapsed
+        _customPortsExpanded = customPortsExpanded
+        _customPortInput = customPortInput
+        self.onScanCustomPorts = onScanCustomPorts
+        reachabilityRows = data.reachabilityRows
+        reachabilityLoading = data.reachability.isLoading
+        reachabilityError = data.reachability.error
+        reachabilityProvenance = data.reachability.provenance
+        locationRows = data.locationRows
+        geolocation = data.geolocation
+        geolocationLoading = data.location.isLoading
+        geolocationError = data.location.error
+        geolocationProvenance = data.location.provenance
+        geolocationConfidence = data.location.confidence
+        standardPortRows = data.standardPortRows
+        customPortRows = data.customPortRows
+        portScanLoading = data.portScan.isLoading
+        portScanError = data.portScan.error
+        portScanProvenance = data.portScan.provenance
+        customPortScanLoading = data.customPortScan.isLoading
+        customPortScanError = data.customPortScan.error
+        isCloudflareProxied = data.isCloudflareProxied
+    }
 
     var body: some View {
         CollapsibleSectionView(title: "Network", isCollapsed: $isCollapsed) {
@@ -1116,4 +1169,57 @@ struct PortRowsView: View {
             return .init(title: row.statusLabel, systemImage: "circle", foregroundColor: Color(.appTextSecondary), backgroundColor: Color(.appSurfaceElevated))
         }
     }
+}
+
+// MARK: - Section view data
+
+/// What one card inside a result section needs to know about its own state:
+/// whether the data is still arriving, what failed, where it came from and how
+/// much to trust it.
+///
+/// These four travelled as a positional group repeated once per card, which is
+/// how `NetworkSectionView` came to declare 22 init parameters and
+/// `WebSectionView` 17 (A10). The views keep their own stored properties —
+/// unpacking happens in the init, so the bodies are unchanged — but a caller
+/// now names three groups instead of counting out twenty-two arguments.
+struct SectionPanelViewData {
+    var isLoading = false
+    var error: String?
+    var provenance: SectionProvenance?
+    var confidence: ConfidenceLevel?
+}
+
+/// The Web section's three cards: TLS, headers, redirects.
+struct WebSectionViewData {
+    var tls = SectionPanelViewData()
+    var certificateRows: [InfoRowViewData] = []
+    var sslInfo: SSLCertificateInfo?
+    var tlsSummary: WebResultSummary?
+
+    var http = SectionPanelViewData()
+    var responseRows: [InfoRowViewData] = []
+    var headers: [HTTPHeader] = []
+
+    var redirect = SectionPanelViewData()
+    var redirectRows: [RedirectHopViewData] = []
+    var finalURL: String?
+}
+
+/// The Network section's cards: reachability, location, ports. Custom port
+/// scanning carries its own state because it runs separately, after the user
+/// asks for it.
+struct NetworkSectionViewData {
+    var reachability = SectionPanelViewData()
+    var reachabilityRows: [ReachabilityRowViewData] = []
+
+    var location = SectionPanelViewData()
+    var locationRows: [InfoRowViewData] = []
+    var geolocation: IPGeolocation?
+
+    var portScan = SectionPanelViewData()
+    var standardPortRows: [PortScanRowViewData] = []
+    var customPortRows: [PortScanRowViewData] = []
+    var customPortScan = SectionPanelViewData()
+
+    var isCloudflareProxied = false
 }
