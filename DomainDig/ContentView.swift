@@ -140,7 +140,15 @@ struct ContentView: View {
             .navigationTitle("DomainDig")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    if viewModel.hasRun {
+                    // While a lookup is in flight the same action is a cancel,
+                    // so it says so rather than leaving an unlabelled glyph to
+                    // stand for both.
+                    if viewModel.singleLookupRunning {
+                        Button("Cancel") {
+                            viewModel.reset()
+                        }
+                        .accessibilityLabel("Cancel lookup")
+                    } else if viewModel.hasRun {
                         Button {
                             viewModel.reset()
                         } label: {
@@ -149,6 +157,15 @@ struct ContentView: View {
                         }
                         .accessibilityLabel("Clear results")
                     }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        WorkflowsView(viewModel: viewModel)
+                    } label: {
+                        Label("Workflows", systemImage: "square.stack.3d.up")
+                    }
+                    .accessibilityLabel("Workflows")
                 }
             }
             .navigationDestination(for: WorkflowNavigationTarget.self) { target in

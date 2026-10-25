@@ -370,6 +370,13 @@ final class DomainViewModel {
         ].allSatisfy { $0 }
     }
 
+    /// A single lookup is in flight. `hasRun` is set when one starts and the
+    /// sections settle as they land, so this is the window in which cancelling
+    /// means something — the counterpart to `batchLookupRunning`.
+    var singleLookupRunning: Bool {
+        hasRun && !resultsLoaded
+    }
+
     var activeLoadingLabels: [String] {
         var labels: [String] = []
         if availabilityLoading { labels.append("Availability") }

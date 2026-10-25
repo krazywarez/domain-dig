@@ -49,14 +49,6 @@ struct SettingsView: View {
             }
 
             Section("Preferences") {
-                NavigationLink("Tracked Domains") {
-                    WatchlistView(viewModel: viewModel)
-                }
-
-                NavigationLink("Workflows") {
-                    WorkflowsView(viewModel: viewModel)
-                }
-
                 NavigationLink("Display") {
                     DisplaySettingsView()
                 }
@@ -67,7 +59,7 @@ struct SettingsView: View {
             }
 
             Section("Services") {
-                NavigationLink("Monitoring Activity") {
+                NavigationLink("Monitoring Log") {
                     MonitoringView(viewModel: viewModel)
                 }
 
@@ -83,7 +75,7 @@ struct SettingsView: View {
                     CloudSyncSettingsView()
                 }
 
-                NavigationLink("Monitoring") {
+                NavigationLink("Monitoring Settings") {
                     MonitoringSettingsView(viewModel: viewModel)
                 }
 

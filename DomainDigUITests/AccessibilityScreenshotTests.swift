@@ -45,12 +45,14 @@ final class AccessibilityScreenshotTests: XCTestCase {
         _ = app.buttons["Refresh all tracked domains"].waitForExistence(timeout: 5)
         attach(app, name: "dashboard-\(suffix)")
 
-        app.selectRootTab("Settings")
-        let trackedDomains = app.buttons["Tracked Domains"]
-        if trackedDomains.waitForExistence(timeout: 5) {
-            trackedDomains.tap()
+        let watchlist = app.buttons["Watchlist"]
+        if watchlist.waitForExistence(timeout: 5) {
+            watchlist.tap()
             _ = element(app, labelled: "healthy.example").waitForExistence(timeout: 5)
             attach(app, name: "watchlist-\(suffix)")
+            // Pop the push, so a later pass's Dashboard capture is the
+            // Dashboard rather than this view again.
+            app.selectRootTab("Dashboard")
         }
 
         app.selectRootTab("Inspect")
@@ -78,8 +80,8 @@ final class AccessibilityScreenshotTests: XCTestCase {
     /// "Appearance, <current value>". Returns `false` (rather than failing) if
     /// any step is unreachable on this runtime.
     private func setAppearance(_ app: XCUIApplication, to option: String) -> Bool {
-        // A prior capture may have left the Settings tab on a pushed view
-        // (Tracked Domains). Re-selecting the active tab pops it back to root.
+        // A prior step may have left the Settings tab on a pushed view.
+        // Re-selecting the active tab pops it back to root.
         app.selectRootTab("Settings")
         let display = app.buttons["Display"]
         if !display.waitForExistence(timeout: 2) {

@@ -26,7 +26,7 @@ struct DashboardView: View {
                     EmptyStateCardView(
                         title: "No Portfolio Yet",
                         message: "Track domains to get portfolio health, recent changes, expiry visibility, and an attention queue in one place.",
-                        suggestion: "Inspect a domain and use the Track action, or add one directly from Tracked Domains in Settings.",
+                        suggestion: "Inspect a domain and use the Track action, or add one directly from the watchlist.",
                         systemImage: "square.stack.3d.up.fill",
                         showsCardBackground: false
                     )
@@ -186,6 +186,16 @@ struct DashboardView: View {
                     .accessibilityLabel("Refresh all tracked domains")
                     .disabled(viewModel.batchLookupRunning)
                 }
+            }
+
+            // The dashboard reads the portfolio; the watchlist edits it.
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    WatchlistView(viewModel: viewModel)
+                } label: {
+                    Label("Watchlist", systemImage: "list.bullet")
+                }
+                .accessibilityLabel("Watchlist")
             }
         }
     }

@@ -40,8 +40,8 @@ final class AccessibilityMetadataTests: XCTestCase {
             "Dashboard refresh lost its 'Refresh all tracked domains' label"
         )
 
-        // Watchlist (Tracked Domains) add + filter.
-        openTrackedDomains(app)
+        // Watchlist add + filter.
+        openWatchlist(app)
         XCTAssertTrue(
             app.buttons["Add domain"].waitForExistence(timeout: 5),
             "Watchlist add-domain lost its 'Add domain' label"
@@ -61,9 +61,9 @@ final class AccessibilityMetadataTests: XCTestCase {
     /// is reachable.
     func testWorkflowsCreateLabel() {
         let app = AccessibilityAuditHarness.launch(seeded: true)
-        app.selectRootTab("Settings")
+        app.selectRootTab("Inspect")
         let workflows = app.buttons["Workflows"]
-        XCTAssertTrue(workflows.waitForExistence(timeout: 5), "Settings no longer offers Workflows")
+        XCTAssertTrue(workflows.waitForExistence(timeout: 5), "Inspect no longer offers Workflows")
         workflows.tap()
         XCTAssertTrue(
             app.buttons["Create workflow"].waitForExistence(timeout: 5),
@@ -79,7 +79,7 @@ final class AccessibilityMetadataTests: XCTestCase {
     /// contract.
     func testWatchlistRowLabelAndValue() {
         let app = AccessibilityAuditHarness.launch(seeded: true)
-        openTrackedDomains(app)
+        openWatchlist(app)
 
         assertElement(in: app, label: "healthy.example", value: "Registered")
         // The stress-length fixture with no known availability.
@@ -111,11 +111,11 @@ final class AccessibilityMetadataTests: XCTestCase {
 
     // MARK: Helpers
 
-    private func openTrackedDomains(_ app: XCUIApplication) {
-        app.selectRootTab("Settings")
-        let trackedDomains = app.buttons["Tracked Domains"]
-        XCTAssertTrue(trackedDomains.waitForExistence(timeout: 5), "Settings no longer offers Tracked Domains")
-        trackedDomains.tap()
+    private func openWatchlist(_ app: XCUIApplication) {
+        app.selectRootTab("Dashboard")
+        let watchlist = app.buttons["Watchlist"]
+        XCTAssertTrue(watchlist.waitForExistence(timeout: 5), "Dashboard no longer offers Watchlist")
+        watchlist.tap()
     }
 
     /// A `children: .ignore` row can surface as a button, cell, or other-element

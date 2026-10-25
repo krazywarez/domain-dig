@@ -38,14 +38,14 @@ final class AccessibilityAuditTests: XCTestCase {
 
     func testTrackedDomainsScreen() throws {
         let app = AccessibilityAuditHarness.launch()
-        app.selectRootTab("Settings")
+        app.selectRootTab("Dashboard")
 
-        let trackedDomains = app.buttons["Tracked Domains"]
+        let watchlist = app.buttons["Watchlist"]
         XCTAssertTrue(
-            trackedDomains.waitForExistence(timeout: 5),
-            "Settings no longer offers a Tracked Domains row"
+            watchlist.waitForExistence(timeout: 5),
+            "Dashboard no longer offers a Watchlist row"
         )
-        trackedDomains.tap()
+        watchlist.tap()
 
         let audited = try AccessibilityAuditHarness.audit(app, screen: "tracked-domains", test: self)
         try XCTSkipUnless(audited, "Tracked Domains audit did not complete in time")
@@ -96,10 +96,10 @@ final class AccessibilityAuditTests: XCTestCase {
     /// The watchlist's dense rows (up to nine text elements each).
     func testSeededTrackedDomains() throws {
         let app = AccessibilityAuditHarness.launch(seeded: true)
-        app.selectRootTab("Settings")
-        let trackedDomains = app.buttons["Tracked Domains"]
-        XCTAssertTrue(trackedDomains.waitForExistence(timeout: 5))
-        trackedDomains.tap()
+        app.selectRootTab("Dashboard")
+        let watchlist = app.buttons["Watchlist"]
+        XCTAssertTrue(watchlist.waitForExistence(timeout: 5))
+        watchlist.tap()
         let audited = try AccessibilityAuditHarness.audit(app, screen: "seeded-tracked-domains", test: self, reportOnly: true)
         try XCTSkipUnless(audited, "Audit did not complete in time for seeded Tracked Domains")
     }
@@ -139,10 +139,10 @@ final class AccessibilityAuditTests: XCTestCase {
             unaudited.append("Inspect batch")
         }
 
-        app.selectRootTab("Settings")
-        let trackedDomains = app.buttons["Tracked Domains"]
-        if trackedDomains.waitForExistence(timeout: 5) {
-            trackedDomains.tap()
+        app.selectRootTab("Dashboard")
+        let watchlist = app.buttons["Watchlist"]
+        if watchlist.waitForExistence(timeout: 5) {
+            watchlist.tap()
             if try !AccessibilityAuditHarness.audit(app, screen: "seeded-tracked-domains-accessibilityL", test: self, reportOnly: true) {
                 unaudited.append("Tracked Domains")
             }
@@ -174,10 +174,10 @@ final class AccessibilityAuditTests: XCTestCase {
             unaudited.append("Inspect batch")
         }
 
-        app.selectRootTab("Settings")
-        let trackedDomains = app.buttons["Tracked Domains"]
-        if trackedDomains.waitForExistence(timeout: 5) {
-            trackedDomains.tap()
+        app.selectRootTab("Dashboard")
+        let watchlist = app.buttons["Watchlist"]
+        if watchlist.waitForExistence(timeout: 5) {
+            watchlist.tap()
             if try !AccessibilityAuditHarness.audit(app, screen: "seeded-tracked-domains-accessibilityXXXL", test: self, reportOnly: true) {
                 unaudited.append("Tracked Domains")
             }
