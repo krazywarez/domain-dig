@@ -69,16 +69,22 @@ run_tier() {
   fi
 
   # Findings are printed by the suite itself; surface them plus the verdict.
+  #
+  # The grep is wrapped in a brace group so that matching nothing does not read
+  # as a failure. With pipefail the pipeline then carries xcodebuild's own
+  # status, so an enforced audit failure reaches the caller — and the pre-push
+  # gate can act on it — rather than being reported and exited 0.
+  local code=0
   set -o pipefail
   xcodebuild test \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -destination "id=$udid" \
     CODE_SIGNING_ALLOWED=NO 2>&1 \
-    | grep -E 'finding\(s\)|no accessibility findings|^  • |did not complete in time|Executed [0-9]+ test|\*\* TEST (SUCCEEDED|FAILED)' \
-    || true
+    | { grep -E 'finding\(s\)|no accessibility findings|^  • |did not complete in time|Executed [0-9]+ test|\*\* TEST (SUCCEEDED|FAILED)' || true; } \
+    || code=$?
 
-  return 0
+  return "$code"
 }
 
 status=0
@@ -94,5 +100,8 @@ if [[ "$status" -eq 0 ]]; then
   echo "==> Done. Findings above are the burndown list for issue #21."
   echo "    They are reported, not enforced — widen"
   echo "    AccessibilityAuditHarness.enforcedAuditTypes as each phase lands."
+else
+  echo "==> A tier failed. An enforced category reported a named finding, or the" >&2
+  echo "    suite could not run. Read the verdict line for each tier above." >&2
 fi
 exit "$status"

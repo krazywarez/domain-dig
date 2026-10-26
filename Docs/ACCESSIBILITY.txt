@@ -410,7 +410,7 @@ no single number is correct on both.
 
 The audit therefore runs locally, across both ends, via
 `Scripts/audit-a11y.sh` — on a machine that actually has an 18.x runtime
-installed. It is wired to the pre-push hook in `.githooks/`.
+installed. The pre-push hook in `.githooks/` runs both of them.
 
 There is no CI job. The GitHub Actions workflow that used to run this suite on
 the newest runtime has been removed, and with it the one check that no local run
@@ -424,10 +424,14 @@ by hand before a release.
 ## Running it
 
 ```sh
-./Scripts/audit-a11y.sh            # floor + current
-./Scripts/audit-a11y.sh floor      # oldest supported only (~85s)
-./Scripts/audit-a11y.sh current    # newest installed only
+./Scripts/audit-a11y.sh            # floor + current (~20 min)
+./Scripts/audit-a11y.sh floor      # oldest supported only (~8 min)
+./Scripts/audit-a11y.sh current    # newest installed only (~10 min)
 ```
+
+It exits non-zero when a tier fails — an enforced category reporting a named
+finding, or the suite not running at all — so it can be used as a gate. Findings
+in unenforced categories are printed and do not affect the exit code.
 
 The script reads the deployment target from the project rather than hard-coding
 it, and selects the oldest installed runtime **at or above** it — a runtime
@@ -441,12 +445,19 @@ so rather than implying floor coverage it does not have.
 git config core.hooksPath .githooks
 ```
 
-Runs the floor audit before a push, and only when Swift, asset, or project files
-changed. Bypass with `git push --no-verify`.
+Runs the complexity ratchet, then the audit on **both** runtimes, before a push,
+and only when Swift, asset, or project files changed. Bypass with
+`git push --no-verify`.
 
-Pre-push rather than pre-commit deliberately: the suite takes ~85s, and at
-pre-commit that blocks every commit. A hook routinely bypassed with
-`--no-verify` is worse than no hook, because it trains you to ignore it.
+Both tiers rather than the floor alone because coverage is not nested across OS
+versions (below) and there is no CI, so a tier the hook does not run is not run
+at all. The cost is real: about twenty minutes, against roughly eight for the
+floor alone.
+
+Pre-push rather than pre-commit deliberately: at pre-commit that blocks every
+commit. A hook routinely bypassed with `--no-verify` is worse than no hook,
+because it trains you to ignore it — which is the standing argument against
+letting this get any slower.
 
 ## Layout gotchas found the hard way
 

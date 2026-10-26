@@ -6,15 +6,15 @@
 # Enable once per clone:
 #     git config core.hooksPath .githooks
 #
-# Why pre-push and not pre-commit: the suite takes ~85s. At pre-commit that
-# blocks every commit, and a hook you routinely bypass with --no-verify is worse
-# than no hook, because it trains you to ignore it. Pushes are far less frequent
-# and map to the unit of work that actually reaches CI.
+# Why pre-push and not pre-commit: the suite takes around ten minutes per
+# runtime. At pre-commit that blocks every commit, and a hook you routinely
+# bypass with --no-verify is worse than no hook, because it trains you to ignore
+# it. Pushes are far less frequent and map to the unit of work.
 #
-# Why only the floor tier: CI already audits the newest runtime on a clean
-# checkout. The GitHub image has no old runtimes, so the floor is the one thing
-# CI structurally cannot cover — and it is the one this machine can. Running
-# both here would just double the wait to re-check what CI already does.
+# Why both tiers: audit coverage is not nested across OS versions — each runtime
+# reports findings the others miss, in both directions, which
+# Docs/ACCESSIBILITY.txt records per screen. There is no CI, so a tier this does
+# not run is not run at all, and an enforced failure on it reaches main.
 #
 # Why the hook runs qlty at all: nothing else does. This repository's origin is
 # gitbay, which has no build configured, so the smell gates in .qlty/qlty.toml
@@ -101,14 +101,14 @@ print(sum(
   fi
 fi
 
-echo "pre-push: running accessibility audit on the floor runtime (~85s)"
+echo "pre-push: running accessibility audit on both runtimes (~20 min)"
 echo "          skip with 'git push --no-verify'"
 
-if ! ./Scripts/audit-a11y.sh floor; then
+if ! ./Scripts/audit-a11y.sh; then
   echo
-  echo "pre-push: audit could not run. Push aborted." >&2
-  echo "          Re-run with './Scripts/audit-a11y.sh floor' to see why," >&2
-  echo "          or bypass with 'git push --no-verify'." >&2
+  echo "pre-push: accessibility audit failed. Push aborted." >&2
+  echo "          Re-run with './Scripts/audit-a11y.sh' to see which tier and" >&2
+  echo "          which screen, or bypass with 'git push --no-verify'." >&2
   exit 1
 fi
 
