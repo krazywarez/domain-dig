@@ -1,8 +1,7 @@
 {
-  "version": "5.3.0",
+  "version": "5.4.0",
   "highlights": [
-    "Pasting a list of domains tells you which ones it skipped. Entries that are not valid domains used to be dropped without a word, so ten pasted domains with two typos ran eight and said nothing about the other two. If none of them is valid, it now says so instead of leaving the Run button to do nothing.",
-    "Accent themes: Graphite, Forest and Plum, in Settings → Display. They change the accent only — the colours that mean healthy, warning and critical keep their meanings, because an accent that recoloured them would make the status of a domain harder to read, not easier. Pro+.",
-    "Deleting a tracked domain or a workflow is covered by tests now, including that the record of the deletion is written where the next sync will read it. That is the half of syncing where a mistake quietly loses or resurrects your data."
+    "DomainDig has a new icon. The mark is the domain name system itself — a tree from the root down — which is what the app reads. The old one is gone, so expect your home screen to look different after updating.",
+    "The icon follows your accent. Pick Graphite, Forest or Plum in Settings → Display and the home-screen icon changes with it, so the two are one choice rather than two. iOS shows its own confirmation when an app changes its icon; that alert is the system's, not ours, and there is no way to turn it off. Pro+."
   ]
 }
