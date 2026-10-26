@@ -57,15 +57,27 @@ enum AccessibilityAuditHarness {
     /// row treatment went unmeasured.
     private static let seedFixturesArgument = "DOMAIN_DIG_SEED_FIXTURES"
 
+    /// Matches `AuditFixtures.recentSearchesArgument`. Separate from the
+    /// fixtures above because Inspect shows either a result or the recent
+    /// list, never both.
+    private static let seedRecentSearchesArgument = "DOMAIN_DIG_SEED_RECENT"
+
     /// Launches the app with feature gating lifted, optionally at a specific
     /// content size category and with the audit fixtures seeded.
-    static func launch(contentSizeCategory: String? = nil, seeded: Bool = false) -> XCUIApplication {
+    static func launch(
+        contentSizeCategory: String? = nil,
+        seeded: Bool = false,
+        recentSearches: Bool = false
+    ) -> XCUIApplication {
         let app = XCUIApplication()
         // Every launch starts from a cleared store, so a screen the enforced
         // suite audits as empty is empty whatever ran before it.
         app.launchArguments = [forceProPlusArgument, resetStoreArgument]
         if seeded {
             app.launchArguments.append(seedFixturesArgument)
+        }
+        if recentSearches {
+            app.launchArguments.append(seedRecentSearchesArgument)
         }
         if let contentSizeCategory {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]

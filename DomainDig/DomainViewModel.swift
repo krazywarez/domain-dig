@@ -1793,6 +1793,11 @@ final class DomainViewModel {
     private(set) var auditFixturesActive = false
 
     func seedAuditFixturesIfRequested() {
+        // Independent of the fixtures below: Inspect renders either a result or
+        // the recent list, so the two cannot be seeded together.
+        if AuditFixtures.recentSearchesRequested {
+            recentSearches = AuditFixtures.recentSearches
+        }
         guard AuditFixtures.requested, !auditFixturesActive else { return }
         auditFixturesActive = true
         trackedDomains = AuditFixtures.trackedDomains

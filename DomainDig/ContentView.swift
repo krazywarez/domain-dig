@@ -589,6 +589,11 @@ struct ContentView: View {
                 }
                 .font(appDensity.font(.caption2))
                 .foregroundStyle(ThemeToken.textSecondary)
+                // `.caption2` text alone is around 16pt tall, well under the
+                // WCAG 2.5.8 floor, which is what the audit reports here.
+                .frame(minWidth: AppLayout.minimumTapTarget, minHeight: AppLayout.minimumTapTarget)
+                .contentShape(Rectangle())
+                .accessibilityLabel("Clear recent searches")
             }
 
             ForEach(viewModel.recentSearches, id: \.self) { domain in
@@ -606,6 +611,9 @@ struct ContentView: View {
                         .background(ThemeToken.surface)
                         .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
                 }
+                // A bare domain reads as neither a word nor an action; the
+                // button re-runs the lookup, so say that.
+                .accessibilityLabel("Look up \(domain)")
             }
         }
         .padding(.top, appDensity.metrics.cardSpacing)

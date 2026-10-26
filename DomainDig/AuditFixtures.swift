@@ -58,6 +58,26 @@ enum AuditFixtures {
     /// layout and traits, not string equality, so coverage wins.
     private static let now = Date()
 
+    /// Inspect's recent-searches section renders only once a lookup has been
+    /// run, so a fresh-install audit never sees it. Assigning
+    /// `recentSearches` does not persist — only `addRecentSearch` and
+    /// `clearRecentSearches` write to defaults — so these stay in memory like
+    /// the rest of the fixtures.
+    ///
+    /// Its own argument rather than part of `DOMAIN_DIG_SEED_FIXTURES`,
+    /// because Inspect shows either a result or the recent list, never both:
+    /// seeding the batch results takes the branch and the section never
+    /// renders.
+    static var recentSearches: [String] {
+        ["healthy.example", "expiring.example", "broken.example"]
+    }
+
+    static let recentSearchesArgument = "DOMAIN_DIG_SEED_RECENT"
+
+    static var recentSearchesRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains(recentSearchesArgument)
+    }
+
     static var trackedDomains: [TrackedDomain] {
         [
             TrackedDomain(

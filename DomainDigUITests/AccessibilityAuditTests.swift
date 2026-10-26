@@ -274,6 +274,33 @@ final class AccessibilityAuditTests: XCTestCase {
     /// One launch rather than ten: re-selecting the Settings tab pops it back
     /// to root, so each destination is reached from a known place, and the
     /// store reset means the launch state is the same for all of them.
+    /// Inspect with its recent-searches section present.
+    ///
+    /// The section renders only once a lookup has been run, so the empty-state
+    /// suite never has it in the tree. Four findings in it were found by
+    /// accident, by driving one real lookup; seeding `recentSearches` puts them
+    /// under the suite on purpose and keeps the launch deterministic.
+    ///
+    /// Gated on everything the project enforces except `.dynamicType`, which
+    /// still reports against the "RECENT" header. That one is the
+    /// position-dependent finding described in `Docs/ACCESSIBILITY.txt`, not a
+    /// property of the header — unlike the other seeded tests, nothing else
+    /// here needs to stay report-only.
+    func testSeededRecentSearches() throws {
+        let app = AccessibilityAuditHarness.launch(recentSearches: true)
+        app.selectRootTab("Inspect")
+        XCTAssertTrue(
+            app.staticTexts["RECENT"].waitForExistence(timeout: 10),
+            "The recent-searches section must render, or this audits nothing"
+        )
+        try AccessibilityAuditHarness.audit(
+            app,
+            screen: "recent-searches",
+            test: self,
+            enforcing: AccessibilityAuditHarness.enforcedAuditTypes.subtracting(.dynamicType)
+        )
+    }
+
     func testSettingsDestinations() throws {
         let destinations = [
             "Display",

@@ -435,20 +435,45 @@ naming the screen something other than what the Settings row that opens it
 says. Left as reported. It is the one `textClipped` finding still open on
 History & Network, and why that screen stays report-only.
 
-## Recent searches are never audited
+## Recent searches
 
-The empty-state suite launches a fresh install, so Inspect's recent-searches
-section — which only appears once a lookup has been run — is never in the tree
-when the audit walks it. Driving one real lookup and re-auditing surfaced four
-findings in it on iOS 27.0:
+Inspect's recent-searches section appears only once a lookup has been run, so
+the empty-state suite never had it in the tree. Four findings in it were found
+by accident, by driving one real lookup; `testSeededRecentSearches` now covers
+it on purpose.
 
-- `dynamicType` on the "RECENT" header and on the "Clear" button
-- `hitRegion` too small on "Clear"
-- `sufficientElementDescription`, "label not human-readable", on a domain chip
+**It needs its own launch argument.** `DOMAIN_DIG_SEED_FIXTURES` cannot be used:
+Inspect renders either a result or the recent list, never both, so seeding the
+batch results takes the branch and the section never appears. The first attempt
+did exactly that and audited the batch screen instead — 35 findings, all of them
+already covered by `testSeededBatchResults`. `DOMAIN_DIG_SEED_RECENT` seeds
+`recentSearches` alone. Assigning that property does not persist (only
+`addRecentSearch` and `clearRecentSearches` write to defaults), so it leaks no
+more than the other fixtures.
 
-These are latent rather than new: nothing in the section changed when Inspect
-moved to a `List`. They need a seeded recent-searches fixture to be audited
-properly, which the seed harness does not have.
+The test asserts "RECENT" is on screen before auditing. Without that it passes
+while measuring the wrong thing, which is how the first attempt looked green
+until the finding list was read.
+
+Under audit, the section reported eight findings. Two kinds were real:
+
+- **`hitRegion` on "Clear".** A `Button("Clear")` with a `.caption2` font and no
+  padding is about 16pt tall, well under the WCAG 2.5.8 floor. Given
+  `minWidth`/`minHeight` of `AppLayout.minimumTapTarget` and a
+  `contentShape(Rectangle())`.
+- **`sufficientElementDescription` on each domain chip.** The button's label was
+  the bare domain, which reads as neither a word nor an action. Given
+  `accessibilityLabel("Look up <domain>")`; "Clear" likewise got "Clear recent
+  searches".
+
+Eight findings became three: two characterised noise entries, and `dynamicType`
+on the "RECENT" header. `dynamicType` on "Clear" cleared as a side effect of the
+44pt frame, which is consistent with those findings tracking geometry rather
+than the element.
+
+So the section gates on everything the project enforces except `.dynamicType` —
+`enforcedAuditTypes.subtracting(.dynamicType)`. It is the only seeded screen
+that gates at all.
 
 ## The empty-state screens are cleared before each launch
 
@@ -468,7 +493,14 @@ the live view model and `auditFixturesActive` blocks persistence precisely so
 they cannot leak, and running the whole audit class against a cleared store
 reproduces neither the failure nor the extra findings. Ruled out as well: the
 unit target, which leaves `trackedDomains` as an empty array in the app's own
-defaults. The source of the rows was never isolated.
+defaults.
+
+**The source of the rows was never isolated, and the search is closed.** The
+remaining plan was to instrument a full-suite run, dump `trackedDomains` at each
+launch and bisect which test precedes contamination. That is not being done: the
+reset below makes the question unobservable from the suite's results, so the
+answer would change nothing. Reopen it only if a finding shows up that the reset
+does not explain.
 
 What fixed it is making the question moot. `AuditFixtures.resetStoreIfRequested`
 clears the app's defaults domain and the history files when
