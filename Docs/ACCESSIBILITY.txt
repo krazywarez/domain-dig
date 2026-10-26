@@ -167,6 +167,11 @@ the build on findings that predate the coverage. What they report on iOS 27.0:
 | Integrations | 1: `dynamicType` on "Process Queue Now" |
 | Integration editor | 7: `contrast` on "Cancel", "Save", "DNS Changed", "Routing Rules"; `dynamicType` on "Cancel" and "Save"; one characterised system-field-placeholder clip |
 
+That table is the iOS 27.0 reading from !42. The editor's clipped picker values
+were fixed later — see the picker section below — and its `contrast` and
+`dynamicType` attribution churns between runs, so treat the names as indicative
+rather than a checklist.
+
 "Cancel" and "Save" are the editor's toolbar buttons, plain `Button`s with no
 density-aware font, which is why they appear in both categories. Note that for
 `dynamicType` that is **not** the cause — see "Already-scalable fonts report
@@ -381,9 +386,16 @@ That leaves, across the ten Settings destinations:
 | 6 `contrast` | all | Report-only by standing policy |
 | 1 `elementDetection` | Local API | Not investigated |
 
-The same picker clipping is still reported on the integration editor —
-"Minimum Severity", "Warning", "Webhook" — which is covered by
-`testIntegrationEditor` rather than the Settings-destination sweep.
+`AdaptivePicker` also reached the integration editor's three pickers — Type,
+Minimum Severity and SMTP Security. Its clipped findings go from four to one:
+"Warning" and "Webhook" cleared, and "Minimum Severity" cleared too, though
+that one had already shown itself unstable — it reported on a single-test run
+of the editor and not on the full-suite run of the same build.
+
+The editor is **not** gated on `.textClipped` even so. "Add Integration" is a
+15-character navigation title, the same unfixable case as the four Settings
+destinations, and a screen with one finding that comes and goes between runs is
+not a screen to gate.
 
 ### What was done about it
 

@@ -228,7 +228,7 @@ private struct IntegrationEditorView: View {
     var body: some View {
         Form {
             Section("Integration") {
-                Picker("Type", selection: $type) {
+                AdaptivePicker("Type", selection: $type) {
                     ForEach(selectableTypes) { integrationType in
                         Text(integrationType.title).tag(integrationType)
                     }
@@ -246,7 +246,7 @@ private struct IntegrationEditorView: View {
             }
 
             Section("Routing Rules") {
-                Picker("Minimum Severity", selection: $minimumSeverity) {
+                AdaptivePicker("Minimum Severity", selection: $minimumSeverity) {
                     ForEach(EventSeverity.allCases) { severity in
                         Text(severity.title).tag(severity)
                     }
@@ -329,7 +329,7 @@ private struct IntegrationEditorView: View {
                         .autocorrectionDisabled()
                         .keyboardType(.emailAddress)
 
-                    Picker("Security", selection: $smtpSecurity) {
+                    AdaptivePicker("Security", selection: $smtpSecurity) {
                         ForEach(SMTPSecurityMode.allCases) { mode in
                             Text(mode.title).tag(mode)
                         }
