@@ -14,7 +14,14 @@ struct DomainDigApp: App {
     @AppStorage(AppDensity.userDefaultsKey) private var density = AppDensity.compact.rawValue
     @AppStorage(AppAppearance.userDefaultsKey) private var appearance = AppAppearance.system.rawValue
     @AppStorage(AccentTheme.userDefaultsKey) private var accent = AccentTheme.default.rawValue
+    // The store is cleared as the view model's argument rather than in
+    // `init()`, because a property's default value is evaluated before the
+    // initialiser body — a reset there would run after the first read.
+    #if DEBUG
+    @State private var viewModel = DomainViewModel(defaults: AuditFixtures.resetStoreIfRequested())
+    #else
     @State private var viewModel = DomainViewModel()
+    #endif
     @State private var purchaseService = PurchaseService.shared
     @State private var cloudSyncService = CloudSyncService.shared
     @State private var localAPIService = LocalAPIService.shared

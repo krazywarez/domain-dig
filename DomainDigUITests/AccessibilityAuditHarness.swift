@@ -27,6 +27,8 @@ enum AccessibilityAuditHarness {
     /// Launch argument that lifts feature gating so Pro-only screens are
     /// reachable. `PurchaseService` honours this in `DEBUG` builds only.
     private static let forceProPlusArgument = "DOMAIN_DIG_FORCE_PRO_PLUS"
+    /// Matches `AuditFixtures.resetStoreArgument`.
+    private static let resetStoreArgument = "DOMAIN_DIG_RESET_STORE"
 
     /// Audit categories that fail the build on the empty-state suite. A named
     /// finding in any of these is a regression in the phase 1–5 work.
@@ -59,7 +61,9 @@ enum AccessibilityAuditHarness {
     /// content size category and with the audit fixtures seeded.
     static func launch(contentSizeCategory: String? = nil, seeded: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = [forceProPlusArgument]
+        // Every launch starts from a cleared store, so a screen the enforced
+        // suite audits as empty is empty whatever ran before it.
+        app.launchArguments = [forceProPlusArgument, resetStoreArgument]
         if seeded {
             app.launchArguments.append(seedFixturesArgument)
         }

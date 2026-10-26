@@ -184,6 +184,52 @@ These are latent rather than new: nothing in the section changed when Inspect
 moved to a `List`. They need a seeded recent-searches fixture to be audited
 properly, which the seed harness does not have.
 
+## The empty-state screens are cleared before each launch
+
+The enforced suite audits several screens in their empty state, and nothing used
+to guarantee they were empty: `AccessibilityAuditHarness.launch` only added
+launch arguments, so whatever a previous run, a manual launch or another test
+target had left in the app's container was still there.
+
+That made the result depend on what ran before it. `testTrackedDomainsScreen`
+passed with one finding in isolation, and reported six — including an enforced
+`[FAIL][dynamicType]` on `EditButton`, which only renders when the watchlist has
+rows — during a full `xcodebuild test`, which is what the pre-push hook runs.
+
+**A correction to what this file said first.** The initial note blamed the
+seeded fixtures. That was wrong: `seedAuditFixturesIfRequested` writes only to
+the live view model and `auditFixturesActive` blocks persistence precisely so
+they cannot leak, and running the whole audit class against a cleared store
+reproduces neither the failure nor the extra findings. Ruled out as well: the
+unit target, which leaves `trackedDomains` as an empty array in the app's own
+defaults. The source of the rows was never isolated.
+
+What fixed it is making the question moot. `AuditFixtures.resetStoreIfRequested`
+clears the app's defaults domain and the history files when
+`DOMAIN_DIG_RESET_STORE` is passed, and the harness passes it on every launch.
+It runs as the view model's `defaults:` argument rather than inside `init()`,
+because a property's default value is evaluated before the initialiser body —
+a reset in the body would run after the first read.
+
+Measured: the same full `xcodebuild test` that reported one enforced failure
+reports none, `AccessibilityAuditTests` goes from 13 of 14 passing to 14, and
+`tracked-domains` is back to a single characterised-noise finding.
+
+## Recent searches are never audited
+
+The empty-state suite launches a fresh install, so Inspect's recent-searches
+section — which only appears once a lookup has been run — is never in the tree
+when the audit walks it. Driving one real lookup and re-auditing surfaced four
+findings in it on iOS 27.0:
+
+- `dynamicType` on the "RECENT" header and on the "Clear" button
+- `hitRegion` too small on "Clear"
+- `sufficientElementDescription`, "label not human-readable", on a domain chip
+
+These are latent rather than new: nothing in the section changed when Inspect
+moved to a `List`. They need a seeded recent-searches fixture to be audited
+properly, which the seed harness does not have.
+
 ## The empty-state screens are not reliably empty
 
 `AccessibilityAuditHarness.launch` only adds launch arguments; it never resets

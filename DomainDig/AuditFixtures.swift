@@ -18,6 +18,34 @@ import Foundation
 /// certificate badges, pinned, noted, changed, monitoring on/off, a
 /// stress-length domain name, and every batch status including failure.
 enum AuditFixtures {
+    /// Clears the app's own store so an audit launch starts from a known
+    /// state.
+    ///
+    /// The fixtures below are in-memory and never persist, but nothing stopped
+    /// *other* state — whatever a previous run, a manual launch, or another
+    /// test target left in the container — from reaching a screen the enforced
+    /// suite audits as empty. That made the result depend on what ran before
+    /// it: `testTrackedDomainsScreen` passes with one finding in isolation and
+    /// reported an enforced `dynamicType` failure on `EditButton`, which only
+    /// renders when the watchlist has rows, during a full `xcodebuild test`.
+    ///
+    /// Returns the store it cleared so a caller can thread it into whatever
+    /// reads it first, which is what stops the reset being ordered after the
+    /// read by accident.
+    @discardableResult
+    static func resetStoreIfRequested(_ defaults: UserDefaults = .standard) -> UserDefaults {
+        guard ProcessInfo.processInfo.arguments.contains(resetStoreArgument) else {
+            return defaults
+        }
+        if let domain = Bundle.main.bundleIdentifier {
+            defaults.removePersistentDomain(forName: domain)
+        }
+        HistoryFileStore.removeAll(at: .default)
+        return defaults
+    }
+
+    static let resetStoreArgument = "DOMAIN_DIG_RESET_STORE"
+
     static let launchArgument = "DOMAIN_DIG_SEED_FIXTURES"
 
     static var requested: Bool {
