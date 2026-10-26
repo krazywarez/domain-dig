@@ -1,6 +1,6 @@
 {
-  "version": "5.5.0",
+  "version": "5.5.1",
   "highlights": [
-    "Settings pickers no longer hide their value at accessibility text sizes. Base Interval read \"E…rs\" instead of \"Every 12 Hours\", and Notify For read \"C…s\" instead of \"Critical + Warnings\", because the menu gave the value whatever width the label left and held it to one line. Those rows now put the value on its own line and move the options to a pushed list, the way iOS Settings does at those sizes. Below accessibility sizes nothing changes."
+    "The picker fix from 5.5.0 now covers the rest of the app. Appearance, Accent and Density in Display, Import Mode in Import & Export, and Type, Minimum Severity and Security in the integration editor were still cutting their value down to an ellipsis at accessibility text sizes — \"Compact\", \"Default\", \"System\", \"Merge\", \"Webhook\" and \"Warning\". Every picker in DomainDig now puts the value on its own line at those sizes instead. Below accessibility sizes nothing changes."
   ]
 }
