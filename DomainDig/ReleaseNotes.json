@@ -1,13 +1,8 @@
 {
-  "version": "5.2.0",
+  "version": "5.3.0",
   "highlights": [
-    "A lookup can run a Quick profile instead of every check. Quick covers DNS, registration, ownership, TLS, HSTS, HTTP, redirects, PTR and email, and leaves out port scanning, reachability, subdomain discovery, IP location and name suggestions. Settings → Network chooses it.",
-    "Third-party enrichment can be declined. With it off DomainDig contacts rdap.org, crt.sh and ipapi.co for nothing, which means ownership, subdomain discovery, IP location and suggestions are unavailable, and registration is decided from DNS alone — that can say Registered or Unknown, but never Available. It stays on unless you turn it off, and monitoring follows whatever you choose.",
-    "A finished run can upload its report to your own S3-compatible bucket: S3, R2, B2, MinIO, Wasabi or Spaces. JSON always, PDF and CSV if you want them. Scheduled reports, monitoring runs and batch lookups upload by default; uploading on every lookup you run by hand is off, because it would ship a file per tap. The endpoint must be https. Pro+.",
-    "The watchlist is reached from the Dashboard now, and Workflows from the Inspect tab, rather than through Settings. The two Settings rows that both said Monitoring are now Monitoring Log and Monitoring Settings.",
-    "A lookup in progress shows a labelled Cancel instead of an unlabelled icon. It always stopped the lookup; nothing said so.",
-    "History keeps 50 snapshots on Free, 250 on Pro and 2000 on Pro+. Settings used to say history was unlimited by default, which it never was.",
-    "A lookup that fails part way now shows where each section's data came from. That was blank until the result had been saved, which a failed lookup never is.",
-    "The Dashboard redraws once instead of rebuilding itself more than twenty times, history reads its list without loading every snapshot, and the Inspect and history screens are laid out like the rest of the app."
+    "Pasting a list of domains tells you which ones it skipped. Entries that are not valid domains used to be dropped without a word, so ten pasted domains with two typos ran eight and said nothing about the other two. If none of them is valid, it now says so instead of leaving the Run button to do nothing.",
+    "Accent themes: Graphite, Forest and Plum, in Settings → Display. They change the accent only — the colours that mean healthy, warning and critical keep their meanings, because an accent that recoloured them would make the status of a domain harder to read, not easier. Pro+.",
+    "Deleting a tracked domain or a workflow is covered by tests now, including that the record of the deletion is written where the next sync will read it. That is the half of syncing where a mistake quietly loses or resurrects your data."
   ]
 }
