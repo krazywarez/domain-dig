@@ -5,7 +5,9 @@ import XCTest
 /// pins the JSON shape of a response, not which request produces it. Matching
 /// and authorisation are both pure, and `handle` answers 401 and 404 before it
 /// reaches the store or the network, so all of that is reachable here. The
-/// success paths are not — they read the real store and run live lookups.
+/// success paths moved to `LocalAPISuccessTests` once the handler took an
+/// injected store; `/inspect` is still uncovered, because it runs a live
+/// lookup.
 final class LocalAPIRoutingTests: XCTestCase {
 
     // MARK: Every documented route

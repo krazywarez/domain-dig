@@ -521,6 +521,19 @@ enum LocalAPIRoute: Equatable {
 }
 
 struct LocalAPIRequestHandler {
+    /// Injectable so the success paths can be answered from a scratch store.
+    /// They read the real one through `DomainDataPortabilityService` and
+    /// `MonitoringStorage`, which both take a `defaults:`; nothing was passing
+    /// one, so the only way to exercise `/portfolio` or `/domains` was against
+    /// the simulator's shared defaults (C7).
+    let defaults: UserDefaults
+    let historyLocation: HistoryFileStore.Location
+
+    init(defaults: UserDefaults = .standard, historyLocation: HistoryFileStore.Location = .default) {
+        self.defaults = defaults
+        self.historyLocation = historyLocation
+    }
+
     private let encoder = LocalAPIContract.makeEncoder()
 
     private let decoder: JSONDecoder = {
@@ -545,7 +558,7 @@ struct LocalAPIRequestHandler {
         case .portfolio:
             return successResponse(PortfolioPayload(summary: buildPortfolioSummary()))
         case .domains:
-            return successResponse(DomainListPayload(domains: DomainDataPortabilityService.loadTrackedDomains()))
+            return successResponse(DomainListPayload(domains: DomainDataPortabilityService.loadTrackedDomains(defaults: defaults)))
         case let .domainDetails(domain):
             return domainDetailsResponse(for: domain)
         case let .domainHistory(domain):
@@ -595,7 +608,7 @@ struct LocalAPIRequestHandler {
 
     private func domainDetailsResponse(for domain: String) -> LocalAPIHTTPResponse {
         let normalized = normalizedDomain(domain)
-        let trackedDomain = DomainDataPortabilityService.loadTrackedDomains().first {
+        let trackedDomain = DomainDataPortabilityService.loadTrackedDomains(defaults: defaults).first {
             $0.domain.caseInsensitiveCompare(normalized) == .orderedSame
         }
         let history = historyEntries(for: normalized)
@@ -652,20 +665,20 @@ struct LocalAPIRequestHandler {
             return .error(statusCode: 400, code: "invalid_domain", message: "A valid domain is required.")
         }
 
-        var trackedDomains = DomainDataPortabilityService.loadTrackedDomains()
+        var trackedDomains = DomainDataPortabilityService.loadTrackedDomains(defaults: defaults)
         guard let index = trackedDomains.firstIndex(where: { $0.domain.caseInsensitiveCompare(normalized) == .orderedSame }) else {
             return .error(statusCode: 404, code: "domain_not_found", message: "Tracked domain \(normalized) was not found.")
         }
 
         trackedDomains[index].monitoringEnabled = enabled
         trackedDomains[index].updatedAt = Date()
-        DomainDataPortabilityService.saveTrackedDomains(trackedDomains)
+        DomainDataPortabilityService.saveTrackedDomains(trackedDomains, defaults: defaults)
 
         let sanitizedSettings = MonitoringStorage.sanitizeSettings(
-            MonitoringStorage.loadSettings(),
+            MonitoringStorage.loadSettings(defaults: defaults),
             trackedDomains: trackedDomains
         )
-        MonitoringStorage.saveSettings(sanitizedSettings)
+        MonitoringStorage.saveSettings(sanitizedSettings, defaults: defaults)
 
         await MainActor.run {
             _ = DomainMonitoringScheduler.shared.syncSchedule()
@@ -680,8 +693,8 @@ struct LocalAPIRequestHandler {
     }
 
     private func buildPortfolioSummary() -> PortfolioSummary {
-        let trackedDomains = DomainDataPortabilityService.loadTrackedDomains()
-        let history = DomainDataPortabilityService.loadHistoryEntries(historyLocation: .default)
+        let trackedDomains = DomainDataPortabilityService.loadTrackedDomains(defaults: defaults)
+        let history = DomainDataPortabilityService.loadHistoryEntries(defaults: defaults, historyLocation: historyLocation)
 
         var healthyCount = 0
         var warningCount = 0
@@ -724,8 +737,8 @@ struct LocalAPIRequestHandler {
     }
 
     private func monitoringPayload() -> MonitoringPayload {
-        let trackedDomains = DomainDataPortabilityService.loadTrackedDomains()
-        let settings = MonitoringStorage.sanitizeSettings(MonitoringStorage.loadSettings(), trackedDomains: trackedDomains)
+        let trackedDomains = DomainDataPortabilityService.loadTrackedDomains(defaults: defaults)
+        let settings = MonitoringStorage.sanitizeSettings(MonitoringStorage.loadSettings(defaults: defaults), trackedDomains: trackedDomains)
 
         return MonitoringPayload(
             isEnabled: settings.isEnabled,
@@ -744,7 +757,7 @@ struct LocalAPIRequestHandler {
     }
 
     private func recentEvents() -> [RecentEventPayload] {
-        MonitoringStorage.loadLogs()
+        MonitoringStorage.loadLogs(defaults: defaults)
             .prefix(25)
             .flatMap { log in
                 log.checkedDomains.map { result in
@@ -761,13 +774,13 @@ struct LocalAPIRequestHandler {
 
     private func historyEntries(for domain: String) -> [HistoryEntry] {
         let normalized = normalizedDomain(domain)
-        return DomainDataPortabilityService.loadHistoryEntries(historyLocation: .default).filter {
+        return DomainDataPortabilityService.loadHistoryEntries(defaults: defaults, historyLocation: historyLocation).filter {
             $0.domain.caseInsensitiveCompare(normalized) == .orderedSame
         }
     }
 
     private func latestHistoryEntry(for domain: String, history: [HistoryEntry]? = nil) -> HistoryEntry? {
-        let entries = history ?? DomainDataPortabilityService.loadHistoryEntries(historyLocation: .default)
+        let entries = history ?? DomainDataPortabilityService.loadHistoryEntries(defaults: defaults, historyLocation: historyLocation)
         let normalized = normalizedDomain(domain)
         return entries.first { $0.domain.caseInsensitiveCompare(normalized) == .orderedSame }
     }

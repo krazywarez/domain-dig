@@ -165,7 +165,12 @@ final class CloudSyncService {
         static let changeTokenPrefix = "cloudSync.changeToken."
     }
 
-    private init(defaults: UserDefaults = .standard) {
+    /// Injectable so the tombstone paths can be exercised against a scratch
+    /// store. Every write below goes through `defaults`, and C7's remaining gap
+    /// was that nothing could prove it: with a private init the only instance
+    /// was `shared`, on `.standard`, and covering a deletion meant polluting
+    /// the simulator the suite runs on. The app still uses `shared`.
+    init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.container = nil
         self.privateDatabase = nil
@@ -835,7 +840,8 @@ final class CloudSyncService {
         saveTombstones(tombstones)
     }
 
-    private func loadTombstones() -> [SyncTombstone] {
+    /// Internal so a test can read back what a deletion recorded.
+    func loadTombstones() -> [SyncTombstone] {
         guard let data = defaults.data(forKey: StorageKey.tombstones),
               let tombstones = try? decoder.decode([SyncTombstone].self, from: data) else {
             return []
