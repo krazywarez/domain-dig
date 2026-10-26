@@ -248,6 +248,66 @@ final class AccessibilityAuditTests: XCTestCase {
         try XCTSkipUnless(audited, "Audit did not complete in time for the integration editor")
     }
 
+    /// Every remaining screen behind a Settings row.
+    ///
+    /// Integrations and the integration editor were covered in !42; these are
+    /// the ten that were still unaudited, which was the largest blind spot left
+    /// in the suite — five phases of row and caption treatment shipped without
+    /// any of them being rendered under audit.
+    ///
+    /// Report-only for the same reason as Integrations: they have never been
+    /// through the ratchet, so gating them on first contact would fail the
+    /// build on findings that predate the coverage. They are a burndown list
+    /// for #21, and `enforcedAuditTypes` widens once they are clear.
+    ///
+    /// One launch rather than ten: re-selecting the Settings tab pops it back
+    /// to root, so each destination is reached from a known place, and the
+    /// store reset means the launch state is the same for all of them.
+    func testSettingsDestinations() throws {
+        let destinations = [
+            "Display",
+            "History & Network",
+            "Monitoring Log",
+            "Local API",
+            "iCloud Sync",
+            "Monitoring Settings",
+            "Scheduled Reports",
+            "Import & Export",
+            "Data Management",
+            "App Info"
+        ]
+
+        let app = AccessibilityAuditHarness.launch()
+        var unreachable: [String] = []
+        var unaudited: [String] = []
+
+        for destination in destinations {
+            // Pops any previous push, so each row is tapped from the root.
+            app.selectRootTab("Settings")
+
+            let row = app.buttons[destination]
+            guard row.waitForExistence(timeout: 5) else {
+                unreachable.append(destination)
+                continue
+            }
+            row.tap()
+
+            let screen = destination
+                .lowercased()
+                .replacingOccurrences(of: " & ", with: "-")
+                .replacingOccurrences(of: " ", with: "-")
+            if try !AccessibilityAuditHarness.audit(app, screen: screen, test: self, reportOnly: true) {
+                unaudited.append(destination)
+            }
+        }
+
+        XCTAssertEqual(unreachable, [], "Settings no longer offers these rows")
+        try XCTSkipUnless(
+            unaudited.isEmpty,
+            "Audit did not complete in time for: \(unaudited.joined(separator: ", "))"
+        )
+    }
+
     private func auditRootTab(_ tab: String) throws {
         let app = AccessibilityAuditHarness.launch()
         app.selectRootTab(tab)

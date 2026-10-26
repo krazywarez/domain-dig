@@ -165,9 +165,36 @@ rather than density-aware text — that is why they appear in both categories.
 They go on the #21 burndown; `enforcedAuditTypes` widens to cover these screens
 once they are clear.
 
-The remaining Settings destinations — Display, History & Network, Local API,
-iCloud Sync, Monitoring Log, Monitoring Settings, Scheduled Reports, Import &
-Export, Data Management — are still unaudited.
+The other ten destinations are covered by `testSettingsDestinations`, also
+report-only. One launch audits all of them: re-selecting the Settings tab pops
+it back to root, so each row is tapped from a known place, and the store reset
+makes the launch state the same for every one. That is 98s for ten screens
+rather than ten launches.
+
+All ten are reachable and all ten audit. 87 findings, of which 43 are real and
+44 are already-characterised noise. **No enforced failures**, which is why the
+test passes report-only rather than needing a carve-out:
+
+| Screen | Real | Noise |
+| --- | --- | --- |
+| Monitoring Settings | 12 | 1 |
+| History & Network | 7 | 5 |
+| Scheduled Reports | 5 | 1 |
+| Monitoring Log | 4 | 1 |
+| Import & Export | 4 | 5 |
+| Display | 3 | 1 |
+| Local API | 3 | 5 |
+| Data Management | 2 | 8 |
+| App Info | 2 | 15 |
+| iCloud Sync | 1 | 2 |
+
+By category the 43 are: `dynamicType` 21, `textClipped` 15, `contrast` 6,
+`elementDetection` 1. The shape matches the rest of the burndown — text that
+does not scale and text that clips at large sizes, concentrated in the
+settings forms with the most rows.
+
+App Info is the inverse: 17 findings, 2 real, the rest system-field and
+unattributed artefacts already characterised in `noiseReason(for:)`.
 
 ## Recent searches are never audited
 
