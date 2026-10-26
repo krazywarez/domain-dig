@@ -236,8 +236,49 @@ enum AccessibilityAuditHarness {
             return "iOS-rendered Settings section header, app sets no font (27.0-only)"
         }
 
+        // The Settings root's own rows, where the finding is a measurement
+        // artifact of the audit's size sweep rather than anything about the
+        // row. Proven by reordering the Services section: the findings stayed
+        // on the same three slots and followed their new occupants.
+        //
+        //   slot | before              | after
+        //   -----+---------------------+--------------------
+        //   1    | Monitoring Log      | Local API
+        //   2    | Integrations        | iCloud Sync
+        //   3    | Local API         * | Monitoring Settings *
+        //   4    | iCloud Sync       * | Monitoring Log      *
+        //   5    | Monitoring Settings*| Integrations        *
+        //   6    | Scheduled Reports   | Scheduled Reports     (contrast)
+        //
+        // Those slots are y 694–850 in a 912pt window: the band directly above
+        // the translucent tab bar, which begins around y 829. The row that
+        // sits fully under the bar reports `contrast` instead — the same
+        // long-standing artifact already carved out for that category, in a
+        // second one. Every row is an identical `NavigationLink("Title")` and
+        // the app sets no font on any of them.
+        //
+        // Scoped to dynamicType on the exact row titles, so a real regression
+        // on anything else on that screen still fails. The equivalent findings
+        // on the report-only Settings destinations are the same artifact and
+        // are left reported; see Docs/ACCESSIBILITY.txt.
+        if issue.auditType.contains(.dynamicType),
+           let label = issue.element?.label,
+           settingsDestinationRows.contains(label) {
+            return "Settings root row in the band above the tab bar, position-dependent"
+        }
+
         return nil
     }
+
+    /// The Settings root's `NavigationLink` titles. Used to scope the
+    /// position-dependent dynamicType carve-out above to that one screen.
+    private static let settingsDestinationRows: Set<String> = [
+        "Display", "History & Network",
+        "Monitoring Log", "Integrations", "Local API", "iCloud Sync",
+        "Monitoring Settings", "Scheduled Reports",
+        "Import & Export", "Data Management",
+        "App Info"
+    ]
 
     /// The Settings screen's `Section(_:)` header titles. UIKit renders these;
     /// the app passes only a string literal. Used to scope the section-header

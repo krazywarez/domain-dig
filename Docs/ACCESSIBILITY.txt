@@ -124,7 +124,9 @@ Three deliberate carve-outs, each with its evidence:
    are rows scrolled under the translucent tab bar; their attribution flips
    between a row name and nil run-to-run, so no suppression is narrow enough to
    keep CI stable. The centralised palette in `Shared/Colors.xcassets` is the
-   actual guard against contrast regressions.
+   actual guard against contrast regressions. The same tab bar degrades
+   `dynamicType` on the rows immediately above it, which is a separate carve-out
+   — see "`dynamicType` findings land on a position, not on a row".
 2. **The seeded tests run `reportOnly`.** Bisecting the row/badge accessibility
    modifiers showed the audit degrades on `children: .ignore` content — the
    *correct* VoiceOver treatment for dense rows — emitting unattributed
@@ -249,57 +251,87 @@ The same clipping is still reported on Display ("Compact", "Default",
 "System") and iCloud Sync ("Merge"), which are the same construct on screens
 outside this pass.
 
-## The remaining `dynamicType` findings on Form rows are unexplained
+## `dynamicType` findings land on a position, not on a row
 
-Every `Picker`, `Toggle` and `LabeledContent` label on these two screens
-reports `dynamicType` "font sizes are partially unsupported", and the picker
-fix above does not change that. Eight on Monitoring Settings, five named on
-History & Network, the same names on both runtimes.
+The remaining `dynamicType` findings — eight on Monitoring Settings, five named
+on History & Network, three on the Settings root — report "font sizes are
+partially unsupported" against rows the app sets no font on. They are
+reproducible: identical on both runtimes and across repeat runs. The picker fix
+above does not touch them.
 
-They are reproducible — identical on the floor and current tiers, and
-identical across repeat runs — but nothing was found that distinguishes a row
-that reports from one that does not:
+**They follow the slot, not the row.** Reordering the Settings root's Services
+section moves the findings onto whichever rows take the vacated positions:
+
+| Slot | Before | | After | |
+| --- | --- | --- | --- | --- |
+| 1 | Monitoring Log | | Local API | |
+| 2 | Integrations | | iCloud Sync | |
+| 3 | Local API | FAIL | Monitoring Settings | FAIL |
+| 4 | iCloud Sync | FAIL | Monitoring Log | FAIL |
+| 5 | Monitoring Settings | FAIL | Integrations | FAIL |
+| 6 | Scheduled Reports | contrast | Scheduled Reports | contrast |
+
+Every one of those rows is an identical `NavigationLink("Title") { … }`. The
+only thing that changed is which title sits in slots 3–5.
+
+**The slots are the band above the tab bar.** Measured frames at default size
+in a 912pt window:
+
+| Row | y | Hittable |
+| --- | --- | --- |
+| Monitoring Log | 590–642 | yes |
+| Integrations | 642–694 | yes |
+| Local API | 694–746 | yes |
+| iCloud Sync | 746–798 | yes |
+| Monitoring Settings | 798–850 | yes |
+| Scheduled Reports | 850–902 | **no** |
+
+The translucent tab bar starts around y 829. The three reporting slots are the
+156pt directly above it; the row that sits fully behind it reports `contrast`
+instead. As the audit sweeps content size categories the rows march downward —
+at `XXXL`, Monitoring Settings is at y 885 and no longer hittable and
+Scheduled Reports is gone from the tree entirely — so the rows in that band are
+the ones whose measurement degrades part-way through the sweep. Hence
+"partially".
+
+This is the same root cause already carved out for `.contrast`: rows under the
+translucent tab bar. It simply surfaces in a second audit category.
+
+Two earlier observations fit this and no other explanation:
 
 - **The same constructs report nothing.** `Text`, `Text` with the density
   caption font, `Toggle` and `LabeledContent` inserted as probe rows into the
-  same `Form` all audit clean.
-- **Inserting rows moves the findings.** With five probe rows above them,
+  Monitoring Settings `Form` all audit clean — they sat near the top.
+- **Inserting rows moved the findings.** With five probe rows above them,
   "Adaptive Monitoring" began reporting and "Enable Background Monitoring"
   stopped, and "Background Refresh" and "Notification Access" switched from
-  `dynamicType` to `contrast`. An element's font scalability does not change
-  because rows were inserted above it, so whatever the check measures depends
-  on where the row sits, not on the row.
-- **The rows render correctly.** Captured at `XXL` and `AccessibilityXXXL`:
-  every named label scales, wraps and reads in full. Nothing is truncated and
-  nothing stops growing.
+  `dynamicType` to `contrast` — pushed from the band into the bar.
+- **The rows render correctly.** Captured at `XXL` and `AccessibilityXXXL`,
+  every named label scales, wraps and reads in full.
 
-So the finding does not point at a defect in the label it names, and no fix
-follows from it. They stay reported rather than suppressed: a `noiseReason`
-rule broad enough to cover them would also hide a real regression on any Form
-row. `dynamicType` is not enforced on these screens.
+### What was done about it
 
-## The Settings root fails the enforced audit on the current runtime
+The Settings root is the only *enforced* screen long enough to reach the band,
+so it was the only one failing — `testSettingsScreen`, on iOS 27.0, with three
+`[FAIL][dynamicType]` findings. Reproduced with the picker change stashed on
+`main` at `02a3463`, so it predated that work. The floor tier passes, the
+pre-push hook runs the floor tier only, and there is no CI, which is why
+nothing had been looking at it.
 
-Found while measuring the above, and **not caused by it** — reproduced with the
-change stashed, on `main` at `02a3463`:
+`noiseReason` now classifies dynamicType findings on the Settings root's row
+titles (`settingsDestinationRows`), with the reorder table recorded inline as
+the evidence. It is scoped to that category and those titles, so a regression on
+anything else on that screen still fails.
 
-```
-settings: 7 finding(s)
-  • [FAIL][dynamicType] ... — "Local API"
-  • [FAIL][dynamicType] ... — "Monitoring Settings"
-  • [FAIL][dynamicType] ... — "iCloud Sync"
-```
+Not done, deliberately: nothing was changed in the UI. List content scrolling
+under a translucent tab bar is how iOS is supposed to look, and inset-ing the
+list to stop it would be changing correct layout to satisfy a measurement
+artifact.
 
-`testSettingsScreen` is an enforced test, and this fails it on iOS 27.0. The
-floor tier passes. The pre-push hook runs the floor tier only and there is no
-CI, so nothing has been looking at the current tier since the hook was wired
-up.
-
-The three are the same unexplained finding as above: all twelve rows in the
-Settings root are an identical `NavigationLink("Title") { … }`, the three named
-are consecutive middle rows, and the set is the same on repeat runs. It needs a
-decision — suppress, or widen the hook to both tiers and accept a red gate —
-rather than a quiet carve-out.
+The equivalent findings on the report-only Settings destinations are the same
+artifact and stay reported — those screens do not gate, so there is nothing to
+unblock, and a suppression wide enough to cover arbitrary `Form` rows would
+hide real regressions.
 
 ## Long navigation titles clip
 
