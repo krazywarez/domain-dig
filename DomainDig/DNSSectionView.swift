@@ -64,7 +64,7 @@ struct DNSSectionView: View {
                         Text(section.title)
                             .font(.system(.subheadline, design: .monospaced))
                             .fontWeight(.semibold)
-                            .foregroundStyle(Color(.statusInfo))
+                            .foregroundStyle(ThemeToken.info)
 
                         if let message = section.message {
                             MessageRowView(text: message.text, isError: message.isError)
@@ -77,7 +77,7 @@ struct DNSSectionView: View {
                         if let wildcardTitle = section.wildcardTitle {
                             Text(wildcardTitle)
                                 .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                                 .padding(.top, 4)
                             ForEach(section.wildcardRows) { row in
                                 LabeledValueRow(row: row)
@@ -91,7 +91,7 @@ struct DNSSectionView: View {
                         Text("PTR")
                             .font(.system(.subheadline, design: .monospaced))
                             .fontWeight(.semibold)
-                            .foregroundStyle(Color(.statusInfo))
+                            .foregroundStyle(ThemeToken.info)
                         SectionTrustMetadataView(provenance: ptrProvenance, confidence: nil)
                         MessageRowView(text: ptrMessage.text, isError: ptrMessage.isError)
                     }
@@ -101,7 +101,7 @@ struct DNSSectionView: View {
                     HStack {
                         Text("History")
                             .font(appDensity.font(.subheadline, weight: .semibold))
-                            .foregroundStyle(Color(.statusInfo))
+                            .foregroundStyle(ThemeToken.info)
                         Spacer()
                         if let onLoadHistory, history.isEmpty, !historyLoading {
                             Button("Load") {
@@ -127,18 +127,18 @@ struct DNSSectionView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(event.date.formatted(date: .abbreviated, time: .omitted))
                         .font(appDensity.font(.caption2))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                     Text(event.summary)
                         .font(appDensity.font(.caption))
                     if !event.aRecords.isEmpty {
                         Text("A: \(event.aRecords.joined(separator: ", "))")
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                     if !event.nameservers.isEmpty {
                         Text("NS: \(event.nameservers.joined(separator: ", "))")
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                 }
             }

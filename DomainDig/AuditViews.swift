@@ -27,7 +27,7 @@ struct AuditListView: View {
                         showsCardBackground: false
                     )
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             } else {
                 Section("Audit Domains") {
                     ForEach(groupedSessions, id: \.domain) { group in
@@ -41,13 +41,13 @@ struct AuditListView: View {
                                     Spacer()
                                     Text("\(group.sessions.count) audit\(group.sessions.count == 1 ? "" : "s")")
                                         .font(appDensity.font(.caption2))
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                 }
 
                                 if let latest = group.sessions.first {
                                     Text(latest.findings.isEmpty ? "No findings recorded yet" : latest.findings.map(\.title).prefix(2).joined(separator: " • "))
                                         .font(appDensity.font(.caption))
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                         .lineLimit(2)
 
                                     HStack(spacing: 8) {
@@ -57,7 +57,7 @@ struct AuditListView: View {
                                         }
                                         Text("Checklist \(latest.completedChecklistCount)/\(latest.checklist.count)")
                                             .font(appDensity.font(.caption2))
-                                            .foregroundStyle(Color(.appTextSecondary))
+                                            .foregroundStyle(ThemeToken.textSecondary)
                                     }
                                 }
                             }
@@ -65,11 +65,11 @@ struct AuditListView: View {
                         }
                     }
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .navigationTitle("Audit Mode")
         .toolbar {
             if !viewModel.searchedDomain.isEmpty {
@@ -115,7 +115,7 @@ struct AuditDomainTimelineView: View {
 
                             Text("Reviewer: \(session.reviewer)")
                                 .font(appDensity.font(.caption))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
 
                             HStack(spacing: 8) {
                                 Text("\(session.findings.count) findings")
@@ -125,13 +125,13 @@ struct AuditDomainTimelineView: View {
                                 }
                             }
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                         }
                         .padding(.vertical, 4)
                     }
                 }
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
 
             Section("Trend") {
                 ForEach(viewModel.auditTimeline(for: domain)) { point in
@@ -142,19 +142,19 @@ struct AuditDomainTimelineView: View {
                             Spacer()
                             Text("\(point.findingCount) findings")
                                 .font(appDensity.font(.caption2))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                         }
                         Text("Open high severity: \(point.openHighSeverityCount) • Repeated issues: \(point.repeatedIssueCount)")
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                     .padding(.vertical, 2)
                 }
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .navigationTitle(domain)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -196,7 +196,7 @@ struct AuditSessionDetailView: View {
                                         .font(appDensity.font(.headline, design: .default, weight: .semibold))
                                     Text("Reviewer: \(session.reviewer)")
                                         .font(appDensity.font(.caption))
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                 }
                                 Spacer()
                                 auditStatusBadge(session.status)
@@ -214,10 +214,10 @@ struct AuditSessionDetailView: View {
 
                             Text("Captured \(session.evidence.capturedAt.formatted(date: .abbreviated, time: .shortened))")
                                 .font(appDensity.font(.caption2))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                         }
                     }
-                    .listRowBackground(Color(.appSurface))
+                    .themedListRowBackground(.surface)
 
                     Section("Audit Summary") {
                         LabeledContent("Findings", value: "\(session.findings.count)")
@@ -227,7 +227,7 @@ struct AuditSessionDetailView: View {
                             LabeledContent("Highest Severity", value: severity.title)
                         }
                     }
-                    .listRowBackground(Color(.appSurface))
+                    .themedListRowBackground(.surface)
 
                     Section("Reviewer Notes") {
                         TextEditor(text: $notesDraft)
@@ -239,7 +239,7 @@ struct AuditSessionDetailView: View {
                             viewModel.updateAuditNotes(notesDraft, sessionID: session.id)
                         }
                     }
-                    .listRowBackground(Color(.appSurface))
+                    .themedListRowBackground(.surface)
 
                     Section("Checklist") {
                         ForEach(session.checklist) { item in
@@ -248,14 +248,14 @@ struct AuditSessionDetailView: View {
                             } label: {
                                 HStack(alignment: .top, spacing: 10) {
                                     Image(systemName: item.isComplete ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(item.isComplete ? Color(.statusPositive) : .secondary)
+                                        .foregroundStyle(item.isComplete ? AnyShapeStyle(ThemeToken.positive) : AnyShapeStyle(.secondary))
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(item.title)
                                             .font(appDensity.font(.callout))
                                             .foregroundStyle(.primary)
                                         Text(item.detail)
                                             .font(appDensity.font(.caption))
-                                            .foregroundStyle(Color(.appTextSecondary))
+                                            .foregroundStyle(ThemeToken.textSecondary)
                                     }
                                     Spacer()
                                 }
@@ -265,13 +265,13 @@ struct AuditSessionDetailView: View {
                             .accessibilityHint(item.isComplete ? "Marks incomplete" : "Marks complete")
                         }
                     }
-                    .listRowBackground(Color(.appSurface))
+                    .themedListRowBackground(.surface)
 
                     Section("Findings") {
                         if session.findings.isEmpty {
                             Text("No findings recorded.")
                                 .font(appDensity.font(.caption))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                         } else {
                             ForEach(session.findings) { finding in
                                 Button {
@@ -287,11 +287,11 @@ struct AuditSessionDetailView: View {
                                         }
                                         Text(finding.summary)
                                             .font(appDensity.font(.caption))
-                                            .foregroundStyle(Color(.appTextSecondary))
+                                            .foregroundStyle(ThemeToken.textSecondary)
                                             .lineLimit(2)
                                         Text("\(finding.status.title) • \(finding.evidenceReferences.count) evidence refs")
                                             .font(appDensity.font(.caption2))
-                                            .foregroundStyle(Color(.appTextSecondary))
+                                            .foregroundStyle(ThemeToken.textSecondary)
                                     }
                                     .padding(.vertical, 2)
                                 }
@@ -302,7 +302,7 @@ struct AuditSessionDetailView: View {
                             }
                         }
                     }
-                    .listRowBackground(Color(.appSurface))
+                    .themedListRowBackground(.surface)
 
                     Section("Evidence Snapshot") {
                         LabeledContent("Availability", value: availabilityTitle(session.evidence.report.availability))
@@ -312,7 +312,7 @@ struct AuditSessionDetailView: View {
                         LabeledContent("Reachability", value: session.evidence.report.network.reachabilitySummary)
                         LabeledContent("Registrar", value: session.evidence.report.ownership?.registrar ?? "Unavailable")
                     }
-                    .listRowBackground(Color(.appSurface))
+                    .themedListRowBackground(.surface)
 
                     if !session.evidence.historicalContext.isEmpty {
                         Section("Historical Context") {
@@ -322,11 +322,11 @@ struct AuditSessionDetailView: View {
                                         .font(appDensity.font(.caption, weight: .semibold))
                                     Text(entry.changeSummaryMessage ?? "No change summary")
                                         .font(appDensity.font(.caption2))
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                 }
                             }
                         }
-                        .listRowBackground(Color(.appSurface))
+                        .themedListRowBackground(.surface)
                     }
 
                     Section("Audit Timeline") {
@@ -338,18 +338,18 @@ struct AuditSessionDetailView: View {
                                     Spacer()
                                     Text(point.status.title)
                                         .font(appDensity.font(.caption2))
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                 }
                                 Text("Findings \(point.findingCount) • Open high \(point.openHighSeverityCount) • Repeated \(point.repeatedIssueCount)")
                                     .font(appDensity.font(.caption2))
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
                             }
                         }
                     }
-                    .listRowBackground(Color(.appSurface))
+                    .themedListRowBackground(.surface)
                 }
                 .scrollContentBackground(.hidden)
-                .background(Color(.appBackground))
+                .background(ThemeToken.background)
                 .navigationTitle("Audit Session")
                 .toolbar {
                     ToolbarItemGroup(placement: .topBarTrailing) {
@@ -399,7 +399,7 @@ struct AuditSessionDetailView: View {
                 }
             } else {
                 ContentUnavailableView("Audit Session Missing", systemImage: "exclamationmark.triangle")
-                    .background(Color(.appBackground))
+                    .background(ThemeToken.background)
             }
         }
     }
@@ -459,7 +459,7 @@ private struct AuditFindingEditorView: View {
                         ForEach(session.evidence.screenshots) { asset in
                             Text("\(asset.title): \(asset.reference)")
                                 .font(.caption)
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                         }
                     }
                 }
@@ -477,7 +477,7 @@ private struct AuditFindingEditorView: View {
                                 Text(area.title)
                                 Spacer()
                                 Image(systemName: selectedAreas.contains(area) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(selectedAreas.contains(area) ? Color(.statusPositive) : .secondary)
+                                    .foregroundStyle(selectedAreas.contains(area) ? AnyShapeStyle(ThemeToken.positive) : AnyShapeStyle(.secondary))
                             }
                         }
                         .buttonStyle(.plain)
@@ -529,11 +529,11 @@ private func auditStatusBadge(_ status: AuditStatus) -> some View {
     let model: AppStatusBadgeModel
     switch status {
     case .draft:
-        model = .init(title: "Draft", systemImage: "square.and.pencil", foregroundColor: Color(.statusWarning), backgroundColor: Color(.statusWarningSurface))
+        model = .init(title: "Draft", systemImage: "square.and.pencil", foreground: .warning, background: .warningSurface)
     case .inReview:
-        model = .init(title: "In Review", systemImage: "doc.text.magnifyingglass", foregroundColor: Color(.statusInfo), backgroundColor: Color(.statusInfoSurface))
+        model = .init(title: "In Review", systemImage: "doc.text.magnifyingglass", foreground: .info, background: .infoSurface)
     case .complete:
-        model = .init(title: "Complete", systemImage: "checkmark.seal.fill", foregroundColor: Color(.statusPositive), backgroundColor: Color(.statusPositiveSurface))
+        model = .init(title: "Complete", systemImage: "checkmark.seal.fill", foreground: .positive, background: .positiveSurface)
     }
     return AppStatusBadgeView(model: model)
 }
@@ -554,8 +554,8 @@ private func findingSeverityBadge(_ severity: AuditFindingSeverity) -> some View
         model: .init(
             title: severity.title,
             systemImage: "exclamationmark.circle.fill",
-            foregroundColor: tone.foreground,
-            backgroundColor: tone.surface
+            foreground: tone.foreground,
+            background: tone.surface
         )
     )
 }

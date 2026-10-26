@@ -2,6 +2,9 @@ import SwiftUI
 
 struct DashboardView: View {
     @Environment(\.appDensity) private var appDensity
+    // Read directly because the selected card's gradient needs `Color` values
+    // rather than styles.
+    @Environment(\.theme) private var theme
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
     @Bindable var viewModel: DomainViewModel
     @State private var collapsedGroups = Set<String>()
@@ -31,20 +34,20 @@ struct DashboardView: View {
                         showsCardBackground: false
                     )
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             } else {
                 Section {
                     LazyVGrid(columns: summaryColumns, spacing: 10) {
-                        summaryCard(title: "Total Domains", value: dashboard.snapshot.totalDomains, filter: .all, tint: Color(.statusInfo))
-                        summaryCard(title: "Healthy", value: dashboard.snapshot.healthyCount, filter: .healthy, tint: Color(.statusPositive))
-                        summaryCard(title: "Warning", value: dashboard.snapshot.warningCount, filter: .warning, tint: Color(.statusWarning))
-                        summaryCard(title: "Critical", value: dashboard.snapshot.criticalCount, filter: .critical, tint: Color(.statusCritical))
-                        summaryCard(title: "Changes (24h)", value: dashboard.snapshot.changedLast24h, filter: .changed, tint: Color(.statusWarning))
-                        summaryCard(title: "Unreachable", value: dashboard.snapshot.unreachableCount, filter: .unreachable, tint: Color(.statusCritical))
+                        summaryCard(title: "Total Domains", value: dashboard.snapshot.totalDomains, filter: .all, tint: .info)
+                        summaryCard(title: "Healthy", value: dashboard.snapshot.healthyCount, filter: .healthy, tint: .positive)
+                        summaryCard(title: "Warning", value: dashboard.snapshot.warningCount, filter: .warning, tint: .warning)
+                        summaryCard(title: "Critical", value: dashboard.snapshot.criticalCount, filter: .critical, tint: .critical)
+                        summaryCard(title: "Changes (24h)", value: dashboard.snapshot.changedLast24h, filter: .changed, tint: .warning)
+                        summaryCard(title: "Unreachable", value: dashboard.snapshot.unreachableCount, filter: .unreachable, tint: .critical)
                     }
                     .padding(.vertical, 4)
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
 
                 Section("Quick Filters") {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -66,10 +69,10 @@ struct DashboardView: View {
                                         Text(filter.title)
                                             .font(appDensity.font(.caption, weight: .semibold))
                                     }
-                                    .foregroundStyle(isSelected ? Color(.appOnAccent) : Color.primary)
+                                    .foregroundStyle(isSelected ? AnyShapeStyle(ThemeToken.onAccent) : AnyShapeStyle(.primary))
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
-                                    .background(isSelected ? Color(.statusInfo) : Color(.appSurfaceElevated))
+                                    .background(isSelected ? ThemeToken.info : ThemeToken.surfaceElevated)
                                     .overlay(
                                         Capsule().strokeBorder(
                                             Color.primary,
@@ -85,7 +88,7 @@ struct DashboardView: View {
                         .padding(.vertical, 4)
                     }
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
 
                 Section("Recent Activity") {
                     if visible.recentActivity.isEmpty {
@@ -98,7 +101,7 @@ struct DashboardView: View {
                         }
                     }
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
 
                 Section("Attention Required") {
                     if visible.attentionRequired.isEmpty {
@@ -111,7 +114,7 @@ struct DashboardView: View {
                         }
                     }
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
 
                 Section("Expiring Soon") {
                     if visible.expiringSoon.isEmpty {
@@ -127,7 +130,7 @@ struct DashboardView: View {
                         }
                     }
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
 
                 Section("Portfolio List") {
                     if visible.groups.isEmpty {
@@ -156,7 +159,7 @@ struct DashboardView: View {
                                                 .font(appDensity.font(.headline, design: .default, weight: .semibold))
                                             Text("\(group.domains.count) domain\(group.domains.count == 1 ? "" : "s")")
                                                 .font(appDensity.font(.caption))
-                                                .foregroundStyle(Color(.appTextSecondary))
+                                                .foregroundStyle(ThemeToken.textSecondary)
                                         }
                                         Spacer()
                                         groupBadge(for: group.domains)
@@ -167,11 +170,11 @@ struct DashboardView: View {
                         }
                     }
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .navigationTitle("Dashboard")
         .searchable(text: $viewModel.dashboardSearchText, prompt: "Search portfolio")
         .toolbar {
@@ -213,14 +216,14 @@ struct DashboardView: View {
         )
     }
 
-    private func summaryCard(title: String, value: Int, filter: PortfolioFilterOption, tint: Color) -> some View {
+    private func summaryCard(title: String, value: Int, filter: PortfolioFilterOption, tint: ThemeToken) -> some View {
         Button {
             viewModel.dashboardFilter = filter
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
                     .font(appDensity.font(.caption, design: .default, weight: .semibold))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
                 Text("\(value)")
                     // Was a fixed 28pt, which ignored Dynamic Type entirely.
                     .font(.system(.title, design: .rounded, weight: .bold))
@@ -270,13 +273,13 @@ struct DashboardView: View {
             // trick into light mode.
             return AnyShapeStyle(
                 LinearGradient(
-                    colors: [Color(.statusInfoSurface), Color(.appSurface)],
+                    colors: [theme[.infoSurface], theme[.surface]],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
             )
         }
-        return AnyShapeStyle(Color(.appSurfaceElevated))
+        return AnyShapeStyle(ThemeToken.surfaceElevated)
     }
 
     /// `label`, opening the tracked domain's detail; nothing for a domain no longer tracked.
@@ -295,7 +298,7 @@ struct DashboardView: View {
     private func dashboardEmptyRow(_ message: String) -> some View {
         Text(message)
             .font(appDensity.font(.caption))
-            .foregroundStyle(Color(.appTextSecondary))
+            .foregroundStyle(ThemeToken.textSecondary)
             .padding(.vertical, 4)
     }
 
@@ -324,8 +327,8 @@ struct DashboardView: View {
             model: .init(
                 title: title,
                 systemImage: systemImage,
-                foregroundColor: tone.foreground,
-                backgroundColor: tone.surface
+                foreground: tone.foreground,
+                background: tone.surface
             )
         )
     }
@@ -353,20 +356,20 @@ private struct PortfolioActivityRow: View {
                     Text(relativeTimestamp(item.timestamp))
                 }
                 .font(appDensity.font(.caption2))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
             }
         }
         .padding(.vertical, 4)
     }
 
-    private var iconColor: Color {
+    private var iconColor: AnyShapeStyle {
         switch item.health {
         case .healthy:
-            return Color(.statusInfo)
+            return AnyShapeStyle(ThemeToken.info)
         case .warning:
-            return Color(.statusWarning)
+            return AnyShapeStyle(ThemeToken.warning)
         case .critical:
-            return Color(.statusCritical)
+            return AnyShapeStyle(ThemeToken.critical)
         }
     }
 }
@@ -385,10 +388,10 @@ private struct PortfolioAttentionRow: View {
                     .foregroundStyle(.primary)
                 Text(item.reason)
                     .font(appDensity.font(.caption, design: .default))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
                 Text(relativeTimestamp(item.timestamp))
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
         }
         .padding(.vertical, 4)
@@ -397,11 +400,11 @@ private struct PortfolioAttentionRow: View {
     private var badgeModel: AppStatusBadgeModel {
         switch item.health {
         case .healthy:
-            return .init(title: "Healthy", systemImage: "checkmark.circle.fill", foregroundColor: Color(.statusPositive), backgroundColor: Color(.statusPositiveSurface))
+            return .init(title: "Healthy", systemImage: "checkmark.circle.fill", foreground: .positive, background: .positiveSurface)
         case .warning:
-            return .init(title: "Warning", systemImage: "exclamationmark.triangle.fill", foregroundColor: Color(.statusWarning), backgroundColor: Color(.statusWarningSurface))
+            return .init(title: "Warning", systemImage: "exclamationmark.triangle.fill", foreground: .warning, background: .warningSurface)
         case .critical:
-            return .init(title: "Critical", systemImage: "exclamationmark.octagon.fill", foregroundColor: Color(.statusCritical), backgroundColor: Color(.statusCriticalSurface))
+            return .init(title: "Critical", systemImage: "exclamationmark.octagon.fill", foreground: .critical, background: .criticalSurface)
         }
     }
 }
@@ -434,7 +437,7 @@ private struct PortfolioExpiryRow: View {
                 .foregroundStyle(.primary)
             Text(expirySubtitle)
                 .font(appDensity.font(.caption))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
         }
     }
 
@@ -448,11 +451,11 @@ private struct PortfolioExpiryRow: View {
     private var badgeModel: AppStatusBadgeModel {
         switch state.certificateExpiryState {
         case .none:
-            return .init(title: "Healthy", systemImage: "lock.fill", foregroundColor: Color(.statusPositive), backgroundColor: Color(.statusPositiveSurface))
+            return .init(title: "Healthy", systemImage: "lock.fill", foreground: .positive, background: .positiveSurface)
         case .warning:
-            return .init(title: "Warning", systemImage: "exclamationmark.triangle.fill", foregroundColor: Color(.statusWarning), backgroundColor: Color(.statusWarningSurface))
+            return .init(title: "Warning", systemImage: "exclamationmark.triangle.fill", foreground: .warning, background: .warningSurface)
         case .critical:
-            return .init(title: "Critical", systemImage: "xmark.octagon.fill", foregroundColor: Color(.statusCritical), backgroundColor: Color(.statusCriticalSurface))
+            return .init(title: "Critical", systemImage: "xmark.octagon.fill", foreground: .critical, background: .criticalSurface)
         }
     }
 }

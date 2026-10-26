@@ -35,9 +35,9 @@ struct DomainSectionView: View {
                     // VoiceOver still hears the word via the label.
                     Image(systemName: "eye.fill")
                         .font(appDensity.font(.caption))
-                        .foregroundStyle(Color(.statusPositive))
+                        .foregroundStyle(ThemeToken.positive)
                         .padding(6)
-                        .background(Color(.statusPositiveSurface), in: Circle())
+                        .background(ThemeToken.positiveSurface, in: Circle())
                         .fixedSize()
                         .accessibilityLabel("Tracked")
                     Button {
@@ -100,7 +100,7 @@ struct DomainSectionView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Part of workflow")
                             .font(appDensity.font(.caption))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
 
                         ForEach(workflows) { workflow in
                             HStack {
@@ -135,7 +135,7 @@ struct DomainSectionView: View {
                 if showSuggestions {
                     Text("Suggestions")
                         .font(appDensity.font(.caption))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                         .padding(.top, 4)
                     if suggestionsLoading {
                         ProgressView("Checking alternatives…")

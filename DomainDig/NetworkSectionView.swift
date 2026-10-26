@@ -68,7 +68,7 @@ struct NetworkSectionView: View {
             CardView {
                 Text("Reachability")
                     .font(appDensity.font(.subheadline, weight: .semibold))
-                    .foregroundStyle(Color(.statusInfo))
+                    .foregroundStyle(ThemeToken.info)
                 SectionTrustMetadataView(provenance: reachabilityProvenance, confidence: nil)
                 if reachabilityLoading {
                     ProgressView("Checking ports…")
@@ -83,7 +83,7 @@ struct NetworkSectionView: View {
                             Spacer()
                             Text(row.latencyLabel)
                                 .font(appDensity.font(.caption2))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                             AppStatusBadgeView(model: reachabilityBadge(row))
                         }
                     }
@@ -93,7 +93,7 @@ struct NetworkSectionView: View {
             CardView(allowsHorizontalScroll: false) {
                 Text("Location")
                     .font(appDensity.font(.subheadline, weight: .semibold))
-                    .foregroundStyle(Color(.statusInfo))
+                    .foregroundStyle(ThemeToken.info)
                 SectionTrustMetadataView(provenance: geolocationProvenance, confidence: geolocationConfidence)
                 if geolocationLoading {
                     ProgressView("Looking up location…")
@@ -125,13 +125,13 @@ struct NetworkSectionView: View {
             CardView(allowsHorizontalScroll: false) {
                 Text("Port Scan")
                     .font(appDensity.font(.subheadline, weight: .semibold))
-                    .foregroundStyle(Color(.statusInfo))
+                    .foregroundStyle(ThemeToken.info)
                 SectionTrustMetadataView(provenance: portScanProvenance, confidence: nil)
 
                 if isCloudflareProxied {
                     Text("Domain is behind Cloudflare's proxy. Results reflect the edge, not the origin.")
                         .font(appDensity.font(.caption2))
-                        .foregroundStyle(Color(.statusWarning))
+                        .foregroundStyle(ThemeToken.warning)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -143,7 +143,7 @@ struct NetworkSectionView: View {
                 } else {
                     Text("Standard Ports")
                         .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                     PortRowsView(rows: standardPortRows)
                 }
 
@@ -155,7 +155,7 @@ struct NetworkSectionView: View {
                             .autocorrectionDisabled()
                             .keyboardType(.numberPad)
                             .padding(10)
-                            .background(Color(.appSurface))
+                            .background(ThemeToken.surface)
                             .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
 
                         Button("Scan") {
@@ -163,7 +163,7 @@ struct NetworkSectionView: View {
                             onScanCustomPorts()
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(Color(.accentFill))
+                        .tint(ThemeToken.accent)
                         .disabled(customPortScanLoading)
 
                         if customPortScanLoading {
@@ -186,13 +186,13 @@ struct NetworkSectionView: View {
     private func reachabilityBadge(_ row: ReachabilityRowViewData) -> AppStatusBadgeModel {
         switch row.statusTone {
         case .success:
-            return .init(title: row.statusLabel, systemImage: "checkmark.circle.fill", foregroundColor: Color(.statusPositive), backgroundColor: Color(.statusPositiveSurface))
+            return .init(title: row.statusLabel, systemImage: "checkmark.circle.fill", foreground: .positive, background: .positiveSurface)
         case .warning:
-            return .init(title: row.statusLabel, systemImage: "exclamationmark.triangle.fill", foregroundColor: Color(.statusWarning), backgroundColor: Color(.statusWarningSurface))
+            return .init(title: row.statusLabel, systemImage: "exclamationmark.triangle.fill", foreground: .warning, background: .warningSurface)
         case .failure:
-            return .init(title: row.statusLabel, systemImage: "xmark.circle.fill", foregroundColor: Color(.statusCritical), backgroundColor: Color(.statusCriticalSurface))
+            return .init(title: row.statusLabel, systemImage: "xmark.circle.fill", foreground: .critical, background: .criticalSurface)
         case .primary, .secondary:
-            return .init(title: row.statusLabel, systemImage: "circle", foregroundColor: Color(.appTextSecondary), backgroundColor: Color(.appSurfaceElevated))
+            return .init(title: row.statusLabel, systemImage: "circle", foreground: .textSecondary, background: .surfaceElevated)
         }
     }
 }
@@ -218,14 +218,14 @@ struct PortRowsView: View {
                         if let durationLabel = row.durationLabel {
                             Text(durationLabel)
                                 .font(appDensity.font(.caption2))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                         }
                         AppStatusBadgeView(model: portBadge(row))
                     }
                     if let banner = row.banner {
                         Text(banner)
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                             .padding(.leading, 8)
                     }
                 }
@@ -237,13 +237,13 @@ struct PortRowsView: View {
     private func portBadge(_ row: PortScanRowViewData) -> AppStatusBadgeModel {
         switch row.statusTone {
         case .success:
-            return .init(title: row.statusLabel, systemImage: "checkmark.circle.fill", foregroundColor: Color(.statusPositive), backgroundColor: Color(.statusPositiveSurface))
+            return .init(title: row.statusLabel, systemImage: "checkmark.circle.fill", foreground: .positive, background: .positiveSurface)
         case .warning:
-            return .init(title: row.statusLabel, systemImage: "exclamationmark.triangle.fill", foregroundColor: Color(.statusWarning), backgroundColor: Color(.statusWarningSurface))
+            return .init(title: row.statusLabel, systemImage: "exclamationmark.triangle.fill", foreground: .warning, background: .warningSurface)
         case .failure:
-            return .init(title: row.statusLabel, systemImage: "xmark.circle.fill", foregroundColor: Color(.statusCritical), backgroundColor: Color(.statusCriticalSurface))
+            return .init(title: row.statusLabel, systemImage: "xmark.circle.fill", foreground: .critical, background: .criticalSurface)
         case .primary, .secondary:
-            return .init(title: row.statusLabel, systemImage: "circle", foregroundColor: Color(.appTextSecondary), backgroundColor: Color(.appSurfaceElevated))
+            return .init(title: row.statusLabel, systemImage: "circle", foreground: .textSecondary, background: .surfaceElevated)
         }
     }
 }

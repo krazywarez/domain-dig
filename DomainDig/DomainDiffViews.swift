@@ -13,11 +13,11 @@ struct DomainChangeSummaryView: View {
             HStack {
                 Label(summary.hasChanges ? "Changed" : "Stable", systemImage: summary.hasChanges ? "arrow.triangle.2.circlepath" : "checkmark.circle")
                     .font(appDensity.font(.caption))
-                    .foregroundStyle(summary.hasChanges ? severityTone(summary.severity).foreground : Color(.statusPositive))
+                    .foregroundStyle(summary.hasChanges ? severityTone(summary.severity).foreground : ThemeToken.positive)
                 Spacer()
                 Text(summary.severity.title.uppercased())
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(summary.hasChanges ? severityTone(summary.severity).foreground : Color(.appTextSecondary))
+                    .foregroundStyle(summary.hasChanges ? severityTone(summary.severity).foreground : ThemeToken.textSecondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background((summary.hasChanges ? severityTone(summary.severity) : AppStatusTone.neutral).surface)
@@ -31,13 +31,13 @@ struct DomainChangeSummaryView: View {
                     .clipShape(Capsule())
                 Text(summary.generatedAt, style: .time)
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Inference")
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
                 Text(summary.message)
                     .font(appDensity.font(.caption))
                     .foregroundStyle(.primary)
@@ -51,7 +51,7 @@ struct DomainChangeSummaryView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Observed")
                                     .font(appDensity.font(.caption2))
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
                                 ForEach(Array(summary.observedFacts.enumerated()), id: \.offset) { _, fact in
                                     Text(fact)
                                         .font(appDensity.font(.caption))
@@ -63,13 +63,13 @@ struct DomainChangeSummaryView: View {
                         if let riskScoreDelta = summary.riskScoreDelta {
                             Text("Risk delta: \(riskScoreDelta >= 0 ? "+" : "")\(riskScoreDelta)")
                                 .font(appDensity.font(.caption2))
-                                .foregroundStyle(riskScoreDelta > 0 ? Color(.statusWarning) : .secondary)
+                                .foregroundStyle(riskScoreDelta > 0 ? AnyShapeStyle(ThemeToken.warning) : AnyShapeStyle(.secondary))
                         }
 
                         if let contextNote = summary.contextNote {
                             Text(contextNote)
                                 .font(appDensity.font(.caption2))
-                                .foregroundStyle(Color(.statusWarning))
+                                .foregroundStyle(ThemeToken.warning)
                         }
                     }
                     .padding(.top, 4)
@@ -153,7 +153,7 @@ struct DomainDiffView: View {
                                     HStack {
                                         Text(item.label)
                                             .font(.system(.caption, design: .monospaced))
-                                            .foregroundStyle(Color(.appTextSecondary))
+                                            .foregroundStyle(ThemeToken.textSecondary)
                                         Spacer()
                                         Text("\(item.changeType.marker) \(item.severity.title) • \(changeLabel(for: item.changeType))")
                                             .font(.system(.caption2, design: .monospaced))
@@ -168,10 +168,10 @@ struct DomainDiffView: View {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text("Old")
                                                 .font(.system(.caption2, design: .monospaced))
-                                                .foregroundStyle(Color(.appTextSecondary))
+                                                .foregroundStyle(ThemeToken.textSecondary)
                                             Text(oldValue)
                                                 .font(.system(.caption2, design: .monospaced))
-                                                .foregroundStyle(Color(.appTextSecondary))
+                                                .foregroundStyle(ThemeToken.textSecondary)
                                                 .textSelection(.enabled)
                                         }
                                     }
@@ -180,7 +180,7 @@ struct DomainDiffView: View {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text("New")
                                                 .font(.system(.caption2, design: .monospaced))
-                                                .foregroundStyle(Color(.appTextSecondary))
+                                                .foregroundStyle(ThemeToken.textSecondary)
                                             Text(newValue)
                                                 .font(.system(.caption, design: .monospaced))
                                                 .foregroundStyle(item.hasChanges ? .primary : .secondary)
@@ -189,7 +189,7 @@ struct DomainDiffView: View {
                                     }
                                 }
                                 .padding(10)
-                                .background(item.hasChanges ? changeTone(for: item).surface : Color(.appSurface))
+                                .background(item.hasChanges ? changeTone(for: item).surface : ThemeToken.surface)
                                 .cornerRadius(8)
                             }
                         } label: {
@@ -209,7 +209,7 @@ struct DomainDiffView: View {
                     .overlay {
                         if highlightedSectionID == section.id {
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color(.statusInfo).opacity(0.55), lineWidth: 1)
+                                .stroke(ThemeToken.info.opacity(0.55), lineWidth: 1)
                         }
                     }
                 }
@@ -248,14 +248,14 @@ struct DomainDiffView: View {
         }
     }
 
-    private func sectionColor(_ section: DomainDiffSection) -> Color {
+    private func sectionColor(_ section: DomainDiffSection) -> AnyShapeStyle {
         switch section.severity {
         case .low:
-            return .blue
+            return AnyShapeStyle(.blue)
         case .medium:
-            return Color(.statusWarning)
+            return AnyShapeStyle(ThemeToken.warning)
         case .high:
-            return Color(.statusCritical)
+            return AnyShapeStyle(ThemeToken.critical)
         }
     }
 

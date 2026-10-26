@@ -19,7 +19,7 @@ struct TrackedDomainDetailHeaderView: View {
                 Text("Last refresh \(trackedDomain.updatedAt.formatted(date: .abbreviated, time: .shortened))")
             }
             .font(.system(.caption2, design: .monospaced))
-            .foregroundStyle(Color(.appTextSecondary))
+            .foregroundStyle(ThemeToken.textSecondary)
         }
     }
 }
@@ -93,7 +93,7 @@ struct CardView<Content: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(providesSurface ? appDensity.metrics.cardPadding : 0)
-        .background(providesSurface ? Color(.appSurface) : Color.clear)
+        .background(providesSurface ? AnyShapeStyle(ThemeToken.surface) : AnyShapeStyle(.clear))
         .clipShape(
             RoundedRectangle(cornerRadius: providesSurface ? appDensity.metrics.cardCornerRadius : 0)
         )
@@ -139,7 +139,7 @@ struct MessageRowView: View {
     var body: some View {
         Label(text, systemImage: isError ? "exclamationmark.triangle.fill" : "info.circle")
             .font(appDensity.font(.caption))
-            .foregroundStyle(isError ? Color(.statusCritical) : .secondary)
+            .foregroundStyle(isError ? AnyShapeStyle(ThemeToken.critical) : AnyShapeStyle(.secondary))
             .lineLimit(nil)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -164,15 +164,15 @@ struct SectionTrustMetadataView: View {
                     if let confidence {
                         Text("Confidence \(confidence.title)")
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                     if let provenance {
                         Text(provenance.provider ?? provenance.source)
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                         Text(provenance.resultSource.label)
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                 }
                 DisclosureGroup("Details") {
@@ -212,7 +212,7 @@ struct LabeledValueRow: View {
                 VStack(alignment: .leading, spacing: appDensity.metrics.rowSpacing - 1) {
                     Text(row.label)
                         .font(appDensity.font(.caption2))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         if differentiateWithoutColor, let symbol = toneSymbol {
                             Image(systemName: symbol)
@@ -274,21 +274,21 @@ struct LabeledValueRow: View {
 /// Maps a row's semantic tone onto the app palette.
 ///
 /// See `Docs/ACCESSIBILITY.md` for the measured contrast ratios behind these
-/// colours. Never reach for a literal (`Color(.statusCritical)`, `Color(.statusWarning)`, …) — the system
+/// colours. Never reach for a system literal (`Color.red`, `Color.yellow`, …) — the system
 /// palette fails WCAG AA badly in light mode (systemYellow is 1.28:1 on white).
 enum ResultColors {
-    static func color(for tone: ResultTone) -> Color {
+    static func color(for tone: ResultTone) -> AnyShapeStyle {
         switch tone {
         case .primary:
-            return .primary
+            return AnyShapeStyle(.primary)
         case .secondary:
-            return .secondary
+            return AnyShapeStyle(.secondary)
         case .success:
-            return Color(.statusPositive)
+            return AnyShapeStyle(ThemeToken.positive)
         case .warning:
-            return Color(.statusWarning)
+            return AnyShapeStyle(ThemeToken.warning)
         case .failure:
-            return Color(.statusCritical)
+            return AnyShapeStyle(ThemeToken.critical)
         }
     }
 }

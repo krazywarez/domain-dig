@@ -12,7 +12,7 @@ struct PaywallView: View {
                 Section {
                     Text("Pro unlocks scale, background monitoring, alerts, exports, and extended subdomain discovery. Pro+ adds shared portfolios, unlimited audits, and the full intelligence breakdown.")
                         .font(appDensity.font(.body, design: .default))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -38,7 +38,7 @@ struct PaywallView: View {
                     } else if purchaseService.products.isEmpty {
                         Text("Pricing is unavailable right now.")
                             .font(appDensity.font(.caption, design: .default))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
 
                         Button("Retry") {
                             Task {
@@ -58,7 +58,7 @@ struct PaywallView: View {
                                         .foregroundStyle(.primary)
                                     Text(product.displayPrice)
                                         .font(appDensity.font(.callout, design: .default))
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -69,13 +69,13 @@ struct PaywallView: View {
                     if let statusMessage = purchaseService.statusMessage {
                         Text(statusMessage)
                             .font(appDensity.font(.caption, design: .default))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
 
                     if let errorMessage = purchaseService.errorMessage {
                         Text(errorMessage)
                             .font(appDensity.font(.caption, design: .default))
-                            .foregroundStyle(Color(.statusCritical))
+                            .foregroundStyle(ThemeToken.critical)
                     }
                 }
 

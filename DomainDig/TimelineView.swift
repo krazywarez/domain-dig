@@ -45,12 +45,12 @@ struct TimelineView: View {
                             }
                         }
                     }
-                    .listRowBackground(Color(.appSurface))
+                    .themedListRowBackground(.surface)
                 }
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .navigationTitle(domain)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -117,8 +117,8 @@ private struct TimelineRow: View {
                         model: .init(
                             title: severity.title,
                             systemImage: "arrow.triangle.2.circlepath",
-                            foregroundColor: severity == .high ? Color(.statusCritical) : Color(.statusWarning),
-                            backgroundColor: (severity == .high ? AppStatusTone.critical : .warning).surface
+                            foreground: severity == .high ? .critical : .warning,
+                            background: (severity == .high ? AppStatusTone.critical : .warning).surface
                         )
                     )
                 }
@@ -126,7 +126,7 @@ private struct TimelineRow: View {
 
             Text(summary.changeSummaryMessage ?? "No change summary")
                 .font(appDensity.font(.caption))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
                 .lineLimit(2)
 
             HStack(spacing: 8) {
@@ -138,14 +138,14 @@ private struct TimelineRow: View {
                 }
             }
             .font(appDensity.font(.caption2))
-            .foregroundStyle(Color(.appTextSecondary))
+            .foregroundStyle(ThemeToken.textSecondary)
 
             if !entry.intelligenceTimeline.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(entry.intelligenceTimeline.prefix(2))) { event in
                         Text("\(event.title): \(event.detail)")
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                             .lineLimit(1)
                     }
                 }
@@ -162,7 +162,7 @@ private struct TimelineRow: View {
                     .lineLimit(1)
             }
             .font(appDensity.font(.caption2))
-            .foregroundStyle(Color(.appTextSecondary))
+            .foregroundStyle(ThemeToken.textSecondary)
         }
     }
 }
@@ -205,7 +205,7 @@ struct TimelineDiffView: View {
                 }
                 .padding()
             }
-            .background(Color(.appBackground))
+            .background(ThemeToken.background)
             .navigationTitle("Compare Snapshots")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {

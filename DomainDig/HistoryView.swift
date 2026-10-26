@@ -25,7 +25,7 @@ struct HistoryView: View {
                     systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
                     showsCardBackground: false
                 )
-                    .listRowBackground(Color(.appSurface))
+                    .themedListRowBackground(.surface)
             } else {
                 Section("Domains") {
                     ForEach(domainSummaries, id: \.domain) { item in
@@ -40,12 +40,12 @@ struct HistoryView: View {
                                     Spacer()
                                     Text("\(item.count) snapshots")
                                         .font(appDensity.font(.caption2))
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                 }
 
                                 Text(item.latest.changeSummaryMessage ?? "No change summary")
                                     .font(appDensity.font(.caption))
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
                                     .lineLimit(2)
 
                                 HStack(spacing: 8) {
@@ -55,21 +55,21 @@ struct HistoryView: View {
                                             model: .init(
                                                 title: severity.title,
                                                 systemImage: "arrow.triangle.2.circlepath",
-                                                foregroundColor: severity == .high ? Color(.statusCritical) : Color(.statusWarning),
-                                                backgroundColor: (severity == .high ? AppStatusTone.critical : .warning).surface
+                                                foreground: severity == .high ? .critical : .warning,
+                                                background: (severity == .high ? AppStatusTone.critical : .warning).surface
                                             )
                                         )
                                     }
                                 }
                             }
                         }
-                        .listRowBackground(Color(.appSurface))
+                        .themedListRowBackground(.surface)
                     }
                 }
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .navigationTitle("History")
         .searchable(text: $viewModel.timelineDomainFilter, prompt: "Search domains")
         .toolbar {
@@ -296,10 +296,10 @@ struct HistoryDetailView: View {
                     )
                 }
         }
-        .listRowBackground(Color(.appSurface))
+        .themedListRowBackground(.surface)
         .environment(\.cardProvidesSurface, false)
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .navigationTitle(entry.domain)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -362,28 +362,28 @@ struct HistoryDetailView: View {
                 Spacer()
                 Text("Live re-run available")
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
             if let mismatchNote = viewModel.resolverMismatchNote(for: entry) {
                 Text(mismatchNote)
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(Color(.statusWarning))
+                    .foregroundStyle(ThemeToken.warning)
             }
             if entry.isPartialSnapshot {
                 Text("Partial snapshot: \(entry.validationIssues.joined(separator: " | "))")
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(Color(.statusWarning))
+                    .foregroundStyle(ThemeToken.warning)
             }
             if let note = entry.note, !note.isEmpty {
                 Text(note)
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
         }
-        .foregroundStyle(Color(.appTextSecondary))
+        .foregroundStyle(ThemeToken.textSecondary)
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.appSurface))
+        .background(ThemeToken.surface)
         .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
         .padding(.vertical, 12)
     }

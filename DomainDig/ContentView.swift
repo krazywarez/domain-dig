@@ -120,10 +120,10 @@ struct ContentView: View {
                     Section { recentSearchesSection }
                 }
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
             .environment(\.cardProvidesSurface, false)
             .scrollContentBackground(.hidden)
-            .background(Color(.appBackground))
+            .background(ThemeToken.background)
             .navigationTitle("DomainDig")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -140,7 +140,7 @@ struct ContentView: View {
                             viewModel.reset()
                         } label: {
                             Image(systemName: "xmark.circle")
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                         }
                         .accessibilityLabel("Clear results")
                     }
@@ -280,7 +280,7 @@ struct ContentView: View {
                     .keyboardType(.URL)
                     .padding(.horizontal, 12)
                     .padding(.vertical, appDensity.metrics.controlVerticalPadding)
-                    .background(Color(.appSurfaceElevated))
+                    .background(ThemeToken.surfaceElevated)
                     .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
                     .focused($focusedInputField, equals: .singleDomain)
                     .onSubmit {
@@ -291,7 +291,7 @@ struct ContentView: View {
                 if let domainInputError = viewModel.domainInputError {
                     Text(domainInputError)
                         .font(appDensity.font(.caption))
-                        .foregroundStyle(Color(.statusCritical))
+                        .foregroundStyle(ThemeToken.critical)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
@@ -305,19 +305,19 @@ struct ContentView: View {
                         .frame(minHeight: appDensity.metrics.controlMinHeight)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color(.accentFill))
+                .tint(ThemeToken.accent)
                 .disabled(viewModel.trimmedDomain.isEmpty)
             } else {
                 if FeatureAccessService.hasAccess(to: .batchOperations) {
                     VStack(alignment: .leading, spacing: appDensity.metrics.cardSpacing) {
                         Text("Paste domains separated by new lines or commas.")
                             .font(appDensity.font(.caption))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
 
                         if let batchAllowanceSummary = FeatureAccessService.batchAllowanceSummary() {
                             Text(batchAllowanceSummary)
                                 .font(appDensity.font(.caption2))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                         }
 
                         TextField(
@@ -332,14 +332,14 @@ struct ContentView: View {
                         .lineLimit(4...10)
                         .padding(.horizontal, 12)
                         .padding(.vertical, appDensity.metrics.controlVerticalPadding)
-                        .background(Color(.appSurfaceElevated))
+                        .background(ThemeToken.surfaceElevated)
                         .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
                         .focused($focusedInputField, equals: .bulkDomains)
 
                         if let bulkInputError = viewModel.bulkInputError {
                             Text(bulkInputError)
                                 .font(appDensity.font(.caption))
-                                .foregroundStyle(Color(.statusCritical))
+                                .foregroundStyle(ThemeToken.critical)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
 
@@ -353,7 +353,7 @@ struct ContentView: View {
                                 .frame(minHeight: appDensity.metrics.controlMinHeight)
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(Color(.accentFill))
+                        .tint(ThemeToken.accent)
                         .disabled(viewModel.bulkInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.batchLookupRunning)
                     }
                 } else {
@@ -529,7 +529,7 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "bolt.circle")
                         .font(appDensity.font(.body, design: .default))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
                 .accessibilityLabel("Actions")
                 Menu {
@@ -537,7 +537,7 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                         .font(appDensity.font(.body, design: .default))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
                 .accessibilityLabel("Export")
             }
@@ -582,13 +582,13 @@ struct ContentView: View {
             HStack {
                 Text("RECENT")
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
                 Spacer()
                 Button("Clear") {
                     viewModel.clearRecentSearches()
                 }
                 .font(appDensity.font(.caption2))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
             }
 
             ForEach(viewModel.recentSearches, id: \.self) { domain in
@@ -603,7 +603,7 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 8)
                         .padding(.horizontal, 10)
-                        .background(Color(.appSurface))
+                        .background(ThemeToken.surface)
                         .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
                 }
             }
@@ -624,11 +624,11 @@ struct ContentView: View {
                 .font(appDensity.font(.headline, design: .default, weight: .semibold))
             Text(message)
                 .font(appDensity.font(.callout, design: .default))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(appDensity.metrics.cardPadding)
-        .background(Color(.appSurfaceElevated))
+        .background(ThemeToken.surfaceElevated)
         .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
     }
 

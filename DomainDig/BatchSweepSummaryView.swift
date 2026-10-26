@@ -43,7 +43,7 @@ struct BatchSweepSummaryView: View {
         HStack {
             Text(label)
                 .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
             Spacer()
             Text(value)
                 .font(.system(.callout, design: .monospaced))
@@ -65,7 +65,7 @@ struct BatchResultsSection: View {
             if results.isEmpty {
                 Text(emptyText)
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             } else {
                 ForEach(results) { result in
                     if let entry = viewModel.historyEntry(for: result) {

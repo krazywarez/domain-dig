@@ -33,6 +33,7 @@ enum FeatureCapability: String, CaseIterable, Identifiable {
     case auditDepth
     case intelligenceDetail
     case bucketExport
+    case accentTheme
 
     var id: String { rawValue }
 
@@ -64,6 +65,8 @@ enum FeatureCapability: String, CaseIterable, Identifiable {
             return "Intelligence detail"
         case .bucketExport:
             return "Export to your own bucket"
+        case .accentTheme:
+            return "Accent themes"
         }
     }
 }
@@ -194,7 +197,7 @@ enum FeatureAccessService {
         case .workflows, .batchOperations, .automatedMonitoring, .localAlerts, .advancedExports,
              .extendedSubdomains:
             return "Available in Pro"
-        case .sharedPortfolios, .auditDepth, .intelligenceDetail, .bucketExport:
+        case .sharedPortfolios, .auditDepth, .intelligenceDetail, .bucketExport, .accentTheme:
             return "Available in Pro+"
         case .limitedTracking:
             return "Tracking is limited on Free"
@@ -256,7 +259,7 @@ enum FeatureAccessService {
     static func upgradePrompt(for capability: FeatureCapability) -> UpgradePromptContext {
         let title: String
         switch capability {
-        case .sharedPortfolios, .auditDepth, .intelligenceDetail, .bucketExport:
+        case .sharedPortfolios, .auditDepth, .intelligenceDetail, .bucketExport, .accentTheme:
             title = "Available in Pro+"
         default:
             title = "Available in Pro"

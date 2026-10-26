@@ -38,13 +38,13 @@ struct SettingsView: View {
                 if let statusMessage = purchaseService.statusMessage {
                     Text(statusMessage)
                         .font(appDensity.font(.caption, design: .default))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
 
                 if let errorMessage = purchaseService.errorMessage {
                     Text(errorMessage)
                         .font(appDensity.font(.caption, design: .default))
-                        .foregroundStyle(Color(.statusCritical))
+                        .foregroundStyle(ThemeToken.critical)
                 }
             }
 
@@ -105,8 +105,10 @@ struct SettingsView: View {
 }
 
 private struct DisplaySettingsView: View {
+    @Environment(\.appDensity) private var appDensity
     @AppStorage(AppDensity.userDefaultsKey) private var storedDensity = AppDensity.compact.rawValue
     @AppStorage(AppAppearance.userDefaultsKey) private var storedAppearance = AppAppearance.system.rawValue
+    @AppStorage(AccentTheme.userDefaultsKey) private var storedAccent = AccentTheme.default.rawValue
 
     var body: some View {
         Form {
@@ -116,6 +118,21 @@ private struct DisplaySettingsView: View {
                         Text(appearance.title).tag(appearance.rawValue)
                     }
                 }
+
+                Picker("Accent", selection: $storedAccent) {
+                    ForEach(AccentTheme.allCases) { accent in
+                        Text(accent.title).tag(accent.rawValue)
+                    }
+                }
+                .disabled(!FeatureAccessService.hasAccess(to: .accentTheme))
+
+                Text(
+                    FeatureAccessService.hasAccess(to: .accentTheme)
+                        ? "Changes the accent only. Status colours keep their meaning."
+                        : "Accent themes are \(FeatureAccessService.upgradeMessage(for: .accentTheme))."
+                )
+                .font(appDensity.font(.caption, design: .default))
+                .foregroundStyle(ThemeToken.textSecondary)
 
                 Picker("Density", selection: $storedDensity) {
                     ForEach(AppDensity.allCases) { density in
@@ -172,7 +189,7 @@ private struct HistoryNetworkSettingsView: View {
 
                 Text(viewModel.historyRetentionCaption)
                     .font(appDensity.font(.caption, design: .default))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
 
             Section("Network") {
@@ -191,7 +208,7 @@ private struct HistoryNetworkSettingsView: View {
                     if let customResolverError {
                         Text(customResolverError)
                             .font(appDensity.font(.caption, design: .default))
-                            .foregroundStyle(Color(.statusCritical))
+                            .foregroundStyle(ThemeToken.critical)
                     }
                 }
 
@@ -203,13 +220,13 @@ private struct HistoryNetworkSettingsView: View {
 
                 Text(selectedProfile.detail)
                     .font(appDensity.font(.caption, design: .default))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
 
                 Toggle("Allow third-party enrichment", isOn: $allowsThirdPartyEnrichment)
 
                 Text(Self.enrichmentCaption)
                     .font(appDensity.font(.caption, design: .default))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
         }
         .navigationTitle("History & Network")
@@ -280,16 +297,16 @@ private struct CloudSyncSettingsView: View {
 
                 Text("iCloud Sync stores DomainDig data in your private iCloud account. DomainDig does not operate a sync server. Disabling sync keeps local data on this device.")
                     .font(appDensity.font(.caption, design: .default))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
 
                 Text(cloudSyncService.detailMessage)
                     .font(appDensity.font(.caption, design: .default))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
 
                 if let lastErrorMessage = cloudSyncService.lastErrorMessage {
                     Text(lastErrorMessage)
                         .font(appDensity.font(.caption, design: .default))
-                        .foregroundStyle(Color(.statusCritical))
+                        .foregroundStyle(ThemeToken.critical)
                 }
             }
         }
@@ -342,7 +359,7 @@ private struct LocalAPISettingsView: View {
                 if let statusMessage = localAPIService.statusMessage {
                     Text(statusMessage)
                         .font(appDensity.font(.caption, design: .default))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
             }
 
@@ -361,7 +378,7 @@ private struct LocalAPISettingsView: View {
 
                 Text("Every request requires either `Authorization: Bearer <token>` or `X-API-Token`. DomainDig stores the token in Keychain and only binds the server to localhost.")
                     .font(appDensity.font(.caption, design: .default))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
 
             Section("Request Logging") {
@@ -376,7 +393,7 @@ private struct LocalAPISettingsView: View {
                 if localAPIService.requestLogs.isEmpty {
                     Text("No local API requests logged yet.")
                         .font(appDensity.font(.caption, design: .default))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 } else {
                     ForEach(localAPIService.requestLogs.prefix(25)) { log in
                         VStack(alignment: .leading, spacing: 4) {
@@ -386,16 +403,16 @@ private struct LocalAPISettingsView: View {
                                 Spacer()
                                 Text("\(log.statusCode)")
                                     .font(appDensity.font(.caption, design: .default))
-                                    .foregroundStyle(log.statusCode >= 400 ? Color(.statusCritical) : .secondary)
+                                    .foregroundStyle(log.statusCode >= 400 ? AnyShapeStyle(ThemeToken.critical) : AnyShapeStyle(.secondary))
                             }
 
                             Text(log.timestamp.formatted(date: .abbreviated, time: .standard))
                                 .font(appDensity.font(.caption2, design: .default))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
 
                             Text("\(Int(log.duration * 1000)) ms")
                                 .font(appDensity.font(.caption2, design: .default))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                         }
                     }
                 }
@@ -571,13 +588,13 @@ private struct MonitoringSettingsView: View {
                 if let monitoringStatusMessage = viewModel.monitoringStatusMessage {
                     Text(monitoringStatusMessage)
                         .font(appDensity.font(.caption, design: .default))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
 
                 if !FeatureAccessService.hasAccess(to: .automatedMonitoring) {
                     Text("Background monitoring and alerts are available in Pro.")
                         .font(appDensity.font(.caption, design: .default))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
             }
         }
@@ -655,7 +672,7 @@ private struct DataPortabilitySettingsView: View {
 
                 Text(importMode.explanation)
                     .font(appDensity.font(.caption, design: .default))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
 
                 Button("Export Full Backup") {
                     exportFullBackup()
@@ -712,12 +729,12 @@ private struct DataPortabilitySettingsView: View {
 
                 Text("Data stays on this device unless you export it. Backup files can include domain history, monitoring settings, and notes. Imported files are processed on-device.")
                     .font(appDensity.font(.caption, design: .default))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
 
                 if let portabilityStatusMessage = viewModel.portabilityStatusMessage {
                     Text(portabilityStatusMessage)
                         .font(appDensity.font(.caption, design: .default))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
             }
 
@@ -726,7 +743,7 @@ private struct DataPortabilitySettingsView: View {
                 Section("Import Debug") {
                     Text(importDebugStatus)
                         .font(appDensity.font(.caption, design: .default))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                         .textSelection(.enabled)
                 }
             }
@@ -1032,14 +1049,14 @@ private struct DataManagementSettingsView: View {
             if let deleteAllSuccessMessage {
                 Text(deleteAllSuccessMessage)
                     .font(.footnote.weight(.medium))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     // Reduce Transparency swaps the blur for an opaque surface.
                     // On iOS 26+ the system also composites its own translucency
                     // that the app cannot declare — verify there too (Phase 6).
                     .background(
-                        Capsule().fill(reduceTransparency ? AnyShapeStyle(Color(.appSurfaceElevated)) : AnyShapeStyle(.thinMaterial))
+                        Capsule().fill(reduceTransparency ? AnyShapeStyle(ThemeToken.surfaceElevated) : AnyShapeStyle(.thinMaterial))
                     )
                     .padding(.bottom, 8)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -1101,7 +1118,7 @@ private struct DataImportPreviewSheet: View {
                     Section("Warnings") {
                         ForEach(preview.warnings, id: \.self) { warning in
                             Text(warning)
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                         }
                     }
                 }

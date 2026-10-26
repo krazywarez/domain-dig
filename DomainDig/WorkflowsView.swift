@@ -20,15 +20,15 @@ struct WorkflowsView: View {
                 Section {
                     Text(limitMessage)
                         .font(appDensity.font(.caption))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             }
 
             workflowContent
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .refreshable {
             await viewModel.refreshWorkflowList()
         }
@@ -71,12 +71,12 @@ struct WorkflowsView: View {
                         value: Double(viewModel.batchCompletedCount),
                         total: Double(max(viewModel.batchTotalCount, 1))
                     )
-                    .tint(Color(.statusInfo))
+                    .tint(ThemeToken.info)
 
                     HStack {
                         Text(viewModel.batchProgressLabel)
                             .font(appDensity.font(.caption))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                         Spacer()
                         if viewModel.batchLookupRunning {
                             Button("Cancel") {
@@ -89,7 +89,7 @@ struct WorkflowsView: View {
                 }
                 .padding(.vertical, 4)
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
         }
 
         if viewModel.workflows.isEmpty {
@@ -102,7 +102,7 @@ struct WorkflowsView: View {
                     showsCardBackground: false
                 )
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
         } else {
             ForEach(viewModel.workflows) { workflow in
                 NavigationLink {
@@ -110,7 +110,7 @@ struct WorkflowsView: View {
                 } label: {
                     WorkflowRowView(workflow: workflow)
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             }
             .onDelete { offsets in
                 let workflows = offsets.map { viewModel.workflows[$0] }
@@ -131,7 +131,7 @@ private struct WorkflowRowView: View {
                 if workflow.collaboration?.isShared == true {
                     Image(systemName: "person.2.fill")
                         .font(.caption2)
-                        .foregroundStyle(Color(.statusInfo))
+                        .foregroundStyle(ThemeToken.info)
                         .accessibilityLabel("Shared")
                 }
                 Text(workflow.name)
@@ -141,23 +141,23 @@ private struct WorkflowRowView: View {
                 Spacer(minLength: 8)
                 Text("\(workflow.domains.count) domains")
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
 
             Text("Updated \(workflow.updatedAt.formatted(date: .abbreviated, time: .shortened))")
                 .font(appDensity.font(.caption2))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
 
             if let collaboration = workflow.collaboration, collaboration.isShared {
                 Text("\(collaboration.ownership.title) • \(collaboration.permission.title)")
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
 
             if let notes = workflow.notes, !notes.isEmpty {
                 Text(notes)
                     .font(appDensity.font(.caption))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
                     .lineLimit(2)
             }
         }
@@ -196,12 +196,12 @@ struct WorkflowDetailView: View {
                         if let notes = workflow.notes, !notes.isEmpty {
                             Text(notes)
                                 .font(appDensity.font(.caption))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                         }
                         if let collaboration = workflow.collaboration, collaboration.isShared {
                             Text("\(collaboration.ownership.title) • \(collaboration.permission.title)")
                                 .font(appDensity.font(.caption))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                         }
                     }
 
@@ -256,7 +256,7 @@ struct WorkflowDetailView: View {
                             if !latestSummary.workflowInsights.isEmpty {
                                 Text(latestSummary.workflowInsights[0].description)
                                     .font(appDensity.font(.caption))
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
                             }
 
                             Button {
@@ -285,7 +285,7 @@ struct WorkflowDetailView: View {
                         if workflow.domains.isEmpty {
                             Text("No domains in this workflow")
                                 .font(appDensity.font(.caption))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                         } else {
                             ForEach(workflow.domains, id: \.self) { domain in
                                 Button {
@@ -297,7 +297,7 @@ struct WorkflowDetailView: View {
                                             .foregroundStyle(.primary)
                                         Spacer()
                                         Image(systemName: "arrow.up.right.circle")
-                                            .foregroundStyle(Color(.appTextSecondary))
+                                            .foregroundStyle(ThemeToken.textSecondary)
                                     }
                                 }
                                 .buttonStyle(.plain)
@@ -314,7 +314,7 @@ struct WorkflowDetailView: View {
                     }
                 }
                 .scrollContentBackground(.hidden)
-                .background(Color(.appBackground))
+                .background(ThemeToken.background)
                 .navigationTitle(workflow.name)
                 .toolbar {
                     if !workflow.domains.isEmpty {
@@ -334,7 +334,7 @@ struct WorkflowDetailView: View {
             } else {
                 Text("Workflow not found")
                     .font(appDensity.font(.callout))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
         }
     }
@@ -343,7 +343,7 @@ struct WorkflowDetailView: View {
         HStack {
             Text(label)
                 .font(appDensity.font(.caption))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
             Spacer()
             Text(value)
                 .font(appDensity.font(.callout))
@@ -484,7 +484,7 @@ struct WorkflowRunSummaryView: View {
                                     .foregroundStyle(.primary)
                                 Text(insight.domainsInvolved.joined(separator: ", "))
                                     .font(.system(.caption, design: .monospaced))
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
                             }
                         }
                     }
@@ -525,7 +525,7 @@ struct WorkflowRunSummaryView: View {
         HStack {
             Text(label)
                 .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
             Spacer()
             Text(value)
                 .font(.system(.callout, design: .monospaced))
@@ -580,7 +580,7 @@ struct WorkflowBulkAddSheet: View {
                                     .foregroundStyle(.primary)
                                 Spacer()
                                 Image(systemName: selectedDomains.contains(domain) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(selectedDomains.contains(domain) ? Color(.statusInfo) : .secondary)
+                                    .foregroundStyle(selectedDomains.contains(domain) ? AnyShapeStyle(ThemeToken.info) : AnyShapeStyle(.secondary))
                             }
                         }
                         .buttonStyle(.plain)

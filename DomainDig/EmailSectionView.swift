@@ -29,7 +29,7 @@ struct EmailSectionView: View {
                     if !assessment.reasons.isEmpty {
                         Text(assessment.reasons.joined(separator: " | "))
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                 }
                 if loading {
@@ -45,7 +45,7 @@ struct EmailSectionView: View {
                             HStack(spacing: 8) {
                                 Text(row.label)
                                     .font(appDensity.font(.caption))
-                                    .foregroundStyle(Color(.statusInfo))
+                                    .foregroundStyle(ThemeToken.info)
                                     .frame(width: 76, alignment: .leading)
                                 AppStatusBadgeView(model: emailRowBadge(row))
                             }
@@ -56,7 +56,7 @@ struct EmailSectionView: View {
                             if let auxiliaryDetail = row.auxiliaryDetail {
                                 Text(auxiliaryDetail)
                                     .font(appDensity.font(.caption2))
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
                             }
                         }
                     }
@@ -68,13 +68,13 @@ struct EmailSectionView: View {
     private func emailRowBadge(_ row: EmailRowViewData) -> AppStatusBadgeModel {
         switch row.statusTone {
         case .success:
-            return .init(title: row.status, systemImage: "checkmark.shield.fill", foregroundColor: Color(.statusPositive), backgroundColor: Color(.statusPositiveSurface))
+            return .init(title: row.status, systemImage: "checkmark.shield.fill", foreground: .positive, background: .positiveSurface)
         case .warning:
-            return .init(title: row.status, systemImage: "shield.lefthalf.filled", foregroundColor: Color(.statusWarning), backgroundColor: Color(.statusWarningSurface))
+            return .init(title: row.status, systemImage: "shield.lefthalf.filled", foreground: .warning, background: .warningSurface)
         case .failure:
-            return .init(title: row.status, systemImage: "minus.circle", foregroundColor: Color(.appTextSecondary), backgroundColor: Color(.appSurfaceElevated))
+            return .init(title: row.status, systemImage: "minus.circle", foreground: .textSecondary, background: .surfaceElevated)
         case .primary, .secondary:
-            return .init(title: row.status, systemImage: "circle", foregroundColor: Color(.appTextSecondary), backgroundColor: Color(.appSurfaceElevated))
+            return .init(title: row.status, systemImage: "circle", foreground: .textSecondary, background: .surfaceElevated)
         }
     }
 }

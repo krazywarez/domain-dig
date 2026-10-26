@@ -31,7 +31,7 @@ struct MonitoringView: View {
                        !monitoringStatusMessage.isEmpty {
                         Text(monitoringStatusMessage)
                             .font(appDensity.font(.caption))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
 
                     Button(viewModel.monitoringRunInProgress ? "Monitoring…" : "Run Now") {
@@ -41,7 +41,7 @@ struct MonitoringView: View {
                 }
                 .padding(.vertical, 4)
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
 
             if viewModel.monitoringLogs.isEmpty {
                 Section {
@@ -53,7 +53,7 @@ struct MonitoringView: View {
                         showsCardBackground: false
                     )
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             } else {
                 Section("Recent Runs") {
                     ForEach(viewModel.monitoringLogs) { log in
@@ -68,12 +68,12 @@ struct MonitoringView: View {
                                     Spacer()
                                     Text(log.timestamp.formatted(date: .abbreviated, time: .shortened))
                                         .font(appDensity.font(.caption2))
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                 }
 
                                 Text(log.summary)
                                     .font(appDensity.font(.caption))
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
 
                                 HStack(spacing: 8) {
                                     metricBadge(title: "\(log.domainsChecked) checked")
@@ -89,11 +89,11 @@ struct MonitoringView: View {
                         }
                     }
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .navigationTitle("Monitoring")
         .onAppear {
             viewModel.refreshMonitoringState()
@@ -132,7 +132,7 @@ struct MonitoringLogDetailView: View {
                 LabeledContent("Alerts", value: "\(log.alertsTriggered)")
                 LabeledContent("Timestamp", value: log.timestamp.formatted(date: .abbreviated, time: .shortened))
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
 
             Section("Domains") {
                 ForEach(log.checkedDomains) { result in
@@ -151,7 +151,7 @@ struct MonitoringLogDetailView: View {
 
                         Text(result.summaryMessage)
                             .font(appDensity.font(.caption))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
 
                         HStack(spacing: 10) {
                             Text(result.resultSource.label)
@@ -161,12 +161,12 @@ struct MonitoringLogDetailView: View {
                             }
                         }
                         .font(appDensity.font(.caption2))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
 
                         if let errorMessage = result.errorMessage {
                             Text(errorMessage)
                                 .font(appDensity.font(.caption2))
-                                .foregroundStyle(Color(.statusWarning))
+                                .foregroundStyle(ThemeToken.warning)
                         }
 
                         if let historyEntryID = result.historyEntryID,
@@ -180,32 +180,32 @@ struct MonitoringLogDetailView: View {
                     .padding(.vertical, 4)
                 }
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
 
             if !log.errors.isEmpty {
                 Section("Errors") {
                     ForEach(log.errors, id: \.self) { error in
                         Text(error)
                             .font(appDensity.font(.caption))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .navigationTitle("Run Details")
     }
 
-    private func color(for severity: MonitoringAlertSeverity) -> Color {
+    private func color(for severity: MonitoringAlertSeverity) -> AnyShapeStyle {
         switch severity {
         case .info:
-            return .secondary
+            return AnyShapeStyle(.secondary)
         case .warning:
-            return Color(.statusWarning)
+            return AnyShapeStyle(ThemeToken.warning)
         case .critical:
-            return Color(.statusCritical)
+            return AnyShapeStyle(ThemeToken.critical)
         }
     }
 }

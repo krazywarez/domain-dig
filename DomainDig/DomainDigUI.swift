@@ -145,95 +145,102 @@ enum AppStatusTone {
     case info
     case neutral
 
-    var foreground: Color {
+    var foreground: ThemeToken {
         switch self {
         case .positive:
-            return Color(.statusPositive)
+            return .positive
         case .warning:
-            return Color(.statusWarning)
+            return .warning
         case .critical:
-            return Color(.statusCritical)
+            return .critical
         case .info:
-            return Color(.statusInfo)
+            return .info
         case .neutral:
-            return Color(.statusNeutral)
+            return .neutral
         }
     }
 
-    var surface: Color {
+    var surface: ThemeToken {
         switch self {
         case .positive:
-            return Color(.statusPositiveSurface)
+            return .positiveSurface
         case .warning:
-            return Color(.statusWarningSurface)
+            return .warningSurface
         case .critical:
-            return Color(.statusCriticalSurface)
+            return .criticalSurface
         case .info:
-            return Color(.statusInfoSurface)
+            return .infoSurface
         case .neutral:
-            return Color(.statusNeutralSurface)
+            return .neutralSurface
         }
     }
 }
 
+/// A badge's appearance, named rather than resolved.
+///
+/// The colours are `ThemeToken`s because every one of these is built outside a
+/// view body — `AppStatusFactory` and the per-row helpers are plain functions —
+/// so they cannot read the environment. `AppStatusBadgeView` resolves them when
+/// it draws.
 struct AppStatusBadgeModel: Equatable {
     let title: String
     let systemImage: String?
-    let foregroundColor: Color
-    let backgroundColor: Color
+    let foreground: ThemeToken
+    let background: ThemeToken
 }
 
 enum AppStatusFactory {
     static func availability(_ status: DomainAvailabilityStatus?) -> AppStatusBadgeModel {
         switch status {
         case .available:
-            return .init(title: "Available", systemImage: "checkmark.circle.fill", foregroundColor: Color(.statusPositive), backgroundColor: Color(.statusPositiveSurface))
+            return .init(title: "Available", systemImage: "checkmark.circle.fill", foreground: .positive, background: .positiveSurface)
         case .registered:
-            return .init(title: "Registered", systemImage: "circle.fill", foregroundColor: Color(.statusWarning), backgroundColor: Color(.statusWarningSurface))
+            return .init(title: "Registered", systemImage: "circle.fill", foreground: .warning, background: .warningSurface)
         case .unknown, .none:
-            return .init(title: "Unknown", systemImage: "questionmark.circle", foregroundColor: Color(.appTextSecondary), backgroundColor: Color(.appSurfaceElevated))
+            return .init(title: "Unknown", systemImage: "questionmark.circle", foreground: .textSecondary, background: .surfaceElevated)
         }
     }
 
     static func tls(sslInfo: SSLCertificateInfo?, error: String?) -> AppStatusBadgeModel {
         if error != nil || sslInfo == nil {
-            return .init(title: "Invalid", systemImage: "xmark.octagon.fill", foregroundColor: Color(.statusCritical), backgroundColor: Color(.statusCriticalSurface))
+            return .init(title: "Invalid", systemImage: "xmark.octagon.fill", foreground: .critical, background: .criticalSurface)
         }
         if let sslInfo, sslInfo.daysUntilExpiry <= 14 {
-            return .init(title: "Expiring", systemImage: "exclamationmark.triangle.fill", foregroundColor: Color(.statusWarning), backgroundColor: Color(.statusWarningSurface))
+            return .init(title: "Expiring", systemImage: "exclamationmark.triangle.fill", foreground: .warning, background: .warningSurface)
         }
-        return .init(title: "Valid", systemImage: "lock.fill", foregroundColor: Color(.statusPositive), backgroundColor: Color(.statusPositiveSurface))
+        return .init(title: "Valid", systemImage: "lock.fill", foreground: .positive, background: .positiveSurface)
     }
 
     static func email(_ result: EmailSecurityResult?, error: String?) -> AppStatusBadgeModel {
         guard error == nil, let result else {
-            return .init(title: "Missing", systemImage: "minus.circle", foregroundColor: Color(.appTextSecondary), backgroundColor: Color(.appSurfaceElevated))
+            return .init(title: "Missing", systemImage: "minus.circle", foreground: .textSecondary, background: .surfaceElevated)
         }
 
         let foundCount = [result.spf.found, result.dmarc.found, result.dkim.found].filter { $0 }.count
         switch foundCount {
         case 3:
-            return .init(title: "Secure", systemImage: "checkmark.shield.fill", foregroundColor: Color(.statusPositive), backgroundColor: Color(.statusPositiveSurface))
+            return .init(title: "Secure", systemImage: "checkmark.shield.fill", foreground: .positive, background: .positiveSurface)
         case 1, 2:
-            return .init(title: "Partial", systemImage: "shield.lefthalf.filled", foregroundColor: Color(.statusWarning), backgroundColor: Color(.statusWarningSurface))
+            return .init(title: "Partial", systemImage: "shield.lefthalf.filled", foreground: .warning, background: .warningSurface)
         default:
-            return .init(title: "Missing", systemImage: "minus.circle", foregroundColor: Color(.appTextSecondary), backgroundColor: Color(.appSurfaceElevated))
+            return .init(title: "Missing", systemImage: "minus.circle", foreground: .textSecondary, background: .surfaceElevated)
         }
     }
 
     static func change(_ summary: DomainChangeSummary?) -> AppStatusBadgeModel {
         guard let summary else {
-            return .init(title: "Unchanged", systemImage: "circle", foregroundColor: Color(.appTextSecondary), backgroundColor: Color(.appSurfaceElevated))
+            return .init(title: "Unchanged", systemImage: "circle", foreground: .textSecondary, background: .surfaceElevated)
         }
         if summary.hasChanges {
-            return .init(title: "Changed", systemImage: "arrow.triangle.2.circlepath", foregroundColor: Color(.statusInfo), backgroundColor: Color(.statusInfoSurface))
+            return .init(title: "Changed", systemImage: "arrow.triangle.2.circlepath", foreground: .info, background: .infoSurface)
         }
-        return .init(title: "Unchanged", systemImage: "checkmark.circle", foregroundColor: Color(.appTextSecondary), backgroundColor: Color(.appSurfaceElevated))
+        return .init(title: "Unchanged", systemImage: "checkmark.circle", foreground: .textSecondary, background: .surfaceElevated)
     }
 }
 
 struct AppStatusBadgeView: View {
     @Environment(\.appDensity) private var appDensity
+    @Environment(\.theme) private var theme
 
     let model: AppStatusBadgeModel
 
@@ -251,10 +258,10 @@ struct AppStatusBadgeView: View {
         // ViewThatFits onto its stacked layout, which is the intended fallback.
         .fixedSize()
         .font(appDensity.font(.caption, weight: .semibold))
-        .foregroundStyle(model.foregroundColor)
+        .foregroundStyle(theme[model.foreground])
         .padding(.horizontal, 9)
         .padding(.vertical, 5)
-        .background(model.backgroundColor)
+        .background(theme[model.background])
         .clipShape(Capsule())
         // Read as one word ("Critical"), not "icon, Critical". The symbol
         // duplicates the title for VoiceOver.
@@ -294,9 +301,9 @@ struct AppCopyButton: View {
         } label: {
             Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
                 .font(appDensity.font(.caption))
-                .foregroundStyle(didCopy ? Color(.statusPositive) : Color(.appTextSecondary))
+                .foregroundStyle(didCopy ? ThemeToken.positive : ThemeToken.textSecondary)
                 .frame(width: max(size, AppLayout.minimumTapTarget), height: max(size, AppLayout.minimumTapTarget))
-                .background(Color(.appSurfaceElevated))
+                .background(ThemeToken.surfaceElevated)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
@@ -400,17 +407,17 @@ struct EmptyStateCardView: View {
 
             Text(message)
                 .font(appDensity.font(.body))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(suggestion)
                 .font(appDensity.font(.caption))
-                .foregroundStyle(Color(.statusInfo))
+                .foregroundStyle(ThemeToken.info)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(appDensity.metrics.cardPadding)
-        .background(showsCardBackground ? Color(.appSurface) : Color.clear)
+        .background(showsCardBackground ? AnyShapeStyle(ThemeToken.surface) : AnyShapeStyle(.clear))
         .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
     }
 }
@@ -503,7 +510,7 @@ struct CollapsibleSectionView<HeaderTrailing: View, Content: View>: View {
             if let subtitle {
                 Text(subtitle)
                     .font(appDensity.font(.caption))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -512,7 +519,7 @@ struct CollapsibleSectionView<HeaderTrailing: View, Content: View>: View {
     private var chevron: some View {
         Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
             .font(.caption.weight(.semibold))
-            .foregroundStyle(Color(.appTextSecondary))
+            .foregroundStyle(ThemeToken.textSecondary)
             .accessibilityHidden(true)
     }
 }
@@ -530,7 +537,7 @@ struct TagChipRowView: View {
                         .font(.caption)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(Color(.appSurfaceElevated), in: Capsule())
+                        .background(ThemeToken.surfaceElevated, in: Capsule())
                 }
             }
         }
@@ -564,8 +571,8 @@ struct TagFilterChipRowView: View {
                 .font(.caption)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(isSelected ? Color(.statusInfoSurface) : Color(.appSurfaceElevated), in: Capsule())
-                .foregroundStyle(isSelected ? Color(.statusInfo) : Color.primary)
+                .background(isSelected ? ThemeToken.infoSurface : ThemeToken.surfaceElevated, in: Capsule())
+                .foregroundStyle(isSelected ? AnyShapeStyle(ThemeToken.info) : AnyShapeStyle(.primary))
         }
         .buttonStyle(.plain)
     }

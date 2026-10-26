@@ -100,16 +100,16 @@ struct SubdomainsSectionView: View {
         if !groups.isEmpty {
             Text("Groups")
                 .font(appDensity.font(.caption2))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
             ForEach(groups) { group in
                 HStack {
                     Text("\(group.label).*")
                         .font(appDensity.font(.caption))
-                        .foregroundStyle(Color(.statusInfo))
+                        .foregroundStyle(ThemeToken.info)
                     Spacer()
                     Text("\(group.subdomains.count)")
                         .font(appDensity.font(.caption2))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
             }
         }
@@ -127,10 +127,10 @@ struct SubdomainsSectionView: View {
                 if row.isInteresting {
                     Text("Interesting")
                         .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(Color(.statusWarning))
+                        .foregroundStyle(ThemeToken.warning)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color(.statusWarningSurface))
+                        .background(ThemeToken.warningSurface)
                         .clipShape(Capsule())
                 }
             }

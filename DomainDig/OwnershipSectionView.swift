@@ -69,7 +69,7 @@ struct OwnershipSectionView: View {
             HStack {
                 Text("History")
                     .font(appDensity.font(.caption))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
                 Spacer()
                 if let onLoadHistory, history.isEmpty, !historyLoading {
                     Button("Load") {
@@ -87,12 +87,12 @@ struct OwnershipSectionView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(event.date.formatted(date: .abbreviated, time: .omitted))
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                         Text(event.summary)
                             .font(appDensity.font(.caption))
                         Text(event.source)
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                 }
             } else if let historyError {

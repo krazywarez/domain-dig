@@ -52,7 +52,7 @@ struct WebSectionView: View {
                 HStack {
                     Text("TLS")
                         .font(appDensity.font(.subheadline, weight: .semibold))
-                        .foregroundStyle(Color(.statusInfo))
+                        .foregroundStyle(ThemeToken.info)
                     Spacer()
                     if !sslLoading {
                         AppStatusBadgeView(model: AppStatusFactory.tls(sslInfo: sslInfo, error: sslError))
@@ -77,7 +77,7 @@ struct WebSectionView: View {
                     if let sslInfo, !sslInfo.subjectAltNames.isEmpty {
                         Text("SANs")
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                         ForEach(sslInfo.subjectAltNames, id: \.self) { san in
                             HStack(alignment: .top, spacing: 8) {
                                 Text(san)
@@ -96,7 +96,7 @@ struct WebSectionView: View {
             CardView {
                 Text("Headers")
                     .font(appDensity.font(.subheadline, weight: .semibold))
-                    .foregroundStyle(Color(.statusInfo))
+                    .foregroundStyle(ThemeToken.info)
                 SectionTrustMetadataView(provenance: httpProvenance, confidence: nil)
                 if headersLoading {
                     ProgressView("Fetching headers…")
@@ -114,7 +114,7 @@ struct WebSectionView: View {
                             HStack(alignment: .top, spacing: 4) {
                                 Text(header.name + ":")
                                     .font(appDensity.font(.caption))
-                                    .foregroundStyle(header.isSecurityHeader ? Color(.statusWarning) : Color(.statusInfo))
+                                    .foregroundStyle(header.isSecurityHeader ? ThemeToken.warning : ThemeToken.info)
                                 Text(header.value)
                                     .font(appDensity.font(.caption))
                                     .foregroundStyle(.primary)
@@ -129,7 +129,7 @@ struct WebSectionView: View {
                 HStack {
                     Text("Redirects")
                         .font(appDensity.font(.subheadline, weight: .semibold))
-                        .foregroundStyle(Color(.statusInfo))
+                        .foregroundStyle(ThemeToken.info)
                     Spacer()
                     if let finalURL {
                         AppCopyButton(value: finalURL, label: "Copy redirect URL")
@@ -151,11 +151,11 @@ struct WebSectionView: View {
                         HStack(alignment: .top, spacing: 6) {
                             Text(redirect.stepLabel)
                                 .font(appDensity.font(.caption))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                                 .frame(width: 16, alignment: .trailing)
                             Text(redirect.statusCode)
                                 .font(appDensity.font(.caption))
-                                .foregroundStyle(Color(.statusInfo))
+                                .foregroundStyle(ThemeToken.info)
                                 .frame(width: 36, alignment: .leading)
                             Text(redirect.url)
                                 .font(appDensity.font(.caption))
@@ -163,7 +163,7 @@ struct WebSectionView: View {
                             if redirect.isFinal {
                                 Text("(final)")
                                     .font(appDensity.font(.caption2))
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
                             }
                             Spacer(minLength: 8)
                             AppCopyButton(value: redirect.url, label: "Copy redirect URL")

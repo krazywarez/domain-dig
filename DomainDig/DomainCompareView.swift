@@ -38,7 +38,7 @@ struct DomainCompareView: View {
                 Section {
                     Text("Choose two different domains to compare.")
                         .font(.callout)
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
             }
 
@@ -63,11 +63,11 @@ struct DomainCompareView: View {
                         showsCardBackground: false
                     )
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .navigationTitle("Compare Domains")
     }
 

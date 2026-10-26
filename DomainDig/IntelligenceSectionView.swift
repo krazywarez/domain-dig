@@ -44,7 +44,7 @@ struct IntelligenceSectionView: View {
                                         .font(appDensity.font(.caption, weight: .semibold))
                                     Text(signal.detail)
                                         .font(appDensity.font(.caption2))
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                 }
                             }
                         }
@@ -80,12 +80,12 @@ struct IntelligenceSectionView: View {
                                         if item.isEphemeral {
                                             Text("Ephemeral")
                                                 .font(appDensity.font(.caption2))
-                                                .foregroundStyle(Color(.statusWarning))
+                                                .foregroundStyle(ThemeToken.warning)
                                         }
                                     }
                                     Text("First \(item.firstSeen.formatted(date: .abbreviated, time: .omitted)) • Last \(item.lastSeen.formatted(date: .abbreviated, time: .omitted)) • Seen \(item.recurrenceCount)x")
                                         .font(appDensity.font(.caption2))
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                 }
                             }
                         }
@@ -109,7 +109,7 @@ struct IntelligenceSectionView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(appDensity.font(.subheadline, weight: .semibold))
-                .foregroundStyle(Color(.statusInfo))
+                .foregroundStyle(ThemeToken.info)
             content()
         }
     }
@@ -118,7 +118,7 @@ struct IntelligenceSectionView: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(date.formatted(date: .abbreviated, time: .omitted))
                 .font(appDensity.font(.caption2))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
             Text(title)
                 .font(appDensity.font(.caption))
         }

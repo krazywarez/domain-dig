@@ -15,7 +15,7 @@ struct IntegrationsSettingsView: View {
                 if let statusMessage = integrationService.statusMessage {
                     Text(statusMessage)
                         .font(.caption)
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
 
                 Button("Process Queue Now") {
@@ -26,7 +26,7 @@ struct IntegrationsSettingsView: View {
             Section("Targets") {
                 if integrationService.targets.isEmpty {
                     Text("No integrations configured.")
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 } else {
                     ForEach(integrationService.targets) { target in
                         NavigationLink {
@@ -42,17 +42,17 @@ struct IntegrationsSettingsView: View {
                                     Text(target.name)
                                     Spacer()
                                     Text(target.type.title)
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                 }
 
                                 Text(summary(for: target))
                                     .font(.caption)
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
 
                                 if !target.isEnabled {
                                     Text("Disabled")
                                         .font(.caption2)
-                                        .foregroundStyle(Color(.statusWarning))
+                                        .foregroundStyle(ThemeToken.warning)
                                 }
                             }
                         }
@@ -140,7 +140,7 @@ private struct IntegrationDetailView: View {
                 Section("Delivery Log") {
                     if integrationService.deliveryRecords(for: target.id).isEmpty {
                         Text("No deliveries yet.")
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     } else {
                         ForEach(integrationService.deliveryRecords(for: target.id), id: \.id) { record in
                             VStack(alignment: .leading, spacing: 4) {
@@ -149,7 +149,7 @@ private struct IntegrationDetailView: View {
                                     Spacer()
                                     Text(record.timestamp.formatted(date: .abbreviated, time: .shortened))
                                         .font(.caption)
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                 }
 
                                 Text(record.summary)
@@ -157,13 +157,13 @@ private struct IntegrationDetailView: View {
 
                                 Text(record.destination)
                                     .font(.caption)
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
 
                                 if let failureReason = record.failureReason {
-                                    let failureColor: Color = record.status == .skipped ? .secondary : Color(.statusCritical)
+                                    let failureStyle = record.status == .skipped ? AnyShapeStyle(.secondary) : AnyShapeStyle(ThemeToken.critical)
                                     Text(failureReason)
                                         .font(.caption)
-                                        .foregroundStyle(failureColor)
+                                        .foregroundStyle(failureStyle)
                                 }
                             }
                         }
@@ -171,7 +171,7 @@ private struct IntegrationDetailView: View {
                 }
             } else {
                 Text("Integration not found.")
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
         }
         .navigationTitle(target?.name ?? "Integration")
@@ -238,7 +238,7 @@ private struct IntegrationEditorView: View {
                 if !FeatureAccessService.hasAccess(to: .bucketExport) {
                     Text("Export to your own bucket is \(FeatureAccessService.upgradeMessage(for: .bucketExport)).")
                         .font(.caption)
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
 
                 TextField("Name", text: $name)
@@ -284,7 +284,7 @@ private struct IntegrationEditorView: View {
                     if existingTarget != nil {
                         Text("Saved webhook URL remains in Keychain unless you replace it.")
                             .font(.caption)
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                 }
             case .slack:
@@ -297,7 +297,7 @@ private struct IntegrationEditorView: View {
                     if existingTarget != nil {
                         Text("Saved Slack webhook remains in Keychain unless you replace it.")
                             .font(.caption)
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                 }
             case .email:
@@ -311,7 +311,7 @@ private struct IntegrationEditorView: View {
 
                     Text("Port 465 with Direct TLS is supported. Port 587 (STARTTLS) is not.")
                         .font(.caption)
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
 
                     TextField("Username", text: $emailUsername)
                         .textInputAutocapitalization(.never)
@@ -338,7 +338,7 @@ private struct IntegrationEditorView: View {
                     if existingTarget != nil {
                         Text("Saved SMTP password remains in Keychain unless you replace it.")
                             .font(.caption)
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                 }
             case .s3:
@@ -350,7 +350,7 @@ private struct IntegrationEditorView: View {
 
                     Text("Must be https. Signing puts your access key ID on the wire, and the signature with it.")
                         .font(.caption)
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
 
                     TextField("Bucket", text: $s3Bucket)
                         .textInputAutocapitalization(.never)
@@ -368,7 +368,7 @@ private struct IntegrationEditorView: View {
 
                     Text("Addresses the bucket as endpoint/bucket/key. MinIO needs this, and so do R2 custom domains.")
                         .font(.caption)
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
 
                 Section("Credentials") {
@@ -384,7 +384,7 @@ private struct IntegrationEditorView: View {
                     if existingTarget != nil {
                         Text("Saved secret access key remains in Keychain unless you replace it.")
                             .font(.caption)
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                 }
 
@@ -407,7 +407,7 @@ private struct IntegrationEditorView: View {
                                 if let detail = trigger.detail {
                                     Text(detail)
                                         .font(.caption)
-                                        .foregroundStyle(Color(.appTextSecondary))
+                                        .foregroundStyle(ThemeToken.textSecondary)
                                 }
                             }
                         }
@@ -417,7 +417,7 @@ private struct IntegrationEditorView: View {
                 Section("Formats") {
                     Text("JSON always uploads. The others are renderings of it.")
                         .font(.caption)
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
 
                     ForEach([DomainExportFormat.pdf, .csv]) { format in
                         Toggle(
@@ -441,7 +441,7 @@ private struct IntegrationEditorView: View {
                 Section {
                     Text(validationMessage)
                         .font(.caption)
-                        .foregroundStyle(Color(.statusCritical))
+                        .foregroundStyle(ThemeToken.critical)
                 }
             }
         }

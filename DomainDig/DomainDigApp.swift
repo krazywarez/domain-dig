@@ -13,10 +13,19 @@ struct DomainDigApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppDensity.userDefaultsKey) private var density = AppDensity.compact.rawValue
     @AppStorage(AppAppearance.userDefaultsKey) private var appearance = AppAppearance.system.rawValue
+    @AppStorage(AccentTheme.userDefaultsKey) private var accent = AccentTheme.default.rawValue
     @State private var viewModel = DomainViewModel()
     @State private var purchaseService = PurchaseService.shared
     @State private var cloudSyncService = CloudSyncService.shared
     @State private var localAPIService = LocalAPIService.shared
+
+    /// Falls back to the default when the tier does not include themes, so a
+    /// lapsed subscriber sees the stock palette rather than a theme they can no
+    /// longer change.
+    private var selectedAccent: AccentTheme {
+        guard FeatureAccessService.hasAccess(to: .accentTheme) else { return .default }
+        return AccentTheme(rawValue: accent) ?? .default
+    }
 
     init() {
         LocalNotificationService.shared.configureForegroundPresentation()
@@ -28,6 +37,10 @@ struct DomainDigApp: App {
         WindowGroup {
             RootTabView(viewModel: viewModel)
                 .environment(\.appDensity, AppDensity(rawValue: density) ?? .compact)
+                .environment(\.theme, selectedAccent.theme)
+                // So standard controls pick the accent up too, not only the
+                // views that name a token.
+                .tint(selectedAccent == .default ? nil : selectedAccent.theme.accentFill)
                 // The single place appearance is applied. Keep it that way.
                 .preferredColorScheme((AppAppearance(rawValue: appearance) ?? .system).colorScheme)
                 .task {

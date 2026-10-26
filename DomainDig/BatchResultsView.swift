@@ -13,16 +13,16 @@ struct BatchResultsView: View {
                 if viewModel.batchLookupRunning {
                     VStack(alignment: .trailing, spacing: 4) {
                         ProgressView(value: Double(viewModel.batchCompletedCount), total: Double(max(viewModel.batchTotalCount, 1)))
-                            .tint(Color(.statusInfo))
+                            .tint(ThemeToken.info)
                             .frame(width: 120)
                         Text(viewModel.batchProgressLabel)
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
                 } else if !viewModel.batchResults.isEmpty {
                     Text("\(viewModel.batchResults.count) domains")
                         .font(appDensity.font(.caption2))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
             }
 
@@ -86,7 +86,7 @@ struct BatchResultRowView: View {
                 }
             }
             .font(appDensity.font(.caption2))
-            .foregroundStyle(Color(.appTextSecondary))
+            .foregroundStyle(ThemeToken.textSecondary)
 
             HStack(spacing: 10) {
                 Text(result.primaryIP ?? "No IP")
@@ -99,12 +99,12 @@ struct BatchResultRowView: View {
                     .lineLimit(1)
             }
             .font(appDensity.font(.caption2))
-            .foregroundStyle(Color(.appTextSecondary))
+            .foregroundStyle(ThemeToken.textSecondary)
 
             if let summaryMessage = result.summaryMessage {
                 Text(summaryMessage)
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
 
             if let changeClassification = result.changeClassification {
@@ -116,7 +116,7 @@ struct BatchResultRowView: View {
             if let errorMessage = result.errorMessage {
                 Text(errorMessage)
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(result.status == .failed ? Color(.statusCritical) : Color(.appTextSecondary))
+                    .foregroundStyle(result.status == .failed ? ThemeToken.critical : ThemeToken.textSecondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -151,7 +151,7 @@ struct BatchResultRowView: View {
     private var sourceLabel: some View {
         Text(result.resultSource.label.lowercased())
             .font(appDensity.font(.caption2))
-            .foregroundStyle(Color(.appTextSecondary))
+            .foregroundStyle(ThemeToken.textSecondary)
     }
 
     private var changeContentLabel: String {
@@ -191,30 +191,30 @@ struct BatchResultRowView: View {
         return .init(
             title: availabilityText,
             systemImage: "exclamationmark.circle",
-            foregroundColor: Color(.appTextSecondary),
-            backgroundColor: Color(.appSurfaceElevated)
+            foreground: .textSecondary,
+            background: .surfaceElevated
         )
     }
 
     private var quickStatusBadge: AppStatusBadgeModel {
         switch result.status {
         case .pending:
-            return .init(title: "Pending", systemImage: "clock", foregroundColor: Color(.appTextSecondary), backgroundColor: Color(.appSurfaceElevated))
+            return .init(title: "Pending", systemImage: "clock", foreground: .textSecondary, background: .surfaceElevated)
         case .running:
-            return .init(title: "Running", systemImage: "arrow.clockwise", foregroundColor: Color(.statusInfo), backgroundColor: Color(.statusInfoSurface))
+            return .init(title: "Running", systemImage: "arrow.clockwise", foreground: .info, background: .infoSurface)
         case .completed:
             if result.changeClassification == .critical || result.certificateWarningLevel == .critical || result.riskLevel == .high {
-                return .init(title: "Critical", systemImage: "exclamationmark.octagon.fill", foregroundColor: Color(.statusCritical), backgroundColor: Color(.statusCriticalSurface))
+                return .init(title: "Critical", systemImage: "exclamationmark.octagon.fill", foreground: .critical, background: .criticalSurface)
             }
             if result.changeClassification == .warning || result.changeSeverity == .medium || result.certificateWarningLevel == .warning {
-                return .init(title: "Warning", systemImage: "exclamationmark.triangle.fill", foregroundColor: Color(.statusWarning), backgroundColor: Color(.statusWarningSurface))
+                return .init(title: "Warning", systemImage: "exclamationmark.triangle.fill", foreground: .warning, background: .warningSurface)
             }
             if result.quickStatus == "Changed" {
-                return .init(title: "Changed", systemImage: "arrow.triangle.2.circlepath", foregroundColor: Color(.statusInfo), backgroundColor: Color(.statusInfoSurface))
+                return .init(title: "Changed", systemImage: "arrow.triangle.2.circlepath", foreground: .info, background: .infoSurface)
             }
-            return .init(title: "Stable", systemImage: "checkmark.circle.fill", foregroundColor: Color(.statusPositive), backgroundColor: Color(.statusPositiveSurface))
+            return .init(title: "Stable", systemImage: "checkmark.circle.fill", foreground: .positive, background: .positiveSurface)
         case .failed:
-            return .init(title: "Failed", systemImage: "xmark.circle.fill", foregroundColor: Color(.statusCritical), backgroundColor: Color(.statusCriticalSurface))
+            return .init(title: "Failed", systemImage: "xmark.circle.fill", foreground: .critical, background: .criticalSurface)
         }
     }
 }

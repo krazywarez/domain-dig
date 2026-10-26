@@ -13,7 +13,7 @@ struct ScheduledReportsView: View {
                 if !FeatureAccessService.hasAccess(to: .automatedMonitoring) {
                     Text("Scheduled reports require Pro.")
                         .font(appDensity.font(.caption))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
 
                 Toggle("Scheduled Reports", isOn: Binding(
@@ -59,7 +59,7 @@ struct ScheduledReportsView: View {
                 if let statusMessage {
                     Text(statusMessage)
                         .font(appDensity.font(.caption))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
 
                 Button(isGenerating ? "Generating…" : "Generate Now") {
@@ -67,7 +67,7 @@ struct ScheduledReportsView: View {
                 }
                 .disabled(isGenerating || !FeatureAccessService.hasAccess(to: .automatedMonitoring))
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
 
             if logs.isEmpty {
                 Section {
@@ -79,7 +79,7 @@ struct ScheduledReportsView: View {
                         showsCardBackground: false
                     )
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             } else {
                 Section("Recent Reports") {
                     ForEach(logs) { log in
@@ -91,16 +91,16 @@ struct ScheduledReportsView: View {
                                     .foregroundStyle(.primary)
                                 Text(log.generatedAt.formatted(date: .abbreviated, time: .shortened))
                                     .font(.caption)
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
                             }
                         }
                     }
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .navigationTitle("Scheduled Reports")
     }
 

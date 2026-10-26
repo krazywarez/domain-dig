@@ -163,7 +163,7 @@ private struct WhatsNewView: View {
             } else {
                 Section {
                     Text("Release notes are unavailable.")
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
             }
         }
@@ -188,7 +188,7 @@ private struct AcknowledgementsView: View {
             Section("License") {
                 Text("DomainDig is released under the MIT License.")
                 Text(AppLinks.copyright)
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
         }
         .navigationTitle("Acknowledgements")
@@ -211,7 +211,7 @@ private struct ReportIssueView: View {
         Form {
             Section {
                 Text("These details are included so issues can be reproduced. They are only added when you send a report — nothing is collected in the background.")
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
 
             Section("Included Diagnostics") {

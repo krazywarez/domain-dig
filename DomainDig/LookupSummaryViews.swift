@@ -15,7 +15,7 @@ struct SummaryView: View {
                     VStack(alignment: .leading, spacing: appDensity.metrics.rowSpacing) {
                         Text(field.label)
                             .font(appDensity.font(.caption2))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                         Text(field.value)
                             .font(appDensity.font(.caption))
                             .foregroundStyle(ResultColors.color(for: field.tone))
@@ -25,7 +25,7 @@ struct SummaryView: View {
                     .frame(minHeight: appDensity.metrics.rowMinHeight + 12, alignment: .topLeading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(appDensity.metrics.cardPadding)
-                    .background(Color(.appSurface))
+                    .background(ThemeToken.surface)
                     .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
                 }
             }
@@ -57,13 +57,13 @@ struct RiskSummaryCardView: View {
                     Spacer()
                     Text("Deterministic")
                         .font(appDensity.font(.caption2))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
 
                 if topFactors.isEmpty {
                     Text("No major risk factors identified")
                         .font(appDensity.font(.caption))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 } else {
                     ForEach(Array(topFactors.enumerated()), id: \.offset) { _, factor in
                         HStack(alignment: .top, spacing: 8) {
@@ -81,25 +81,25 @@ struct RiskSummaryCardView: View {
         }
     }
 
-    private var levelColor: Color {
+    private var levelColor: AnyShapeStyle {
         switch report.riskAssessment.level {
         case .low:
-            return Color(.statusPositive)
+            return AnyShapeStyle(ThemeToken.positive)
         case .medium:
-            return Color(.statusWarning)
+            return AnyShapeStyle(ThemeToken.warning)
         case .high:
-            return Color(.statusCritical)
+            return AnyShapeStyle(ThemeToken.critical)
         }
     }
 
-    private func factorColor(_ impact: RiskImpact) -> Color {
+    private func factorColor(_ impact: RiskImpact) -> AnyShapeStyle {
         switch impact {
         case .positive:
-            return Color(.statusPositive)
+            return AnyShapeStyle(ThemeToken.positive)
         case .neutral:
-            return .secondary
+            return AnyShapeStyle(.secondary)
         case .negative:
-            return Color(.statusCritical)
+            return AnyShapeStyle(ThemeToken.critical)
         }
     }
 }
@@ -115,13 +115,13 @@ struct InsightsSummaryCardView: View {
                 if insights.isEmpty {
                     Text("No deterministic insights triggered")
                         .font(appDensity.font(.caption))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 } else {
                     ForEach(Array(insights.enumerated()), id: \.offset) { _, insight in
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "chart.line.uptrend.xyaxis")
                                 .font(appDensity.font(.caption2))
-                                .foregroundStyle(Color(.statusInfo))
+                                .foregroundStyle(ThemeToken.info)
                                 .padding(.top, 2)
                             Text(insight)
                                 .font(appDensity.font(.caption))
@@ -171,7 +171,7 @@ struct StickyLookupSummaryView: View {
                     HStack(spacing: 8) {
                         Label(primaryIP, systemImage: "network")
                             .font(appDensity.font(.caption))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                         Spacer(minLength: 6)
                         AppCopyButton(value: primaryIP, label: "Copy IP")
                     }
@@ -197,7 +197,7 @@ struct LookupProgressOverviewView: View {
                         .foregroundStyle(.primary)
                     Text(steps.isEmpty ? "Preparing requests" : steps.joined(separator: " • "))
                         .font(appDensity.font(.caption2))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 }
                 Spacer()
             }
@@ -225,16 +225,16 @@ struct LookupStatusBannerView: View {
         .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
     }
 
-    private var color: Color {
+    private var color: AnyShapeStyle {
         switch resultSource {
         case .live:
-            return Color(.statusPositive)
+            return AnyShapeStyle(ThemeToken.positive)
         case .cached:
-            return .secondary
+            return AnyShapeStyle(.secondary)
         case .mixed:
-            return Color(.statusWarning)
+            return AnyShapeStyle(ThemeToken.warning)
         case .snapshot:
-            return Color(.statusWarning)
+            return AnyShapeStyle(ThemeToken.warning)
         }
     }
 

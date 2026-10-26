@@ -37,11 +37,11 @@ struct WatchlistView: View {
                 Section("Refresh Progress") {
                     VStack(alignment: .leading, spacing: 8) {
                         ProgressView(value: Double(viewModel.batchCompletedCount), total: Double(max(viewModel.batchTotalCount, 1)))
-                            .tint(Color(.statusInfo))
+                            .tint(ThemeToken.info)
                         HStack {
                             Text(viewModel.batchProgressLabel)
                                 .font(appDensity.font(.caption))
-                                .foregroundStyle(Color(.appTextSecondary))
+                                .foregroundStyle(ThemeToken.textSecondary)
                             Spacer()
                             if viewModel.batchLookupRunning {
                                 Button("Cancel") {
@@ -58,7 +58,7 @@ struct WatchlistView: View {
                     }
                     .padding(.vertical, 4)
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             }
 
             if viewModel.filteredTrackedDomains.isEmpty {
@@ -71,15 +71,15 @@ struct WatchlistView: View {
                         showsCardBackground: false
                     )
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             } else {
                 if let limitMessage = FeatureAccessService.trackedDomainLimitMessage(currentCount: viewModel.trackedDomains.count) {
                     Section {
                         Text(limitMessage)
                             .font(appDensity.font(.caption))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
-                    .listRowBackground(Color(.appSurface))
+                    .themedListRowBackground(.surface)
                 }
 
                 if !pinnedDomains.isEmpty {
@@ -93,7 +93,7 @@ struct WatchlistView: View {
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.filteredTrackedDomains.map(\.id))
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .navigationTitle("Watchlist")
         .searchable(text: $viewModel.watchlistSearchText, prompt: "Search tracked domains")
         .toolbar {
@@ -180,14 +180,14 @@ struct WatchlistView: View {
                     Section {
                         Text("Adds the domain directly to your watchlist so monitoring can run without a prior inspection.")
                             .font(appDensity.font(.caption))
-                            .foregroundStyle(Color(.appTextSecondary))
+                            .foregroundStyle(ThemeToken.textSecondary)
                     }
 
                     if let addDomainError {
                         Section {
                             Text(addDomainError)
                                 .font(appDensity.font(.caption))
-                                .foregroundStyle(Color(.statusCritical))
+                                .foregroundStyle(ThemeToken.critical)
                         }
                     }
                 }
@@ -239,7 +239,7 @@ struct WatchlistView: View {
                                     .foregroundStyle(.primary)
                                 Text([view.tag, view.filter.title, view.sort.title].compactMap { $0 }.joined(separator: " • "))
                                     .font(.caption)
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
                             }
                         }
                     }
@@ -283,19 +283,19 @@ struct WatchlistView: View {
         .buttonStyle(.plain)
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             refreshButton(trackedDomain)
-                .tint(Color(.statusInfo))
+                .tint(ThemeToken.info)
             pinButton(trackedDomain)
-                .tint(Color(.statusWarning))
+                .tint(ThemeToken.warning)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             refreshButton(trackedDomain)
-                .tint(Color(.statusInfo))
+                .tint(ThemeToken.info)
             deleteButton(trackedDomain)
         }
         .contextMenu {
             rowMenu(trackedDomain)
         }
-        .listRowBackground(Color(.appSurface))
+        .themedListRowBackground(.surface)
     }
 
     @ViewBuilder
@@ -418,12 +418,12 @@ struct WatchlistRowView: View {
 
             Text("Updated \(trackedDomain.updatedAt.formatted(date: .abbreviated, time: .shortened))")
                 .font(appDensity.font(.caption2))
-                .foregroundStyle(Color(.appTextSecondary))
+                .foregroundStyle(ThemeToken.textSecondary)
 
             if let collaboration = trackedDomain.collaboration, collaboration.isShared {
                 Text("\(collaboration.ownership.title) • \(collaboration.permission.title)")
                     .font(appDensity.font(.caption2))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
             }
 
             ViewThatFits(in: .horizontal) {
@@ -431,19 +431,19 @@ struct WatchlistRowView: View {
                 VStack(alignment: .leading, spacing: 2) { monitoringMetadata }
             }
             .font(appDensity.font(.caption2))
-            .foregroundStyle(Color(.appTextSecondary))
+            .foregroundStyle(ThemeToken.textSecondary)
 
             indicatorRow
 
             if let note = trackedDomain.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
                 Text(note)
                     .font(appDensity.font(.caption))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
                     .lineLimit(2)
             } else if let summary = trackedDomain.lastChangeSummary {
                 Text(summary.message)
                     .font(appDensity.font(.caption))
-                    .foregroundStyle(Color(.appTextSecondary))
+                    .foregroundStyle(ThemeToken.textSecondary)
                     .lineLimit(2)
             }
         }
@@ -468,7 +468,7 @@ struct WatchlistRowView: View {
             if trackedDomain.isPinned {
                 Image(systemName: "pin.fill")
                     .font(.caption2)
-                    .foregroundStyle(Color(.statusWarning))
+                    .foregroundStyle(ThemeToken.warning)
             }
             Text(trackedDomain.domain)
                 .font(appDensity.font(.callout))
@@ -493,7 +493,7 @@ struct WatchlistRowView: View {
     @ViewBuilder
     private var statusBadge: some View {
         if isRefreshing {
-            AppStatusBadgeView(model: .init(title: "Refreshing", systemImage: "arrow.clockwise", foregroundColor: Color(.appTextSecondary), backgroundColor: Color(.appSurfaceElevated)))
+            AppStatusBadgeView(model: .init(title: "Refreshing", systemImage: "arrow.clockwise", foreground: .textSecondary, background: .surfaceElevated))
         } else {
             AppStatusBadgeView(model: AppStatusFactory.availability(trackedDomain.lastKnownAvailability))
         }
@@ -507,8 +507,8 @@ struct WatchlistRowView: View {
                     model: .init(
                         title: "Shared",
                         systemImage: "person.2.fill",
-                        foregroundColor: Color(.statusInfo),
-                        backgroundColor: Color(.statusInfoSurface)
+                        foreground: .info,
+                        background: .infoSurface
                     )
                 )
             }
@@ -525,11 +525,11 @@ struct WatchlistRowView: View {
         let days = trackedDomain.certificateDaysRemaining.map { "\($0)d" } ?? "Soon"
         switch trackedDomain.certificateWarningLevel {
         case .critical:
-            return .init(title: "Invalid \(days)", systemImage: "xmark.octagon.fill", foregroundColor: Color(.statusCritical), backgroundColor: Color(.statusCriticalSurface))
+            return .init(title: "Invalid \(days)", systemImage: "xmark.octagon.fill", foreground: .critical, background: .criticalSurface)
         case .warning:
-            return .init(title: "Expiring \(days)", systemImage: "exclamationmark.triangle.fill", foregroundColor: Color(.statusWarning), backgroundColor: Color(.statusWarningSurface))
+            return .init(title: "Expiring \(days)", systemImage: "exclamationmark.triangle.fill", foreground: .warning, background: .warningSurface)
         case .none:
-            return .init(title: "Valid", systemImage: "lock.fill", foregroundColor: Color(.statusPositive), backgroundColor: Color(.statusPositiveSurface))
+            return .init(title: "Valid", systemImage: "lock.fill", foreground: .positive, background: .positiveSurface)
         }
     }
 }
@@ -596,7 +596,7 @@ struct TrackedDomainDetailView: View {
                     isRefreshing: viewModel.refreshingTrackedDomainID == liveTrackedDomain.id
                 )
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
 
             Section {
                 Button {
@@ -678,13 +678,13 @@ struct TrackedDomainDetailView: View {
                     Label(liveTrackedDomain.collaboration?.isShared == true ? "Manage Share" : "Share Domain", systemImage: "person.2")
                 }
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
 
             if !liveTrackedDomain.tags.isEmpty {
                 Section("Tags") {
                     TagChipRowView(tags: liveTrackedDomain.tags)
                 }
-                .listRowBackground(Color(.appSurface))
+                .themedListRowBackground(.surface)
             }
 
             Section("Monitoring Status") {
@@ -698,7 +698,7 @@ struct TrackedDomainDetailView: View {
                     LabeledContent("Queued Alerts", value: "\(liveTrackedDomain.pendingMonitoringAlerts.count)")
                 }
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
 
             if let summary = viewModel.latestChangeSummary(for: liveTrackedDomain) {
                 Section("Latest Change Summary") {
@@ -726,7 +726,7 @@ struct TrackedDomainDetailView: View {
                 if latestSnapshots.isEmpty {
                     Text("No snapshots yet")
                         .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(Color(.appTextSecondary))
+                        .foregroundStyle(ThemeToken.textSecondary)
                 } else {
                     ForEach(latestSnapshots) { entry in
                         NavigationLink {
@@ -738,16 +738,16 @@ struct TrackedDomainDetailView: View {
                                     .foregroundStyle(.primary)
                                 Text(entry.changeSummary?.hasChanges == true ? "Changed" : "Snapshot")
                                     .font(.system(.caption2, design: .monospaced))
-                                    .foregroundStyle(Color(.appTextSecondary))
+                                    .foregroundStyle(ThemeToken.textSecondary)
                             }
                         }
                     }
                 }
             }
-            .listRowBackground(Color(.appSurface))
+            .themedListRowBackground(.surface)
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.appBackground))
+        .background(ThemeToken.background)
         .navigationTitle(liveTrackedDomain.domain)
         .onChange(of: viewModel.rerunNavigationToken) { _, _ in
             dismiss()
