@@ -190,6 +190,7 @@ struct ContentView: View {
             viewModel.clearPresentedResults()
         }
         .onChange(of: viewModel.bulkInput) { _, newValue in
+            viewModel.bulkInputError = nil
             guard inputMode == .bulk else { return }
             let normalized = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !normalized.isEmpty || viewModel.hasRun || !viewModel.batchResults.isEmpty else { return }
@@ -334,6 +335,13 @@ struct ContentView: View {
                         .background(Color(.appSurfaceElevated))
                         .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
                         .focused($focusedInputField, equals: .bulkDomains)
+
+                        if let bulkInputError = viewModel.bulkInputError {
+                            Text(bulkInputError)
+                                .font(appDensity.font(.caption))
+                                .foregroundStyle(Color(.statusCritical))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
 
                         Button {
                             focusedInputField = nil

@@ -322,3 +322,34 @@ struct InspectionMetadata: Equatable {
         previousSnapshotID = snapshot.previousSnapshotID
     }
 }
+
+/// Bulk input split into what will run and what will not.
+struct ParsedBulkInput: Equatable {
+    /// Valid domains, deduplicated, in the order they were written.
+    var domains: [String]
+    /// Entries that failed validation, as the user typed them.
+    var skipped: [String]
+
+    /// How many entries to name before falling back to a count. Naming them is
+    /// the point — "two were skipped" does not tell anyone which to fix — but a
+    /// pasted list of fifty typos should not become a wall of text.
+    private static let namedLimit = 5
+
+    /// What to tell the user, or `nil` when nothing was skipped.
+    var skippedMessage: String? {
+        guard !skipped.isEmpty else { return nil }
+
+        let named = skipped.prefix(Self.namedLimit).joined(separator: ", ")
+        let remainder = skipped.count - min(skipped.count, Self.namedLimit)
+        let list = remainder > 0 ? "\(named) and \(remainder) more" : named
+
+        if domains.isEmpty {
+            return skipped.count == 1
+                ? "\(list) is not a valid domain, so there is nothing to run."
+                : "None of these is a valid domain, so there is nothing to run: \(list)."
+        }
+        return skipped.count == 1
+            ? "Skipped \(list): not a valid domain."
+            : "Skipped \(skipped.count) entries that are not valid domains: \(list)."
+    }
+}

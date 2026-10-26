@@ -116,6 +116,9 @@ final class DomainViewModel {
     var domain: String = ""
     var bulkInput: String = ""
     var domainInputError: String?
+    /// What the bulk path skipped, for the same reason `domainInputError`
+    /// exists for the single one.
+    var bulkInputError: String?
 
     // MARK: Section state
 
@@ -1234,13 +1237,15 @@ final class DomainViewModel {
     }
 
     func runBulkLookup() {
-        let domains = parsedDomains(from: bulkInput)
-        guard !domains.isEmpty else { return }
-        guard FeatureAccessService.canRunBatch(domainCount: domains.count) else {
-            upgradePrompt = FeatureAccessService.upgradePromptForBatch(domainCount: domains.count)
+        let parsed = parsedBulkInput(from: bulkInput)
+        bulkInputError = parsed.skippedMessage
+
+        guard !parsed.domains.isEmpty else { return }
+        guard FeatureAccessService.canRunBatch(domainCount: parsed.domains.count) else {
+            upgradePrompt = FeatureAccessService.upgradePromptForBatch(domainCount: parsed.domains.count)
             return
         }
-        startBatchLookup(domains: domains, source: .manual)
+        startBatchLookup(domains: parsed.domains, source: .manual)
     }
 
     func refreshAllTrackedDomains() {
@@ -2118,14 +2123,33 @@ final class DomainViewModel {
         batchTask = nil
     }
 
-    private func parsedDomains(from input: String) -> [String] {
+    /// Splits bulk input into the domains that validate and the entries that do
+    /// not.
+    ///
+    /// The rejected entries are returned rather than dropped: they used to go
+    /// missing silently, so pasting ten domains with two typos ran eight and
+    /// said nothing about the other two (U5). Before !8 those entries ran and
+    /// failed visibly per section, and the single-lookup path has reported its
+    /// own error since — the asymmetry was the defect.
+    func parsedBulkInput(from input: String) -> ParsedBulkInput {
         let separators = CharacterSet(charactersIn: ",").union(.whitespacesAndNewlines)
         var seen = Set<String>()
+        var domains: [String] = []
+        var skipped: [String] = []
 
-        return input
-            .components(separatedBy: separators)
-            .compactMap { try? DomainName.validate($0).get() }
-            .filter { seen.insert($0).inserted }
+        for token in input.components(separatedBy: separators) {
+            // Whitespace between entries is not an entry.
+            guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            guard let domain = try? DomainName.validate(token).get() else {
+                skipped.append(token)
+                continue
+            }
+            if seen.insert(domain).inserted {
+                domains.append(domain)
+            }
+        }
+
+        return ParsedBulkInput(domains: domains, skipped: skipped)
     }
 
     private func runBatchLookup(domains: [String], source: BatchLookupSource) async {
