@@ -113,13 +113,13 @@ private struct DisplaySettingsView: View {
     var body: some View {
         Form {
             Section("Display") {
-                Picker("Appearance", selection: $storedAppearance) {
+                AdaptivePicker("Appearance", selection: $storedAppearance) {
                     ForEach(AppAppearance.allCases) { appearance in
                         Text(appearance.title).tag(appearance.rawValue)
                     }
                 }
 
-                Picker("Accent", selection: $storedAccent) {
+                AdaptivePicker("Accent", selection: $storedAccent) {
                     ForEach(AccentTheme.allCases) { accent in
                         Text(accent.title).tag(accent.rawValue)
                     }
@@ -134,7 +134,7 @@ private struct DisplaySettingsView: View {
                 .font(appDensity.font(.caption, design: .default))
                 .foregroundStyle(ThemeToken.textSecondary)
 
-                Picker("Density", selection: $storedDensity) {
+                AdaptivePicker("Density", selection: $storedDensity) {
                     ForEach(AppDensity.allCases) { density in
                         Text(density.title).tag(density.rawValue)
                     }
@@ -664,7 +664,7 @@ private struct DataPortabilitySettingsView: View {
     var body: some View {
         Form {
             Section("Import & Export") {
-                Picker("Import Mode", selection: $importMode) {
+                AdaptivePicker("Import Mode", selection: $importMode) {
                     ForEach(DataPortabilityImportMode.allCases) { mode in
                         Text(mode.title).tag(mode)
                     }

@@ -260,12 +260,16 @@ final class AccessibilityAuditTests: XCTestCase {
     /// build on findings that predate the coverage. They are a burndown list
     /// for #21, and the enforced set widens per screen as each one clears.
     ///
-    /// Monitoring Settings is the first to gate, on `.textClipped` alone: its
-    /// five clipped picker values are fixed (`AdaptivePicker`) and that
-    /// category is now empty on both runtimes. Its `dynamicType` findings stay
-    /// reported — they are reproducible but nothing was found that
-    /// distinguishes a row that reports from one that does not, and the rows
-    /// render correctly at every size. See `Docs/ACCESSIBILITY.txt`.
+    /// Monitoring Settings and Display gate on `.textClipped` alone: their
+    /// clipped picker values are fixed (`AdaptivePicker`) and that category is
+    /// now empty on both runtimes. Their `dynamicType` findings stay reported —
+    /// those land on a position rather than on the row they name, which
+    /// reordering proves, so no fix follows from them.
+    ///
+    /// Import & Export is not gated although its picker value is fixed too: its
+    /// one remaining clipped finding is the navigation title, which only a
+    /// shorter screen name would change. Same for History & Network, Scheduled
+    /// Reports and Data Management. See `Docs/ACCESSIBILITY.txt`.
     ///
     /// One launch rather than ten: re-selecting the Settings tab pops it back
     /// to root, so each destination is reached from a known place, and the
@@ -284,6 +288,7 @@ final class AccessibilityAuditTests: XCTestCase {
             "App Info"
         ]
         let enforcedPerScreen: [String: XCUIAccessibilityAuditType] = [
+            "Display": .textClipped,
             "Monitoring Settings": .textClipped
         ]
 

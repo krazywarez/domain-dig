@@ -142,7 +142,7 @@ Three deliberate carve-outs, each with its evidence:
 `enforcedAuditTypes` is what a fully cleared screen gets. A screen part-way
 through its burndown passes `enforcing:` to `audit` instead, naming only the
 categories it has cleared, so progress gates as it is made rather than waiting
-on the whole screen. Monitoring Settings is the first: `.textClipped` only.
+on the whole screen. Monitoring Settings and Display gate on `.textClipped`.
 
 Enforcement is a committed constant rather than a CI setting, for two reasons.
 Environment variables do not work: neither a plain `xcodebuild` env var nor a
@@ -360,12 +360,30 @@ the Settings table above overstate what is left:
 | `contrast` | 6 | Report-only by standing policy |
 | `elementDetection` | 1 | Not investigated |
 
-The actionable remainder is four clipped picker values — "Compact", "Default"
-and "System" on Display, and "Merge" on iCloud Sync — which are the same
-construct `AdaptivePicker` already fixes, on two screens outside that pass. The
-four navigation titles need a shorter screen name, which is a naming decision
-rather than a bug. Everything else either renders correctly or is already
-carved out.
+The actionable remainder was four clipped picker values — "Compact", "Default"
+and "System" on Display, and "Merge" on Import & Export — the same construct
+`AdaptivePicker` already fixes. (An earlier note put "Merge" on iCloud Sync;
+that was read off a sorted list pooled across screens. iCloud Sync has no
+clipped findings at all.)
+
+All four are now fixed, by converting the three Display pickers and the Import
+Mode picker. `textClipped` on Display goes from 3 to 0, so it joins Monitoring
+Settings in gating on that category. Import & Export keeps one clipped finding —
+its own navigation title — so it stays report-only despite its picker being
+fixed.
+
+That leaves, across the ten Settings destinations:
+
+| Finding | Where | Why it stays |
+| --- | --- | --- |
+| 4 clipped navigation titles | History & Network, Scheduled Reports, Import & Export, Data Management | Only a shorter screen name fixes it |
+| 21 `dynamicType` | all | Position-dependent, per the above |
+| 6 `contrast` | all | Report-only by standing policy |
+| 1 `elementDetection` | Local API | Not investigated |
+
+The same picker clipping is still reported on the integration editor —
+"Minimum Severity", "Warning", "Webhook" — which is covered by
+`testIntegrationEditor` rather than the Settings-destination sweep.
 
 ### What was done about it
 
