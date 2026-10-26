@@ -175,7 +175,7 @@ private struct HistoryNetworkSettingsView: View {
     var body: some View {
         Form {
             Section("History") {
-                Picker(
+                AdaptivePicker(
                     "Auto-prune",
                     selection: Binding(
                         get: { viewModel.historyAutoPruneOption },
@@ -193,7 +193,7 @@ private struct HistoryNetworkSettingsView: View {
             }
 
             Section("Network") {
-                Picker("Resolver", selection: $resolverOption) {
+                AdaptivePicker("Resolver", selection: $resolverOption) {
                     ForEach(DNSResolverOption.allCases) { option in
                         Text(option.title).tag(option)
                     }
@@ -212,7 +212,7 @@ private struct HistoryNetworkSettingsView: View {
                     }
                 }
 
-                Picker("Lookup profile", selection: $storedProfile) {
+                AdaptivePicker("Lookup profile", selection: $storedProfile) {
                     ForEach(InspectionProfile.allCases) { profile in
                         Text(profile.title).tag(profile.rawValue)
                     }
@@ -471,7 +471,7 @@ private struct MonitoringSettingsView: View {
                     )
                 )
 
-                Picker(
+                AdaptivePicker(
                     "Base Interval",
                     selection: Binding(
                         get: { MonitoringBaseInterval.nearest(to: viewModel.monitoringSettings.baseInterval) },
@@ -491,7 +491,7 @@ private struct MonitoringSettingsView: View {
                     )
                 )
 
-                Picker(
+                AdaptivePicker(
                     "Sensitivity",
                     selection: Binding(
                         get: { viewModel.monitoringSettings.sensitivity },
@@ -530,7 +530,7 @@ private struct MonitoringSettingsView: View {
                     ))
                 }
 
-                Picker(
+                AdaptivePicker(
                     "Domains",
                     selection: Binding(
                         get: { viewModel.monitoringSettings.scope },
@@ -570,7 +570,7 @@ private struct MonitoringSettingsView: View {
                     )
                 )
 
-                Picker(
+                AdaptivePicker(
                     "Notify For",
                     selection: Binding(
                         get: { viewModel.monitoringSettings.alertFilter },
@@ -608,7 +608,7 @@ private struct MonitoringSettingsView: View {
     }
 
     private func hourPicker(_ title: String, selection: Binding<Int>) -> some View {
-        Picker(title, selection: selection) {
+        AdaptivePicker(title, selection: selection) {
             ForEach(0..<24, id: \.self) { hour in
                 Text(Self.monitoringHourLabel(for: hour)).tag(hour)
             }

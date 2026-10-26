@@ -88,12 +88,18 @@ enum AccessibilityAuditHarness {
     /// unattributed contrast/dynamicType failures on rows that measure 6–7:1
     /// and render correctly. Until that behaves, the seeded screens report
     /// their burndown without gating CI.
+    ///
+    /// `enforcing` narrows the enforced set for one screen, so a screen whose
+    /// burndown is partly clear can gate on the categories it has cleared
+    /// while still reporting the rest. That is the ratchet at screen
+    /// granularity: `enforcedAuditTypes` is what a cleared screen gets.
     @discardableResult
     static func audit(
         _ app: XCUIApplication,
         screen: String,
         test: XCTestCase,
-        reportOnly: Bool = false
+        reportOnly: Bool = false,
+        enforcing: XCUIAccessibilityAuditType = enforcedAuditTypes
     ) throws -> Bool {
         var findings: [String] = []
         var timeout: Error?
@@ -125,7 +131,7 @@ enum AccessibilityAuditHarness {
                         return true
                     }
 
-                    let isEnforced = !reportOnly && !enforcedAuditTypes.intersection(issue.auditType).isEmpty
+                    let isEnforced = !reportOnly && !enforcing.intersection(issue.auditType).isEmpty
                     let marker = isEnforced ? "FAIL" : "report"
                     findings.append("[\(marker)][\(name(for: issue.auditType))] \(issue.compactDescription) — \(element)")
                     // true suppresses the finding, false reports it as a test failure.

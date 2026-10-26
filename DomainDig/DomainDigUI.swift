@@ -100,6 +100,47 @@ enum AppDensity: String, CaseIterable, Identifiable {
     }
 }
 
+/// A `Form` picker that moves its options to a pushed list at accessibility text
+/// sizes and stays a menu below them.
+///
+/// A menu picker gives its value whatever horizontal space the label does not
+/// use, and holds it to one line. At `AccessibilityXXXL` on an iPhone 16 that
+/// leaves "Every 12 Hours" rendering as "E…rs" and "Critical + Warnings" as
+/// "C…s" — the audit's `textClipped` findings on Monitoring Settings and
+/// History & Network. The pushed list puts the value on its own line under a
+/// full-width label.
+///
+/// Stacking the label above the menu was measured and does not fix it: the
+/// menu's value is one line whatever width it gets ("Criti…nings"). Neither
+/// does `fixedSize`, which the menu button ignores.
+struct AdaptivePicker<Value: Hashable, Options: View>: View {
+    private let title: String
+    private let selection: Binding<Value>
+    private let options: Options
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    init(_ title: String, selection: Binding<Value>, @ViewBuilder options: () -> Options) {
+        self.title = title
+        self.selection = selection
+        self.options = options()
+    }
+
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            picker.pickerStyle(.navigationLink)
+        } else {
+            picker.pickerStyle(.menu)
+        }
+    }
+
+    private var picker: some View {
+        Picker(title, selection: selection) {
+            options
+        }
+    }
+}
+
 /// Layout constants that are not density-dependent.
 enum AppLayout {
     /// The HIG minimum for an interactive control, and WCAG 2.5.8's floor.

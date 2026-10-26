@@ -137,6 +137,11 @@ Three deliberate carve-outs, each with its evidence:
    clipped/dynamic-type artifacts. Nothing disappears silently; see
    `noiseReason(for:)` for each rule's provenance.
 
+`enforcedAuditTypes` is what a fully cleared screen gets. A screen part-way
+through its burndown passes `enforcing:` to `audit` instead, naming only the
+categories it has cleared, so progress gates as it is made rather than waiting
+on the whole screen. Monitoring Settings is the first: `.textClipped` only.
+
 Enforcement is a committed constant rather than a CI setting, for two reasons.
 Environment variables do not work: neither a plain `xcodebuild` env var nor a
 `TEST_RUNNER_`-prefixed build setting reaches the UI test process, so the toggle
@@ -196,6 +201,120 @@ settings forms with the most rows.
 App Info is the inverse: 17 findings, 2 real, the rest system-field and
 unattributed artefacts already characterised in `noiseReason(for:)`.
 
+The counts above are the floor tier (iPhone 16, iOS 18.6). The current tier
+reports fewer on every screen — Monitoring Settings 13 against 8, App Info 17
+against 5 — which is the asymmetry the coverage table below already records,
+measured here across ten more screens.
+
+## Menu pickers clip their value at accessibility text sizes
+
+A `Picker` in a `Form` renders as a menu button: the label takes the width it
+needs and the value gets what is left, on one line. At `AccessibilityXXXL` on
+an iPhone 16 that leaves nothing. Measured on Monitoring Settings before the
+fix:
+
+| Row | Value | Rendered |
+| --- | --- | --- |
+| Base Interval | Every 12 Hours | `E…rs` |
+| Notify For | Critical + Warnings | `C…s` |
+| Domains | All Tracked | `A…d` |
+| Sensitivity | Medium | `Medium` |
+
+Three treatments were measured. Only the third works:
+
+- **`.fixedSize(horizontal: false, vertical: true)`** — no change. The menu
+  button ignores it.
+- **Stacking the label above the menu** in a `VStack` at accessibility sizes —
+  the label gets full width, but the value still truncates
+  (`Criti…nings`). The menu's value is one line whatever width it gets.
+- **`.pickerStyle(.navigationLink)`** — the row becomes label over value with a
+  chevron, both in full, and the options move to a pushed list. This is what
+  iOS Settings itself does at these sizes.
+
+`AdaptivePicker` (`DomainDigUI.swift`) applies the third only when
+`dynamicTypeSize.isAccessibilitySize`, and stays a menu below that, so the
+interaction is unchanged for anyone not using accessibility text. It replaces
+the eight `Picker`s on History & Network and Monitoring Settings, the two
+quiet-hours pickers among them — those render only while the toggle is on, so
+the audit has never seen them, but they are the same construct.
+
+Result on the floor tier: `textClipped` on Monitoring Settings goes from 5 to
+0, and on History & Network from 3 to 1. Both screens are clipping-free on the
+current tier. Monitoring Settings is therefore the first Settings destination
+to gate rather than report, on `.textClipped` alone — the `enforcing:` argument
+on `AccessibilityAuditHarness.audit` is the ratchet at screen granularity, and
+it passes on both tiers.
+
+The same clipping is still reported on Display ("Compact", "Default",
+"System") and iCloud Sync ("Merge"), which are the same construct on screens
+outside this pass.
+
+## The remaining `dynamicType` findings on Form rows are unexplained
+
+Every `Picker`, `Toggle` and `LabeledContent` label on these two screens
+reports `dynamicType` "font sizes are partially unsupported", and the picker
+fix above does not change that. Eight on Monitoring Settings, five named on
+History & Network, the same names on both runtimes.
+
+They are reproducible — identical on the floor and current tiers, and
+identical across repeat runs — but nothing was found that distinguishes a row
+that reports from one that does not:
+
+- **The same constructs report nothing.** `Text`, `Text` with the density
+  caption font, `Toggle` and `LabeledContent` inserted as probe rows into the
+  same `Form` all audit clean.
+- **Inserting rows moves the findings.** With five probe rows above them,
+  "Adaptive Monitoring" began reporting and "Enable Background Monitoring"
+  stopped, and "Background Refresh" and "Notification Access" switched from
+  `dynamicType` to `contrast`. An element's font scalability does not change
+  because rows were inserted above it, so whatever the check measures depends
+  on where the row sits, not on the row.
+- **The rows render correctly.** Captured at `XXL` and `AccessibilityXXXL`:
+  every named label scales, wraps and reads in full. Nothing is truncated and
+  nothing stops growing.
+
+So the finding does not point at a defect in the label it names, and no fix
+follows from it. They stay reported rather than suppressed: a `noiseReason`
+rule broad enough to cover them would also hide a real regression on any Form
+row. `dynamicType` is not enforced on these screens.
+
+## The Settings root fails the enforced audit on the current runtime
+
+Found while measuring the above, and **not caused by it** — reproduced with the
+change stashed, on `main` at `02a3463`:
+
+```
+settings: 7 finding(s)
+  • [FAIL][dynamicType] ... — "Local API"
+  • [FAIL][dynamicType] ... — "Monitoring Settings"
+  • [FAIL][dynamicType] ... — "iCloud Sync"
+```
+
+`testSettingsScreen` is an enforced test, and this fails it on iOS 27.0. The
+floor tier passes. The pre-push hook runs the floor tier only and there is no
+CI, so nothing has been looking at the current tier since the hook was wired
+up.
+
+The three are the same unexplained finding as above: all twelve rows in the
+Settings root are an identical `NavigationLink("Title") { … }`, the three named
+are consecutive middle rows, and the set is the same on repeat runs. It needs a
+decision — suppress, or widen the hook to both tiers and accept a red gate —
+rather than a quiet carve-out.
+
+## Long navigation titles clip
+
+`textClipped` is reported against the navigation title of exactly the screens
+whose title is 15 characters or more: History & Network, Scheduled Reports,
+Import & Export, Data Management. The short ones — Display, Monitoring, Local
+API, iCloud Sync — are clean. The large title renders in full at default size;
+it is the growth at larger sizes that does not fit, and SwiftUI does not wrap a
+large title.
+
+The only remedy in app code is a shorter title, which for these four would mean
+naming the screen something other than what the Settings row that opens it
+says. Left as reported. It is the one `textClipped` finding still open on
+History & Network, and why that screen stays report-only.
+
 ## Recent searches are never audited
 
 The empty-state suite launches a fresh install, so Inspect's recent-searches
@@ -241,41 +360,6 @@ a reset in the body would run after the first read.
 Measured: the same full `xcodebuild test` that reported one enforced failure
 reports none, `AccessibilityAuditTests` goes from 13 of 14 passing to 14, and
 `tracked-domains` is back to a single characterised-noise finding.
-
-## Recent searches are never audited
-
-The empty-state suite launches a fresh install, so Inspect's recent-searches
-section — which only appears once a lookup has been run — is never in the tree
-when the audit walks it. Driving one real lookup and re-auditing surfaced four
-findings in it on iOS 27.0:
-
-- `dynamicType` on the "RECENT" header and on the "Clear" button
-- `hitRegion` too small on "Clear"
-- `sufficientElementDescription`, "label not human-readable", on a domain chip
-
-These are latent rather than new: nothing in the section changed when Inspect
-moved to a `List`. They need a seeded recent-searches fixture to be audited
-properly, which the seed harness does not have.
-
-## The empty-state screens are not reliably empty
-
-`AccessibilityAuditHarness.launch` only adds launch arguments; it never resets
-the app's store. A `seeded: true` test therefore leaves its fixtures behind, and
-any later non-seeded launch audits a populated app rather than an empty one.
-
-Measured: `testTrackedDomainsScreen` reports 1 finding and passes against a
-clean store, and 6 findings — including an enforced
-`[FAIL][dynamicType]` on `EditButton` — when a seeded test has run before it in
-the same invocation. Nothing about the screen changed between the two.
-
-So the enforced suite's result depends on execution order, which means the
-pre-push hook can report a failure that a re-run on a fresh simulator does not.
-When a `[FAIL]` appears, check it against a clean store before believing it.
-
-Fixing it properly means the harness resetting the app's store between
-launches — a launch argument that wipes the suite's `UserDefaults` domain
-would do it, and would also let the recent-searches section below be audited on
-purpose rather than by accident.
 
 ## Why the floor runtime needs its own run
 

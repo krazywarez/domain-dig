@@ -258,7 +258,14 @@ final class AccessibilityAuditTests: XCTestCase {
     /// Report-only for the same reason as Integrations: they have never been
     /// through the ratchet, so gating them on first contact would fail the
     /// build on findings that predate the coverage. They are a burndown list
-    /// for #21, and `enforcedAuditTypes` widens once they are clear.
+    /// for #21, and the enforced set widens per screen as each one clears.
+    ///
+    /// Monitoring Settings is the first to gate, on `.textClipped` alone: its
+    /// five clipped picker values are fixed (`AdaptivePicker`) and that
+    /// category is now empty on both runtimes. Its `dynamicType` findings stay
+    /// reported — they are reproducible but nothing was found that
+    /// distinguishes a row that reports from one that does not, and the rows
+    /// render correctly at every size. See `Docs/ACCESSIBILITY.txt`.
     ///
     /// One launch rather than ten: re-selecting the Settings tab pops it back
     /// to root, so each destination is reached from a known place, and the
@@ -275,6 +282,9 @@ final class AccessibilityAuditTests: XCTestCase {
             "Import & Export",
             "Data Management",
             "App Info"
+        ]
+        let enforcedPerScreen: [String: XCUIAccessibilityAuditType] = [
+            "Monitoring Settings": .textClipped
         ]
 
         let app = AccessibilityAuditHarness.launch()
@@ -296,7 +306,15 @@ final class AccessibilityAuditTests: XCTestCase {
                 .lowercased()
                 .replacingOccurrences(of: " & ", with: "-")
                 .replacingOccurrences(of: " ", with: "-")
-            if try !AccessibilityAuditHarness.audit(app, screen: screen, test: self, reportOnly: true) {
+            let enforced = enforcedPerScreen[destination]
+            let audited = try AccessibilityAuditHarness.audit(
+                app,
+                screen: screen,
+                test: self,
+                reportOnly: enforced == nil,
+                enforcing: enforced ?? []
+            )
+            if !audited {
                 unaudited.append(destination)
             }
         }
