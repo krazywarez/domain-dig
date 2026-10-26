@@ -167,10 +167,11 @@ the build on findings that predate the coverage. What they report on iOS 27.0:
 | Integrations | 1: `dynamicType` on "Process Queue Now" |
 | Integration editor | 7: `contrast` on "Cancel", "Save", "DNS Changed", "Routing Rules"; `dynamicType` on "Cancel" and "Save"; one characterised system-field-placeholder clip |
 
-"Cancel" and "Save" are the editor's toolbar buttons, which are plain `Button`s
-rather than density-aware text — that is why they appear in both categories.
-They go on the #21 burndown; `enforcedAuditTypes` widens to cover these screens
-once they are clear.
+"Cancel" and "Save" are the editor's toolbar buttons, plain `Button`s with no
+density-aware font, which is why they appear in both categories. Note that for
+`dynamicType` that is **not** the cause — see "Already-scalable fonts report
+too" below — so only the `contrast` half of their findings is a real question.
+`enforcedAuditTypes` widens to cover these screens once they are clear.
 
 The other ten destinations are covered by `testSettingsDestinations`, also
 report-only. One launch audits all of them: re-selecting the Settings tab pops
@@ -196,9 +197,9 @@ test passes report-only rather than needing a carve-out:
 | iCloud Sync | 1 | 2 |
 
 By category the 43 are: `dynamicType` 21, `textClipped` 15, `contrast` 6,
-`elementDetection` 1. The shape matches the rest of the burndown — text that
-does not scale and text that clips at large sizes, concentrated in the
-settings forms with the most rows.
+`elementDetection` 1. Read that breakdown with the reclassification below: the
+`dynamicType` column turned out not to be a list of defects, so "43 real"
+overstates what is actually left to fix.
 
 App Info is the inverse: 17 findings, 2 real, the rest system-field and
 unattributed artefacts already characterised in `noiseReason(for:)`.
@@ -308,6 +309,63 @@ Two earlier observations fit this and no other explanation:
   `dynamicType` to `contrast` — pushed from the band into the bar.
 - **The rows render correctly.** Captured at `XXL` and `AccessibilityXXXL`,
   every named label scales, wraps and reads in full.
+
+### Confirmed across the rest of the burndown
+
+The Settings root is not a special case. Reordering two more screens moves the
+verdict off the labels that had it and onto the labels that take their place.
+
+**Monitoring Settings** — "Notify For", "Background Refresh" and "Notification
+Access" moved from the bottom of the section to the top. Eight findings before,
+eight after, and five of the names changed:
+
+| Row | Before | After |
+| --- | --- | --- |
+| Background Refresh | reports | **clean** (moved to slot 2) |
+| Notification Access | reports | **clean** (moved to slot 3) |
+| Enable Background Monitoring | clean | **reports** (pushed to slot 4) |
+| Adaptive Monitoring | clean | **reports** (pushed to slot 6) |
+| Base Interval, Sensitivity, Quiet Hours, Domains, Local Alerts, Notify For | reports | reports |
+
+**History & Network** — the History and Network sections swapped. "Allow
+third-party enrichment" stopped reporting when its section moved to the top;
+five findings became four, with no change to that toggle.
+
+Nothing about any of those labels changed — not the text, not the font, not the
+construct. Four of them flipped verdict in each direction purely by moving.
+
+### Already-scalable fonts report too
+
+`EmptyStateCardView` sets `appDensity.font(...)` on its title, message and
+suggestion — `Font.system(textStyle:)`, scalable by construction — and applies
+`.fixedSize(horizontal: false, vertical: true)` so each one wraps and grows.
+All three still report `dynamicType` on Scheduled Reports and Monitoring Log.
+
+That rules out the obvious reading of these findings, which is that the named
+text uses a non-scaling font. **Earlier notes in this file and in the issue
+suggested the integration editor's plain `Button("Cancel")` / `Button("Save")`
+report `dynamicType` because they lack a density-aware font, and that adding one
+is a two-line fix. That is not supported.** Text that already has a
+density-aware font reports just the same.
+
+### What this means for the #21 burndown
+
+The `dynamicType` column is not a list of defects, so the 43 "real" findings in
+the Settings table above overstate what is left:
+
+| Category | Count | Status |
+| --- | --- | --- |
+| `dynamicType` | 21 | Not actionable — position-dependent, per the above |
+| `textClipped` | 15 | 7 fixed by `AdaptivePicker`; 4 are long navigation titles; **4 remain** |
+| `contrast` | 6 | Report-only by standing policy |
+| `elementDetection` | 1 | Not investigated |
+
+The actionable remainder is four clipped picker values — "Compact", "Default"
+and "System" on Display, and "Merge" on iCloud Sync — which are the same
+construct `AdaptivePicker` already fixes, on two screens outside that pass. The
+four navigation titles need a shorter screen name, which is a naming decision
+rather than a bug. Everything else either renders correctly or is already
+carved out.
 
 ### What was done about it
 
