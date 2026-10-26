@@ -109,6 +109,43 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(FeatureAccessService.upgradeMessage(for: .accentTheme), "Available in Pro+")
     }
 
+    // MARK: App icons
+
+    /// The alternate icon names are strings matched against the asset catalog
+    /// at runtime, so a typo fails the same silent way a wrong colorset name
+    /// would — `setAlternateIconName` just reports an error and the icon stays
+    /// put. This is the parity check for them.
+    func testEveryAccentsIconNameHasAnIconSet() throws {
+        let catalog = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("DomainDig/Assets.xcassets")
+        let sets = Set(
+            try FileManager.default.contentsOfDirectory(atPath: catalog.path)
+                .filter { $0.hasSuffix(".appiconset") }
+                .map { String($0.dropLast(".appiconset".count)) }
+        )
+
+        for accent in AccentTheme.allCases {
+            guard let name = accent.alternateIconName else { continue }
+            XCTAssertTrue(sets.contains(name), "\(accent) names '\(name)', which is not an icon set")
+        }
+
+        // And the other direction: an icon set nothing selects is dead weight
+        // in the bundle.
+        let named = Set(AccentTheme.allCases.compactMap(\.alternateIconName)).union(["AppIcon"])
+        XCTAssertEqual(sets.subtracting(named), [], "these icon sets are unreachable")
+    }
+
+    /// The default accent uses the primary icon, which is what `nil` means to
+    /// `setAlternateIconName`.
+    func testTheDefaultAccentUsesThePrimaryIcon() {
+        XCTAssertNil(AccentTheme.default.alternateIconName)
+        for accent in AccentTheme.allCases where accent != .default {
+            XCTAssertNotNil(accent.alternateIconName, "\(accent) should have its own icon")
+        }
+    }
+
     // MARK: Badge models carry tokens
 
     /// The badges are built outside a view body, which is why their colours are

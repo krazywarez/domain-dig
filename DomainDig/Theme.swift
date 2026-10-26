@@ -134,6 +134,45 @@ nonisolated enum AccentTheme: String, Codable, CaseIterable, Identifiable, Senda
     }
 }
 
+extension AccentTheme {
+    /// The alternate app icon for this accent, or `nil` for the primary one.
+    ///
+    /// The names match the asset catalog's icon sets, which
+    /// `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` lists.
+    var alternateIconName: String? {
+        switch self {
+        case .default: return nil
+        case .graphite: return "AppIconGraphite"
+        case .forest: return "AppIconForest"
+        case .plum: return "AppIconPlum"
+        }
+    }
+}
+
+/// Keeps the home-screen icon on whichever accent is in force.
+///
+/// The icon follows the accent rather than being a second picker: iOS shows its
+/// own "You have changed the icon" alert on every change and there is no public
+/// way to suppress it, so two pickers would mean two alerts for what a user
+/// thinks of as one choice.
+@MainActor
+enum AppIconController {
+    /// Idempotent, so it is safe to call on launch as well as on change —
+    /// which is what reverts the icon when a lapsed tier drops the accent back
+    /// to default.
+    static func apply(_ accent: AccentTheme) {
+        guard UIApplication.shared.supportsAlternateIcons else { return }
+
+        let desired = accent.alternateIconName
+        guard UIApplication.shared.alternateIconName != desired else { return }
+
+        UIApplication.shared.setAlternateIconName(desired) { error in
+            guard let error else { return }
+            DomainDebugLog.error("AppIcon.setFailed name=\(desired ?? "primary") error=\(error.localizedDescription)")
+        }
+    }
+}
+
 nonisolated private struct ThemeKey: EnvironmentKey {
     static let defaultValue = Theme.default
 }

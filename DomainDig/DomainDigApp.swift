@@ -38,6 +38,8 @@ struct DomainDigApp: App {
             RootTabView(viewModel: viewModel)
                 .environment(\.appDensity, AppDensity(rawValue: density) ?? .compact)
                 .environment(\.theme, selectedAccent.theme)
+                .task { AppIconController.apply(selectedAccent) }
+                .onChange(of: accent) { _, _ in AppIconController.apply(selectedAccent) }
                 // So standard controls pick the accent up too, not only the
                 // views that name a token.
                 .tint(selectedAccent == .default ? nil : selectedAccent.theme.accentFill)

@@ -184,6 +184,26 @@ These are latent rather than new: nothing in the section changed when Inspect
 moved to a `List`. They need a seeded recent-searches fixture to be audited
 properly, which the seed harness does not have.
 
+## The empty-state screens are not reliably empty
+
+`AccessibilityAuditHarness.launch` only adds launch arguments; it never resets
+the app's store. A `seeded: true` test therefore leaves its fixtures behind, and
+any later non-seeded launch audits a populated app rather than an empty one.
+
+Measured: `testTrackedDomainsScreen` reports 1 finding and passes against a
+clean store, and 6 findings — including an enforced
+`[FAIL][dynamicType]` on `EditButton` — when a seeded test has run before it in
+the same invocation. Nothing about the screen changed between the two.
+
+So the enforced suite's result depends on execution order, which means the
+pre-push hook can report a failure that a re-run on a fresh simulator does not.
+When a `[FAIL]` appears, check it against a clean store before believing it.
+
+Fixing it properly means the harness resetting the app's store between
+launches — a launch argument that wipes the suite's `UserDefaults` domain
+would do it, and would also let the recent-searches section below be audited on
+purpose rather than by accident.
+
 ## Why the floor runtime needs its own run
 
 **Audit coverage is not nested across OS versions.** Each runtime reports
