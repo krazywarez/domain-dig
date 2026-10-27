@@ -11,7 +11,7 @@ enum AppLinks {
 
     static let sourceCode = url("https://github.com/krazywarez/domain-dig")
     static let documentation = url("https://github.com/krazywarez/domain-dig#readme")
-    static let privacyPolicy = url("https://krz.sh/domaindig/privacy-policy/")
+    static let privacyPolicy = url("https://krz.sh/privacy/domain-dig/")
     static let supportEmail = "root@krz.sh"
 
     static var appStoreListing: URL { url("https://apps.apple.com/app/id\(appStoreID)") }
