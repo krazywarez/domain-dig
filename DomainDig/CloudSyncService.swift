@@ -661,7 +661,7 @@ final class CloudSyncService {
     /// Returns the server-assigned modification date of every record the push
     /// saved, keyed by record name. Those dates are what the next sync orders
     /// its conflicts by.
-    private func pushMergedPayload(_ payload: SyncPayload) async throws -> [String: Date] {
+    private func pushMergedPayload(_ payload: SyncPayload, now: Date = Date()) async throws -> [String: Date] {
         guard let privateDatabase = cloudKitDatabase(in: .privateDatabase) else {
             throw CloudSyncRuntimeError.missingEntitlement
         }
@@ -698,7 +698,20 @@ final class CloudSyncService {
         privateRecordsToSave.append(makeMonitoringSettingsRecord(payload.monitoringSettings.value))
         privateRecordsToSave.append(contentsOf: payload.notesByDomain.values.map { makeDomainNoteRecord($0.value) })
         privateRecordsToSave.append(contentsOf: payload.historyMetadataByDomain.values.map { makeHistoryMetadataRecord($0.value) })
-        privateRecordsToSave.append(contentsOf: payload.tombstones.map { makeTombstoneRecord($0.value) })
+        // Expired tombstones are deleted from the zone rather than re-saved;
+        // saving and deleting the same record in one operation would contradict
+        // itself. The rows they refer to are still deleted below, so the row
+        // goes before the record that remembers it did.
+        let agedTombstones = CloudSyncMerge.partitionedTombstones(payload.tombstones, now: now)
+        privateRecordsToSave.append(contentsOf: agedTombstones.kept.map { makeTombstoneRecord($0.value) })
+        for tombstone in agedTombstones.expired.map(\.value) {
+            recordIDsToDelete.append(
+                CKRecord.ID(
+                    recordName: tombstoneRecordName(for: tombstone.entityType, identifier: tombstone.identifier),
+                    zoneID: customZoneID
+                )
+            )
+        }
 
         for tombstone in payload.tombstones.map(\.value) {
             switch tombstone.entityType {
@@ -849,8 +862,11 @@ final class CloudSyncService {
         return tombstones
     }
 
-    private func saveTombstones(_ tombstones: [SyncRow<SyncTombstone>]) {
-        if let data = try? encoder.encode(CloudSyncMerge.newestTombstones(tombstones).map(\.value)) {
+    private func saveTombstones(_ tombstones: [SyncRow<SyncTombstone>], now: Date = Date()) {
+        // Dropped locally as well as in the zone: a tombstone kept here would be
+        // re-uploaded on the next push, right after that push deleted it.
+        let kept = CloudSyncMerge.partitionedTombstones(tombstones, now: now).kept
+        if let data = try? encoder.encode(CloudSyncMerge.newestTombstones(kept).map(\.value)) {
             defaults.set(data, forKey: StorageKey.tombstones)
         }
     }

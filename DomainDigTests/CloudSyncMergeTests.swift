@@ -198,6 +198,95 @@ final class CloudSyncMergeTests: XCTestCase {
         XCTAssertNil(updated.first?.value.lastKnownAvailability)
     }
 
+    // MARK: Tombstone retention
+
+    /// The window is what stops the zone growing without bound. A tombstone
+    /// older than it is deleted from the zone; everything newer stays, because
+    /// forgetting a deletion resurrects the row.
+    func testATombstoneOlderThanTheWindowExpires() {
+        let now = at(0)
+        let old = tombstoneRow(.trackedDomain, "old.example", serverDate: now.addingTimeInterval(-400 * 86_400), deviceDate: now.addingTimeInterval(-400 * 86_400))
+        let recent = tombstoneRow(.trackedDomain, "recent.example", serverDate: now.addingTimeInterval(-10 * 86_400), deviceDate: now.addingTimeInterval(-10 * 86_400))
+
+        let partitioned = CloudSyncMerge.partitionedTombstones([old, recent], now: now)
+
+        XCTAssertEqual(partitioned.kept.map(\.value.identifier), ["recent.example"])
+        XCTAssertEqual(partitioned.expired.map(\.value.identifier), ["old.example"])
+    }
+
+    /// A tombstone exactly on the boundary is kept. Of the two mistakes
+    /// available, resurrecting a row the user deleted is the worse one — the
+    /// same tie-break `applyTrackedDomainTombstones` makes.
+    func testATombstoneExactlyOnTheBoundaryIsKept() {
+        let now = at(0)
+        let boundary = tombstoneRow(
+            .trackedDomain,
+            "boundary.example",
+            serverDate: now.addingTimeInterval(-CloudSyncMerge.tombstoneRetention),
+            deviceDate: now.addingTimeInterval(-CloudSyncMerge.tombstoneRetention)
+        )
+
+        let partitioned = CloudSyncMerge.partitionedTombstones([boundary], now: now)
+
+        XCTAssertEqual(partitioned.kept.map(\.value.identifier), ["boundary.example"])
+        XCTAssertTrue(partitioned.expired.isEmpty)
+    }
+
+    /// Workflows carry tombstones too, and the window applies to the record
+    /// regardless of what it refers to.
+    func testTheWindowAppliesToWorkflowTombstones() {
+        let now = at(0)
+        let old = tombstoneRow(.workflow, "flow-1", serverDate: now.addingTimeInterval(-400 * 86_400), deviceDate: now.addingTimeInterval(-400 * 86_400))
+
+        XCTAssertEqual(
+            CloudSyncMerge.partitionedTombstones([old], now: now).expired.map(\.value.identifier),
+            ["flow-1"]
+        )
+    }
+
+    /// Nothing is dropped on a device that has only ever deleted rows
+    /// recently, which is the common case and must stay free of churn.
+    func testRecentDeletionsAreAllKept() {
+        let now = at(0)
+        let rows = (1...5).map { index in
+            tombstoneRow(
+                .trackedDomain,
+                "row-\(index).example",
+                serverDate: now.addingTimeInterval(-Double(index) * 86_400),
+                deviceDate: now.addingTimeInterval(-Double(index) * 86_400)
+            )
+        }
+
+        let partitioned = CloudSyncMerge.partitionedTombstones(rows, now: now)
+
+        XCTAssertEqual(partitioned.kept.count, 5)
+        XCTAssertTrue(partitioned.expired.isEmpty)
+    }
+
+    /// The deletion is still only on this device, so ageing it out would throw
+    /// away the deletion rather than a record of one — and the row would come
+    /// back from another device on the next sync.
+    func testADeletionTheServerHasNeverSeenNeverExpires() {
+        let now = at(0)
+        let unpushed = tombstoneRow(
+            .trackedDomain,
+            "offline.example",
+            serverDate: nil,
+            deviceDate: now.addingTimeInterval(-4_000 * 86_400)
+        )
+
+        let partitioned = CloudSyncMerge.partitionedTombstones([unpushed], now: now)
+
+        XCTAssertEqual(partitioned.kept.map(\.value.identifier), ["offline.example"])
+        XCTAssertTrue(partitioned.expired.isEmpty)
+    }
+
+    /// A year, stated as a test so a change to the constant is a deliberate
+    /// one rather than a silent shortening of everyone's safe offline window.
+    func testTheRetentionWindowIsAYear() {
+        XCTAssertEqual(CloudSyncMerge.tombstoneRetention, 365 * 24 * 60 * 60)
+    }
+
     // MARK: Fixtures
 
     private func at(_ offset: TimeInterval) -> Date {

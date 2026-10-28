@@ -102,6 +102,58 @@ enum CloudSyncMerge {
     /// How many tombstones the local ledger keeps.
     static let tombstoneLedgerLimit = 200
 
+    /// How long a tombstone record stays in the zone before it is deleted.
+    ///
+    /// Any retention shorter than a device's longest gap between syncs
+    /// resurrects rows it deleted, because the merge rule is
+    /// `row.updatedAt > tombstone.deletedAt` and a forgotten deletion loses to
+    /// a row that is still being synced. A year is chosen to be longer than any
+    /// plausible gap for a device still in use.
+    ///
+    /// The alternative, acknowledging each device's last sync so nothing is
+    /// guessed, needs a production CloudKit schema addition, a device identity
+    /// that survives reinstalls, acknowledgement for `CKShare` participants the
+    /// owner cannot enumerate — and still a window for a device that goes
+    /// silent forever, or one dead device pins every tombstone. It reduces to
+    /// this with more moving parts.
+    ///
+    /// Note that the ledger limit above is already the same trade expressed as
+    /// a count: a device past 200 deletions drops its oldest tombstones with no
+    /// acknowledgement from anyone.
+    static let tombstoneRetention: TimeInterval = 365 * 24 * 60 * 60
+
+    /// Splits tombstones into the ones still inside the retention window and
+    /// the ones whose record can be deleted from the zone.
+    ///
+    /// **A tombstone the server has never seen never expires**, whatever its
+    /// date. No server date means the deletion is still only on this device, so
+    /// ageing it out would discard the deletion itself rather than a record of
+    /// it — a device offline past the window would hand its deleted rows back
+    /// on the next sync. Only a deletion the zone has held can be forgotten,
+    /// which also makes the window mean what it says: a year during which every
+    /// online device had the chance to see it.
+    ///
+    /// A tombstone exactly at the boundary is kept: of the two possible
+    /// mistakes, resurrecting a row the user deleted is the worse one, which is
+    /// the same tie-break `applyTrackedDomainTombstones` makes.
+    static func partitionedTombstones(
+        _ tombstones: [SyncRow<SyncTombstone>],
+        now: Date,
+        retention: TimeInterval = tombstoneRetention
+    ) -> (kept: [SyncRow<SyncTombstone>], expired: [SyncRow<SyncTombstone>]) {
+        let cutoff = now.addingTimeInterval(-retention)
+        var kept: [SyncRow<SyncTombstone>] = []
+        var expired: [SyncRow<SyncTombstone>] = []
+        for tombstone in tombstones {
+            if tombstone.orderKey.serverDate != nil, tombstone.value.deletedAt < cutoff {
+                expired.append(tombstone)
+            } else {
+                kept.append(tombstone)
+            }
+        }
+        return (kept, expired)
+    }
+
     // MARK: Rows
 
     static func mergeTrackedDomains(
