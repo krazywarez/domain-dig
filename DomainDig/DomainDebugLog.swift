@@ -1,7 +1,14 @@
 import Foundation
 import os
 
-enum DomainDebugLog {
+/// Nonisolated because nothing here needs the main actor: `enabled` is a
+/// compile-time constant and `Logger` is `Sendable` and thread-safe. Without
+/// this the project-wide `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` makes it
+/// main-actor-isolated, so a nonisolated caller — a UIKit completion handler,
+/// say — cannot log the failure it was handed without hopping actors to write
+/// one line. `AppIconController` had exactly that, as a Release-only warning
+/// the Debug build did not show.
+nonisolated enum DomainDebugLog {
 #if DEBUG
     static let enabled = true
 #else
