@@ -33,6 +33,21 @@ worst of those three is shown:
 Each status foreground has a matching `…Surface` colour for the fill behind it,
 paired through `AppStatusTone`.
 
+**That table is enforced, not just recorded.** `PaletteContrastTests` reads the
+colorsets, computes WCAG relative luminance, and asserts every status
+foreground clears 4.5:1 on the page, on a card, and on its own badge fill, in
+light and dark — the three surfaces `AppStatusBadgeView` can draw it on. It
+covers `AppTextSecondary` on all three surfaces too, and `AppOnAccent` on
+`StatusInfo`, which is the selected Dashboard chip. Until it existed, the
+harness called this palette "the actual guard against contrast regressions"
+while nothing checked it.
+
+One pairing is deliberately not asserted. `AppOnAccent` over `AccentFill`
+measures **2.78:1** in dark — black on `#0040DD` — but nothing draws it:
+`accentFill` goes to `.tint`, where iOS picks its own label colour, and the
+accent themes override `.onAccent` to white against their own fill. The number
+is noted in the test so anything that starts drawing that pair has it to hand.
+
 ### Contrast alone is not a palette
 
 The first version of this palette maximised contrast and produced mud. Requiring
@@ -362,8 +377,8 @@ the Settings table above overstate what is left:
 | --- | --- | --- |
 | `dynamicType` | 21 | Not actionable — position-dependent, per the above |
 | `textClipped` | 15 | 7 fixed by `AdaptivePicker`; 4 are long navigation titles; **4 remain** |
-| `contrast` | 6 | Report-only by standing policy |
-| `elementDetection` | 1 | Not investigated |
+| `contrast` | 6 | Report-only; the palette is tested instead |
+| `elementDetection` | 1 | Unattributed — see below |
 
 The actionable remainder was four clipped picker values — "Compact", "Default"
 and "System" on Display, and "Merge" on Import & Export — the same construct
@@ -383,8 +398,8 @@ That leaves, across the ten Settings destinations:
 | --- | --- | --- |
 | 4 clipped navigation titles | History & Network, Scheduled Reports, Import & Export, Data Management | Only a shorter screen name fixes it |
 | 21 `dynamicType` | all | Position-dependent, per the above |
-| 6 `contrast` | all | Report-only by standing policy |
-| 1 `elementDetection` | Local API | Not investigated |
+| 6 `contrast` | all | Report-only; the palette is tested instead |
+| 1 `elementDetection` | Local API | Unattributed — see below |
 
 `AdaptivePicker` also reached the integration editor's three pickers — Type,
 Minimum Severity and SMTP Security. Its clipped findings go from four to one:
@@ -420,6 +435,29 @@ The equivalent findings on the report-only Settings destinations are the same
 artifact and stay reported — those screens do not gate, so there is nothing to
 unblock, and a suppression wide enough to cover arbitrary `Form` rows would
 hide real regressions.
+
+## `contrast` and `elementDetection`, the last two categories
+
+Neither is a to-do list either, for different reasons.
+
+**Every `elementDetection` finding is unattributed.** Across both runtimes they
+report against "unknown element" — on `seeded-dashboard`,
+`seeded-tracked-domains` and `monitoring-log`, and nowhere else. All three are
+report-only screens, so none of them gates anything, and a finding that names no
+element cannot be acted on. No carve-out was added: there is nothing to unblock,
+and a rule wide enough to cover them would weaken an enforced category
+everywhere else.
+
+**The `contrast` attribution differs so much between runtimes that the names
+cannot be worked through.** On `seeded-tracked-domains` the floor names 25
+elements and the current runtime names 5, largely a different set; on
+`seeded-dashboard` the floor reports 4 unattributed findings and the current
+runtime names 17. Same build, same fixtures. That is the flip the `.contrast`
+carve-out was written for, at a larger scale.
+
+What was done instead is the thing the carve-out always pointed at: the palette
+is tested, so a colour that stops clearing AA fails the unit suite in seconds
+rather than appearing as one more unstable name in an audit list.
 
 ## Long navigation titles clip
 
