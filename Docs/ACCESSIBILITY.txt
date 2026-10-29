@@ -408,9 +408,9 @@ that one had already shown itself unstable — it reported on a single-test run
 of the editor and not on the full-suite run of the same build.
 
 The editor is **not** gated on `.textClipped` even so. "Add Integration" is a
-15-character navigation title, the same unfixable case as the four Settings
-destinations, and a screen with one finding that comes and goes between runs is
-not a screen to gate.
+15-character navigation title, the same floor-only case as the four Settings
+destinations above, and a screen with one finding that comes and goes between
+runs is not a screen to gate.
 
 ### What was done about it
 
@@ -459,19 +459,34 @@ What was done instead is the thing the carve-out always pointed at: the palette
 is tested, so a colour that stops clearing AA fails the unit suite in seconds
 rather than appearing as one more unstable name in an audit list.
 
-## Long navigation titles clip
+## Long navigation titles clip, on the narrower device only
 
 `textClipped` is reported against the navigation title of exactly the screens
-whose title is 15 characters or more: History & Network, Scheduled Reports,
-Import & Export, Data Management. The short ones — Display, Monitoring, Local
-API, iCloud Sync — are clean. The large title renders in full at default size;
-it is the growth at larger sizes that does not fit, and SwiftUI does not wrap a
-large title.
+whose title runs to 15 characters or more:
 
-The only remedy in app code is a shorter title, which for these four would mean
-naming the screen something other than what the Settings row that opens it
-says. Left as reported. It is the one `textClipped` finding still open on
-History & Network, and why that screen stays report-only.
+| Title | Length | Screen |
+| --- | --- | --- |
+| History & Network | 17 | Settings → History & Network |
+| Scheduled Reports | 17 | Settings → Scheduled Reports |
+| Import & Export | 15 | Settings → Import & Export |
+| Data Management | 15 | Settings → Data Management |
+| Add Integration | 15 | the integration editor |
+
+The short ones are clean: Display (7), App Info (8), Settings (8), Local API
+(9), Monitoring (10), iCloud Sync (11).
+
+**All five report on the floor tier only.** iPhone 16 is 393pt wide and iPhone
+Air is 420pt, and the current tier reports none of them, so this is screen
+width rather than OS version — the one entry in the coverage table below that
+the newer runtime misses for a reason that is understood. The large title
+renders in full at default size; it is the growth at larger sizes that does not
+fit, and SwiftUI does not wrap a large title.
+
+The only remedy in app code is a shorter title, which for these five would mean
+naming the screen something other than the row that opens it. Left as reported.
+It is the single `textClipped` finding still open on History & Network, Import
+& Export, Data Management and the integration editor, and why those screens
+stay report-only while Display and Monitoring Settings gate.
 
 ## Recent searches
 
