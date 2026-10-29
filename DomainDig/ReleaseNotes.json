@@ -1,7 +1,14 @@
 {
-  "version": "5.5.2",
+  "version": "5.5.3",
   "highlights": [
-    "The Privacy Policy link in Settings → App Info opened a page that did not exist. It now opens the policy.",
-    "Recent searches on the Inspect tab are easier to use. The Clear button was about 16pt tall, well under the 44pt minimum, so it was easy to miss; it now has a full-size tap target. Each recent domain also announces as \"Look up example.com\" to VoiceOver rather than reading out the bare hostname."
+    "This update covers everything since 5.0.3, which is the last version that reached the App Store.",
+    "Four defects reachable from the main screen are fixed. A domain containing a space closed the app. Availability could never report a name as free, which is also why alternative-name suggestions never appeared. Redirect tracing could not follow plain http — the http-to-https hop being the one the check exists to show. And SMTP integration credentials were sent in the clear on the \"Plain\" security mode; they are now refused without TLS.",
+    "Enabling iCloud sync no longer erases your tracked domains' tags, and sync conflicts are settled by CloudKit's own record dates instead of device clocks, so a skewed or long-offline device no longer wins or loses arbitrarily.",
+    "Pro+ has changed. It promised five capabilities and four could not produce data in a shipping build. Pricing and reputation are gone entirely. Ownership history and DNS history are now free for everyone, being derived from your own snapshots. Extended subdomain discovery moved to Pro. Pro+ is now shared portfolios, unlimited audit sessions and the full intelligence breakdown.",
+    "A lookup can run a Quick profile instead of every check, and third-party enrichment can be declined — with it off, DomainDig contacts rdap.org, crt.sh and ipapi.co for nothing. Both are in Settings → Network.",
+    "A finished run can upload its report to your own S3-compatible bucket: S3, R2, B2, MinIO, Wasabi or Spaces. JSON always, PDF and CSV if you want them. Pro+.",
+    "New icon, built from the domain name system itself — a tree from the root down. It follows your accent if you pick Graphite, Forest or Plum in Settings → Display. Pro+.",
+    "The watchlist is reached from the Dashboard now and Workflows from the Inspect tab. Pasting a list of domains tells you which entries it skipped. History keeps 50 snapshots on Free, 250 on Pro and 2000 on Pro+.",
+    "Accessibility: every picker in the app now shows its value in full at large text sizes instead of cutting it to an ellipsis, the Privacy Policy link opens the policy rather than a missing page, and recent searches have a full-size Clear target and read properly in VoiceOver."
   ]
 }
