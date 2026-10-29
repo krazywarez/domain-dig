@@ -87,6 +87,25 @@ Two test targets run from the `DomainDig` scheme's test action:
 
 A plain `xcodebuild test` (and CI) runs both. The unit net went in first in `v5.0.0` and is what made the god-file decomposition safe to attempt.
 
+## Releasing
+
+`Scripts/release-ios.sh` archives the app with its widget and share extension
+and uploads the result to App Store Connect, signed automatically through the
+Apple ID signed in to Xcode. `DOMAIN_DIG_PUBLISH=0` archives and exports the
+`.ipa` to `.build/ios-release` without uploading.
+
+The build number is `CURRENT_PROJECT_VERSION` as committed, not a derived
+value: the release cut sets it by hand, states it in the commit message, and it
+is what the tag describes. The script re-reads it from the built archive rather
+than trusting the project file, because Xcode has migrated keys out from under
+this project before.
+
+Publishing is refused unless the tree is clean, the branch is `main`, and
+`v<MARKETING_VERSION>` exists and points at `HEAD` — so an upload cannot carry
+code the tag does not. It also checks `ReleaseNotes.json` against the marketing
+version, which nothing else does; the unit suite asserts the notes parse, not
+that they describe this build.
+
 ## Xcode Project Structure
 
 `DomainDig.xcodeproj` uses filesystem-synchronized groups for the `DomainDig` folder. Target membership exclusions are therefore important release metadata. Files that should remain in the tree but not compile, such as retired prototypes, must be listed in the appropriate synchronized build file exception set.
