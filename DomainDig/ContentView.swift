@@ -593,6 +593,7 @@ struct ContentView: View {
                 // WCAG 2.5.8 floor, which is what the audit reports here.
                 .frame(minWidth: AppLayout.minimumTapTarget, minHeight: AppLayout.minimumTapTarget)
                 .contentShape(Rectangle())
+                .buttonStyle(.borderless)
                 .accessibilityLabel("Clear recent searches")
             }
 
@@ -611,6 +612,9 @@ struct ContentView: View {
                         .background(ThemeToken.surface)
                         .clipShape(RoundedRectangle(cornerRadius: appDensity.metrics.cardCornerRadius))
                 }
+                // Every button in this one List row fires on a tap unless it
+                // is borderless.
+                .buttonStyle(.borderless)
                 // A bare domain reads as neither a word nor an action; the
                 // button re-runs the lookup, so say that.
                 .accessibilityLabel("Look up \(domain)")
