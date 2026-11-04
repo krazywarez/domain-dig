@@ -538,7 +538,7 @@ target had left in the app's container was still there.
 That made the result depend on what ran before it. `testTrackedDomainsScreen`
 passed with one finding in isolation, and reported six — including an enforced
 `[FAIL][dynamicType]` on `EditButton`, which only renders when the watchlist has
-rows — during a full `xcodebuild test`, which is what the pre-push hook runs.
+rows — during a full `xcodebuild test`, which is what `Scripts/audit-a11y.sh` runs.
 
 **A correction to what this file said first.** The initial note blamed the
 seeded fixtures. That was wrong: `seedAuditFixturesIfRequested` writes only to
@@ -583,7 +583,8 @@ no single number is correct on both.
 
 The audit therefore runs locally, across both ends, via
 `Scripts/audit-a11y.sh` — on a machine that actually has an 18.x runtime
-installed. The pre-push hook in `.githooks/` runs both of them.
+installed. The pre-push hook in `.githooks/` refuses a push without a recorded
+pass of both.
 
 There is no CI job. The GitHub Actions workflow that used to run this suite on
 the newest runtime has been removed, and with it the one check that no local run
@@ -618,19 +619,24 @@ so rather than implying floor coverage it does not have.
 git config core.hooksPath .githooks
 ```
 
-Runs the complexity ratchet, then the audit on **both** runtimes, before a push,
-and only when Swift, asset, or project files changed. Bypass with
-`git push --no-verify`.
+Runs the complexity ratchet, then refuses the push unless the tree being pushed
+has a recorded audit pass, when Swift, asset, or project files changed. Bypass
+with `git push --no-verify`.
+
+Run the audit before pushing. `./Scripts/audit-a11y.sh` with no argument, on a
+tree with no tracked changes and no untracked Swift, asset or project files,
+appends `HEAD^{tree}` to `a11y-audit-passed` in the common git dir when both
+tiers pass. A squash or rebase that keeps the tree keeps the pass.
+
+The hook does not run the suite itself because git opens the connection before
+pre-push runs, and gitbay kills a push that moves no data for a minute or has
+not reached pre-receive fifteen minutes after taking its slot. The suite takes
+about twenty minutes, so every push it gated failed.
 
 Both tiers rather than the floor alone because coverage is not nested across OS
-versions (below) and there is no CI, so a tier the hook does not run is not run
-at all. The cost is real: about twenty minutes, against roughly eight for the
-floor alone.
-
-Pre-push rather than pre-commit deliberately: at pre-commit that blocks every
-commit. A hook routinely bypassed with `--no-verify` is worse than no hook,
-because it trains you to ignore it — which is the standing argument against
-letting this get any slower.
+versions (below) and there is no CI, so a tier that is not run is not run at
+all. The cost is real: about twenty minutes, against roughly eight for the floor
+alone.
 
 ## Layout gotchas found the hard way
 

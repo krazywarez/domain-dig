@@ -33,6 +33,8 @@ TIER="${1:-both}"
 
 # shellcheck source=lib/simulators.sh
 source "$(dirname "$0")/lib/simulators.sh"
+# shellcheck source=lib/audit-pass.sh
+source "$(dirname "$0")/lib/audit-pass.sh"
 
 case "$TIER" in
   floor | current | both) ;;
@@ -72,8 +74,8 @@ run_tier() {
   #
   # The grep is wrapped in a brace group so that matching nothing does not read
   # as a failure. With pipefail the pipeline then carries xcodebuild's own
-  # status, so an enforced audit failure reaches the caller — and the pre-push
-  # gate can act on it — rather than being reported and exited 0.
+  # status, so an enforced audit failure reaches the caller — and is never
+  # recorded as a pass — rather than being reported and exited 0.
   local code=0
   set -o pipefail
   xcodebuild test \
@@ -95,11 +97,27 @@ else
   run_tier "$TIER" || status=1
 fi
 
+# A pass on both tiers is recorded against the tree it ran on, for the pre-push
+# hook to check. Only a tree the build saw exactly counts: no tracked changes,
+# and no untracked file the build would pick up.
+record_pass() {
+  if [[ -n "$(git status --porcelain --untracked-files=no)" ]] \
+    || git status --porcelain --untracked-files=all | grep -qE "$AUDIT_INPUTS"; then
+    echo "    Not recorded for the pre-push hook: the working tree differs from HEAD."
+    return
+  fi
+  git rev-parse 'HEAD^{tree}' >> "$(audit_pass_file)"
+  echo "    Recorded for the pre-push hook: $(git log -1 --format='%h %s')"
+}
+
 echo
 if [[ "$status" -eq 0 ]]; then
   echo "==> Done. Findings above are the burndown list for issue #21."
   echo "    They are reported, not enforced — widen"
   echo "    AccessibilityAuditHarness.enforcedAuditTypes as each phase lands."
+  if [[ "$TIER" = "both" ]]; then
+    record_pass
+  fi
 else
   echo "==> A tier failed. An enforced category reported a named finding, or the" >&2
   echo "    suite could not run. Read the verdict line for each tier above." >&2

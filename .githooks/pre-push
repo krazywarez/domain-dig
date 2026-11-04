@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 #
-# Run the complexity ratchet and the accessibility audit against the oldest
-# supported simulator runtime before pushing.
+# Run the complexity ratchet, and refuse a push whose tree has no recorded
+# accessibility audit pass.
 #
 # Enable once per clone:
 #     git config core.hooksPath .githooks
 #
-# Why pre-push and not pre-commit: the suite takes around ten minutes per
-# runtime. At pre-commit that blocks every commit, and a hook you routinely
-# bypass with --no-verify is worse than no hook, because it trains you to ignore
-# it. Pushes are far less frequent and map to the unit of work.
+# The audit runs before the push, not here: `./Scripts/audit-a11y.sh` on a
+# clean tree records the tree it passed on, and this hook looks it up. git opens
+# the connection before running pre-push, and gitbay kills a push that moves no
+# data for a minute or has not reached pre-receive fifteen minutes after taking
+# its slot. The suite takes around twenty minutes, so run inside the hook it
+# failed every push it gated.
 #
 # Why both tiers: audit coverage is not nested across OS versions — each runtime
 # reports findings the others miss, in both directions, which
-# Docs/ACCESSIBILITY.txt records per screen. There is no CI, so a tier this does
-# not run is not run at all, and an enforced failure on it reaches main.
+# Docs/ACCESSIBILITY.txt records per screen. There is no CI, so a tier that is
+# not run is not run at all, and an enforced failure on it reaches main. Only a
+# run of both tiers is recorded.
 #
 # Why the hook runs qlty at all: nothing else does. This repository's origin is
 # gitbay, which has no build configured, so the smell gates in .qlty/qlty.toml
@@ -28,8 +31,11 @@ set -euo pipefail
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
+# shellcheck source=../Scripts/lib/audit-pass.sh
+source Scripts/lib/audit-pass.sh
+
 zero='0000000000000000000000000000000000000000'
-changed=''
+needs_audit=''
 
 # stdin: <local ref> <local sha> <remote ref> <remote sha>, one line per ref.
 while read -r _local_ref local_sha _remote_ref remote_sha; do
@@ -43,15 +49,12 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     range="$remote_sha..$local_sha"
   fi
 
-  changed="$changed$(git diff --name-only "$range" 2>/dev/null || true)"$'\n'
+  if git diff --name-only "$range" 2>/dev/null | grep -qE "$AUDIT_INPUTS"; then
+    needs_audit="$needs_audit $local_sha"
+  fi
 done
 
-if [ -z "$(printf '%s' "$changed" | tr -d '[:space:]')" ]; then
-  exit 0
-fi
-
-# Only pay the ~85s when something could actually change the rendered UI.
-if ! printf '%s' "$changed" | grep -qE '\.(swift|xcassets|xcodeproj)|\.pbxproj|xcscheme'; then
+if [ -z "$needs_audit" ]; then
   echo "pre-push: no Swift/project changes, skipping accessibility audit"
   exit 0
 fi
@@ -101,18 +104,21 @@ print(sum(
   fi
 fi
 
-echo "pre-push: running accessibility audit on both runtimes (~20 min)"
-echo "          skip with 'git push --no-verify'"
+passes=$(audit_pass_file)
+missing=''
+for sha in $needs_audit; do
+  grep -qxF "$(git rev-parse "$sha^{tree}")" "$passes" 2>/dev/null || missing="$missing $sha"
+done
 
-if ! ./Scripts/audit-a11y.sh; then
-  echo
-  echo "pre-push: accessibility audit failed. Push aborted." >&2
-  echo "          Re-run with './Scripts/audit-a11y.sh' to see which tier and" >&2
-  echo "          which screen, or bypass with 'git push --no-verify'." >&2
+if [ -n "$missing" ]; then
+  echo "pre-push: no recorded accessibility audit pass for:" >&2
+  for sha in $missing; do
+    echo "            $(git log -1 --format='%h %s' "$sha")" >&2
+  done
+  echo "          Check it out with a clean tree, run './Scripts/audit-a11y.sh'," >&2
+  echo "          then push again. Bypass with 'git push --no-verify'." >&2
   exit 1
 fi
 
-# Note: findings are reported, not enforced, so a clean exit here does not mean
-# zero findings — read the list above. Enforcement is controlled by
-# AccessibilityAuditHarness.enforcedAuditTypes.
+echo "pre-push: accessibility audit passed on this tree"
 exit 0

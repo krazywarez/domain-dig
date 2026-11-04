@@ -70,7 +70,9 @@ accessibility audit.
 ./Scripts/audit-a11y.sh floor    # oldest only (~85s)
 #+end_src
 
-findings are reported, not enforced. optional pre-push hook:
+findings are reported, not enforced. a passing run of both tiers on a
+clean tree is recorded, and the optional pre-push hook refuses a push of
+Swift or project changes without one:
 
 #+begin_src sh
 git config core.hooksPath .githooks
