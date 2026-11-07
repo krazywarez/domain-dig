@@ -92,7 +92,9 @@ A plain `xcodebuild test` (and CI) runs both. The unit net went in first in `v5.
 `Scripts/release-ios.sh` archives the app with its widget and share extension
 and uploads the result to App Store Connect, signed automatically through the
 Apple ID signed in to Xcode. `DOMAIN_DIG_PUBLISH=0` archives and exports the
-`.ipa` to `.build/ios-release` without uploading.
+`.ipa` to `.build/ios-release` without uploading. The script sources
+`release-ios.sh` from appstore-kit, checked out beside this repository or at
+`$APPSTORE_KIT`.
 
 The build number is `CURRENT_PROJECT_VERSION` as committed, not a derived
 value: the release cut sets it by hand, states it in the commit message, and it
