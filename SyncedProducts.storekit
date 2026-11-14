@@ -66,7 +66,7 @@
           ],
           "displayPrice" : "14.99",
           "familyShareable" : true,
-          "groupNumber" : 2,
+          "groupNumber" : 3,
           "internalID" : "6763609513",
           "introductoryOffers" : [
 
@@ -105,7 +105,7 @@
           ],
           "displayPrice" : "1.99",
           "familyShareable" : true,
-          "groupNumber" : 2,
+          "groupNumber" : 4,
           "internalID" : "6763609831",
           "introductoryOffers" : [
 
@@ -183,7 +183,7 @@
           ],
           "displayPrice" : "4.99",
           "familyShareable" : true,
-          "groupNumber" : 1,
+          "groupNumber" : 2,
           "internalID" : "6763610379",
           "introductoryOffers" : [
 
