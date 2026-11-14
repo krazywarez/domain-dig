@@ -1,6 +1,7 @@
 {
-  "version": "5.5.4",
+  "version": "5.5.5",
   "highlights": [
-    "Tapping a recent search on the Inspect tab looked up a different domain from the one you tapped, and cleared the recent list as it did. It now looks up the domain you tapped and leaves the list alone."
+    "Pro and Pro+ cost about a third of what they did. Pro is $1.99 a month or $14.99 a year, and Pro+ is $4.99 a month or $39.99 a year, in US dollars; the App Store shows your local price. If you already subscribe, your plan renews at the lower price.",
+    "Moving from monthly to yearly, or from Pro to Pro+, now takes effect straight away instead of at your next renewal."
   ]
 }
