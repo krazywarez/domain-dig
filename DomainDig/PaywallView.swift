@@ -95,6 +95,13 @@ struct PaywallView: View {
                         }
                     }
                 }
+
+                Section {
+                    Link("Terms of Use", destination: AppLinks.termsOfUse)
+                    Link("Privacy Policy", destination: AppLinks.privacyPolicy)
+                } footer: {
+                    Text("Subscriptions renew automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel them in your App Store account settings.")
+                }
             }
             .navigationTitle("DomainDig Pro")
             .toolbar {
