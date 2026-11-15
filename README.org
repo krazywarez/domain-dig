@@ -71,8 +71,9 @@ accessibility audit.
 #+end_src
 
 findings are reported, not enforced. a passing run of both tiers on a
-clean tree is recorded, and the optional pre-push hook refuses a push of
-Swift or project changes without one:
+clean tree is recorded. the audit is optional: the pre-push hook warns
+when a push of Swift or project changes has no recorded pass, and does
+not block it:
 
 #+begin_src sh
 git config core.hooksPath .githooks

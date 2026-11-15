@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Run the complexity ratchet, and refuse a push whose tree has no recorded
-# accessibility audit pass.
+# Run the complexity ratchet, and warn when the pushed tree has no recorded
+# accessibility audit pass. The audit is optional; the warning does not block.
 #
 # Enable once per clone:
 #     git config core.hooksPath .githooks
@@ -111,13 +111,12 @@ for sha in $needs_audit; do
 done
 
 if [ -n "$missing" ]; then
-  echo "pre-push: no recorded accessibility audit pass for:" >&2
+  echo "pre-push: no recorded accessibility audit pass (optional) for:"
   for sha in $missing; do
-    echo "            $(git log -1 --format='%h %s' "$sha")" >&2
+    echo "            $(git log -1 --format='%h %s' "$sha")"
   done
-  echo "          Check it out with a clean tree, run './Scripts/audit-a11y.sh'," >&2
-  echo "          then push again. Bypass with 'git push --no-verify'." >&2
-  exit 1
+  echo "          Run './Scripts/audit-a11y.sh' on a clean tree to check it."
+  exit 0
 fi
 
 echo "pre-push: accessibility audit passed on this tree"

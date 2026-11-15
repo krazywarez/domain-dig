@@ -131,7 +131,7 @@ With phases 1–5 landed, `AccessibilityAuditHarness.enforcedAuditTypes` enforce
 **`.textClipped`, `.dynamicType`, `.hitRegion`, `.elementDetection`,
 `.sufficientElementDescription`, `.trait`** on the empty-state test suite. A
 named finding in any of these fails the test run — regressions in five phases of
-work are still gated locally and at the pre-push hook, not merely reported.
+work fail the audit run, not merely reported.
 
 Three deliberate carve-outs, each with its evidence:
 
@@ -583,8 +583,8 @@ no single number is correct on both.
 
 The audit therefore runs locally, across both ends, via
 `Scripts/audit-a11y.sh` — on a machine that actually has an 18.x runtime
-installed. The pre-push hook in `.githooks/` refuses a push without a recorded
-pass of both.
+installed. The audit is optional: the pre-push hook in `.githooks/` warns when
+a push has no recorded pass of both, and does not block it.
 
 There is no CI job. The GitHub Actions workflow that used to run this suite on
 the newest runtime has been removed, and with it the one check that no local run
@@ -619,11 +619,11 @@ so rather than implying floor coverage it does not have.
 git config core.hooksPath .githooks
 ```
 
-Runs the complexity ratchet, then refuses the push unless the tree being pushed
-has a recorded audit pass, when Swift, asset, or project files changed. Bypass
-with `git push --no-verify`.
+Runs the complexity ratchet, then warns when Swift, asset, or project files
+changed and the tree being pushed has no recorded audit pass. The warning does
+not block the push.
 
-Run the audit before pushing. `./Scripts/audit-a11y.sh` with no argument, on a
+To check a tree, run the audit before pushing. `./Scripts/audit-a11y.sh` with no argument, on a
 tree with no tracked changes and no untracked Swift, asset or project files,
 appends `HEAD^{tree}` to `a11y-audit-passed` in the common git dir when both
 tiers pass. A squash or rebase that keeps the tree keeps the pass.
