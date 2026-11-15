@@ -492,7 +492,7 @@
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
-				MARKETING_VERSION = 5.5.5;
+				MARKETING_VERSION = 5.5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.DomainDigTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -654,7 +654,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 5.5.5;
+				MARKETING_VERSION = 5.5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.DomainDig;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -693,7 +693,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 5.5.5;
+				MARKETING_VERSION = 5.5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.DomainDig;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -723,7 +723,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 5.5.5;
+				MARKETING_VERSION = 5.5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.DomainDig.DomainDigWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -752,7 +752,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 5.5.5;
+				MARKETING_VERSION = 5.5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.DomainDig.DomainDigWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -781,7 +781,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 5.5.5;
+				MARKETING_VERSION = 5.5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.DomainDig.DomainDigShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -810,7 +810,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 5.5.5;
+				MARKETING_VERSION = 5.5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.DomainDig.DomainDigShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -830,7 +830,7 @@
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
-				MARKETING_VERSION = 5.5.5;
+				MARKETING_VERSION = 5.5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.DomainDigUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -849,7 +849,7 @@
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
-				MARKETING_VERSION = 5.5.5;
+				MARKETING_VERSION = 5.5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.DomainDigUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -870,7 +870,7 @@
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
-				MARKETING_VERSION = 5.5.5;
+				MARKETING_VERSION = 5.5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.DomainDigTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
